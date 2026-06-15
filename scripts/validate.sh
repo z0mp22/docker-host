@@ -12,7 +12,7 @@ wait_for_metrics() {
   local pattern="$3"
   local i
   for i in $(seq 1 "${RETRIES}"); do
-    if curl -sf "${url}" | grep -qE "${pattern}"; then
+    if curl -sf "${url}" 2>/dev/null | grep -qE "${pattern}"; then
       echo "[validate] OK ${name}"
       return 0
     fi
@@ -28,7 +28,7 @@ wait_for_http() {
   local url="$2"
   local i code
   for i in $(seq 1 "${RETRIES}"); do
-    code="$(curl -s -o /dev/null -w '%{http_code}' "${url}")"
+    code="$(curl -s -o /dev/null -w '%{http_code}' "${url}" 2>/dev/null || echo "000")"
     if [ "${code}" = "200" ] || [ "${code}" = "302" ] || [ "${code}" = "405" ]; then
       echo "[validate] OK ${name} (HTTP ${code})"
       return 0
