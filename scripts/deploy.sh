@@ -206,6 +206,8 @@ deploy_exporters() {
   log "deploying unifi-poller"
   (
     cd "${DEPLOY_ROOT}/unifi-poller"
+    docker compose down 2>/dev/null || true
+    docker rm -f unifi-poller 2>/dev/null || true
     [ "${PULL_IMAGES:-0}" = "1" ] && docker compose pull
     docker compose up -d
   )
