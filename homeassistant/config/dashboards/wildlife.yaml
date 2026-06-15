@@ -1,0 +1,358 @@
+title: Wildlife
+theme: RedditMushroom
+views:
+  - title: Wildlife
+    path: wildlife
+    icon: mdi:bird
+    theme: RedditMushroom
+    cards:
+      - type: custom:mushroom-template-card
+        primary: >
+          {% set cameras = ['basement', 'garage', 'driveway'] %}
+          {% set animals = ['bird', 'deer', 'raccoon', 'fox', 'squirrel', 'rabbit', 'skunk', 'bear', 'cat', 'dog', 'horse', 'cow', 'goat', 'sheep'] %}
+          {% set ns = namespace(active=[]) %}
+          {% for camera in cameras %}
+            {% for animal in animals %}
+              {% set entity = 'binary_sensor.' ~ camera ~ '_' ~ animal ~ '_occupancy' %}
+              {% if states(entity) == 'on' %}
+                {% set ns.active = ns.active + [animal ~ ' @ ' ~ camera] %}
+              {% endif %}
+            {% endfor %}
+          {% endfor %}
+          {% if ns.active | length > 0 %}
+            Wildlife active now
+          {% else %}
+            Yard is peaceful
+          {% endif %}
+        secondary: >
+          {% set cameras = ['basement', 'garage', 'driveway'] %}
+          {% set animals = ['bird', 'deer', 'raccoon', 'fox', 'squirrel', 'rabbit', 'skunk', 'bear', 'cat', 'dog', 'horse', 'cow', 'goat', 'sheep'] %}
+          {% set ns = namespace(active=[]) %}
+          {% for camera in cameras %}
+            {% for animal in animals %}
+              {% set entity = 'binary_sensor.' ~ camera ~ '_' ~ animal ~ '_occupancy' %}
+              {% if states(entity) == 'on' %}
+                {% set ns.active = ns.active + [animal | title ~ ' (' ~ camera | title ~ ')'] %}
+              {% endif %}
+            {% endfor %}
+          {% endfor %}
+          {% if ns.active | length > 0 %}
+            {{ ns.active | join(' · ') }}
+          {% else %}
+            No wildlife detected right now
+          {% endif %}
+        icon: >
+          {% set cameras = ['basement', 'garage', 'driveway'] %}
+          {% set animals = ['bird', 'deer', 'raccoon', 'fox', 'squirrel', 'rabbit', 'skunk', 'bear', 'cat', 'dog', 'horse', 'cow', 'goat', 'sheep'] %}
+          {% set ns = namespace(active=false) %}
+          {% for camera in cameras %}
+            {% for animal in animals %}
+              {% if is_state('binary_sensor.' ~ camera ~ '_' ~ animal ~ '_occupancy', 'on') %}
+                {% set ns.active = true %}
+              {% endif %}
+            {% endfor %}
+          {% endfor %}
+          {{ 'mdi:bird' if ns.active else 'mdi:tree' }}
+        fill_container: true
+
+      - type: custom:mushroom-chips-card
+        alignment: center
+        chips:
+          - type: template
+            icon: mdi:bird
+            content: >
+              {% set ns = namespace(count=0) %}
+              {% for camera in ['basement', 'garage', 'driveway'] %}
+                {% if is_state('binary_sensor.' ~ camera ~ '_bird_occupancy', 'on') %}
+                  {% set ns.count = ns.count + 1 %}
+                {% endif %}
+              {% endfor %}
+              {{ ns.count }} bird{{ 's' if ns.count != 1 else '' }} now
+          - type: template
+            icon: mdi:deer
+            content: >
+              {% set ns = namespace(count=0) %}
+              {% for camera in ['basement', 'garage', 'driveway'] %}
+                {% if is_state('binary_sensor.' ~ camera ~ '_deer_occupancy', 'on') %}
+                  {% set ns.count = ns.count + 1 %}
+                {% endif %}
+              {% endfor %}
+              {{ ns.count }} deer now
+          - type: template
+            icon: mdi:paw
+            content: 14 species tracked
+          - type: template
+            icon: mdi:cctv
+            content: Basement · Garage · Driveway
+
+      - type: custom:mushroom-title-card
+        title: Birds
+        subtitle: Latest detections · species labels appear in Frigate when confident
+
+      - type: grid
+        columns: 3
+        square: false
+        cards:
+          - type: picture-entity
+            entity: image.basement_bird
+            name: Basement
+            aspect_ratio: 16:9
+
+          - type: picture-entity
+            entity: image.garage_bird
+            name: Garage
+            aspect_ratio: 16:9
+
+          - type: picture-entity
+            entity: image.driveway_bird
+            name: Driveway
+            aspect_ratio: 16:9
+
+      - type: custom:mushroom-title-card
+        title: Backyard visitors
+        subtitle: Deer, raccoon, fox, and other critters
+
+      - type: grid
+        columns: 3
+        square: false
+        cards:
+          - type: picture-entity
+            entity: image.basement_deer
+            name: Basement · Deer
+            aspect_ratio: 16:9
+
+          - type: picture-entity
+            entity: image.garage_deer
+            name: Garage · Deer
+            aspect_ratio: 16:9
+
+          - type: picture-entity
+            entity: image.driveway_deer
+            name: Driveway · Deer
+            aspect_ratio: 16:9
+
+          - type: picture-entity
+            entity: image.basement_raccoon
+            name: Basement · Raccoon
+            aspect_ratio: 16:9
+
+          - type: picture-entity
+            entity: image.garage_raccoon
+            name: Garage · Raccoon
+            aspect_ratio: 16:9
+
+          - type: picture-entity
+            entity: image.driveway_raccoon
+            name: Driveway · Raccoon
+            aspect_ratio: 16:9
+
+          - type: picture-entity
+            entity: image.basement_fox
+            name: Basement · Fox
+            aspect_ratio: 16:9
+
+          - type: picture-entity
+            entity: image.garage_fox
+            name: Garage · Fox
+            aspect_ratio: 16:9
+
+          - type: picture-entity
+            entity: image.driveway_fox
+            name: Driveway · Fox
+            aspect_ratio: 16:9
+
+          - type: picture-entity
+            entity: image.basement_squirrel
+            name: Basement · Squirrel
+            aspect_ratio: 16:9
+
+          - type: picture-entity
+            entity: image.garage_squirrel
+            name: Garage · Squirrel
+            aspect_ratio: 16:9
+
+          - type: picture-entity
+            entity: image.driveway_squirrel
+            name: Driveway · Squirrel
+            aspect_ratio: 16:9
+
+          - type: picture-entity
+            entity: image.basement_rabbit
+            name: Basement · Rabbit
+            aspect_ratio: 16:9
+
+          - type: picture-entity
+            entity: image.garage_rabbit
+            name: Garage · Rabbit
+            aspect_ratio: 16:9
+
+          - type: picture-entity
+            entity: image.driveway_rabbit
+            name: Driveway · Rabbit
+            aspect_ratio: 16:9
+
+          - type: picture-entity
+            entity: image.basement_skunk
+            name: Basement · Skunk
+            aspect_ratio: 16:9
+
+          - type: picture-entity
+            entity: image.garage_skunk
+            name: Garage · Skunk
+            aspect_ratio: 16:9
+
+          - type: picture-entity
+            entity: image.driveway_skunk
+            name: Driveway · Skunk
+            aspect_ratio: 16:9
+
+          - type: picture-entity
+            entity: image.basement_bear
+            name: Basement · Bear
+            aspect_ratio: 16:9
+
+          - type: picture-entity
+            entity: image.garage_bear
+            name: Garage · Bear
+            aspect_ratio: 16:9
+
+          - type: picture-entity
+            entity: image.driveway_bear
+            name: Driveway · Bear
+            aspect_ratio: 16:9
+
+      - type: custom:mushroom-title-card
+        title: Pets & farm animals
+        subtitle: Cats, dogs, and larger livestock if detected
+
+      - type: grid
+        columns: 3
+        square: false
+        cards:
+          - type: picture-entity
+            entity: image.basement_cat
+            name: Basement · Cat
+            aspect_ratio: 16:9
+
+          - type: picture-entity
+            entity: image.garage_cat
+            name: Garage · Cat
+            aspect_ratio: 16:9
+
+          - type: picture-entity
+            entity: image.driveway_cat
+            name: Driveway · Cat
+            aspect_ratio: 16:9
+
+          - type: picture-entity
+            entity: image.basement_dog
+            name: Basement · Dog
+            aspect_ratio: 16:9
+
+          - type: picture-entity
+            entity: image.garage_dog
+            name: Garage · Dog
+            aspect_ratio: 16:9
+
+          - type: picture-entity
+            entity: image.driveway_dog
+            name: Driveway · Dog
+            aspect_ratio: 16:9
+
+          - type: picture-entity
+            entity: image.basement_horse
+            name: Basement · Horse
+            aspect_ratio: 16:9
+
+          - type: picture-entity
+            entity: image.garage_horse
+            name: Garage · Horse
+            aspect_ratio: 16:9
+
+          - type: picture-entity
+            entity: image.driveway_horse
+            name: Driveway · Horse
+            aspect_ratio: 16:9
+
+          - type: picture-entity
+            entity: image.basement_cow
+            name: Basement · Cow
+            aspect_ratio: 16:9
+
+          - type: picture-entity
+            entity: image.garage_cow
+            name: Garage · Cow
+            aspect_ratio: 16:9
+
+          - type: picture-entity
+            entity: image.driveway_cow
+            name: Driveway · Cow
+            aspect_ratio: 16:9
+
+          - type: picture-entity
+            entity: image.basement_goat
+            name: Basement · Goat
+            aspect_ratio: 16:9
+
+          - type: picture-entity
+            entity: image.garage_goat
+            name: Garage · Goat
+            aspect_ratio: 16:9
+
+          - type: picture-entity
+            entity: image.driveway_goat
+            name: Driveway · Goat
+            aspect_ratio: 16:9
+
+          - type: picture-entity
+            entity: image.basement_sheep
+            name: Basement · Sheep
+            aspect_ratio: 16:9
+
+          - type: picture-entity
+            entity: image.garage_sheep
+            name: Garage · Sheep
+            aspect_ratio: 16:9
+
+          - type: picture-entity
+            entity: image.driveway_sheep
+            name: Driveway · Sheep
+            aspect_ratio: 16:9
+
+      - type: custom:mushroom-title-card
+        title: Active detections
+        subtitle: Live occupancy sensors from Frigate
+
+      - type: entities
+        entities:
+          - binary_sensor.basement_bird_occupancy
+          - binary_sensor.garage_bird_occupancy
+          - binary_sensor.driveway_bird_occupancy
+          - binary_sensor.basement_deer_occupancy
+          - binary_sensor.garage_deer_occupancy
+          - binary_sensor.driveway_deer_occupancy
+          - binary_sensor.basement_raccoon_occupancy
+          - binary_sensor.garage_raccoon_occupancy
+          - binary_sensor.driveway_raccoon_occupancy
+          - binary_sensor.basement_fox_occupancy
+          - binary_sensor.garage_fox_occupancy
+          - binary_sensor.driveway_fox_occupancy
+          - binary_sensor.basement_squirrel_occupancy
+          - binary_sensor.garage_squirrel_occupancy
+          - binary_sensor.driveway_squirrel_occupancy
+          - binary_sensor.basement_rabbit_occupancy
+          - binary_sensor.garage_rabbit_occupancy
+          - binary_sensor.driveway_rabbit_occupancy
+          - binary_sensor.basement_skunk_occupancy
+          - binary_sensor.garage_skunk_occupancy
+          - binary_sensor.driveway_skunk_occupancy
+          - binary_sensor.basement_bear_occupancy
+          - binary_sensor.garage_bear_occupancy
+          - binary_sensor.driveway_bear_occupancy
+          - binary_sensor.basement_cat_occupancy
+          - binary_sensor.garage_cat_occupancy
+          - binary_sensor.driveway_cat_occupancy
+          - binary_sensor.basement_dog_occupancy
+          - binary_sensor.garage_dog_occupancy
+          - binary_sensor.driveway_dog_occupancy
+        state_color: true
