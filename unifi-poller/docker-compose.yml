@@ -1,0 +1,10 @@
+version: '3.3'
+
+services:
+  unifi-poller:
+    image: golift/unifi-poller:latest
+    container_name: unifi-poller
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./up.conf:/etc/unpoller/up.conf:ro

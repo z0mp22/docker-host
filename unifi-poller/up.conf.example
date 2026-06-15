@@ -1,0 +1,17 @@
+[prometheus]
+disable = false
+http_listen = "0.0.0.0:9130"
+
+[influxdb]
+disable = true
+
+[loki]
+disable = true
+
+[unifi.defaults]
+url = "https://10.0.0.1"
+user = "change-me"
+pass = "change-me"
+verify_ssl = false
+sites = ["all"]
+save_sites = true

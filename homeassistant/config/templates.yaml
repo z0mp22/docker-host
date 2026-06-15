@@ -1,0 +1,68 @@
+- sensor:
+    - name: Irrigation Next Run
+      unique_id: irrigation_next_run
+      icon: mdi:calendar-clock
+      state: >
+        {% if is_state('binary_sensor.opensprinkler_rain_delay_active', 'on')
+           and states('sensor.opensprinkler_rain_delay_stop_time') not in ['unknown', 'unavailable', 'none', ''] %}
+          Rain delay until {{ as_timestamp(states('sensor.opensprinkler_rain_delay_stop_time')) | timestamp_custom('%b %d, %H:%M') }}
+        {% else %}
+          {% set ns = namespace(name='', days=999, time='') %}
+          {% for e in states.number if 'starting_in_days' in e.entity_id %}
+            {% set base = e.entity_id | replace('number.', '') | replace('_starting_in_days', '') %}
+            {% set enabled = 'switch.' ~ base ~ '_program_enabled' %}
+            {% if is_state(enabled, 'on') %}
+              {% set d = e.state | int(999) %}
+              {% if d < ns.days %}
+                {% set ns.days = d %}
+                {% set ns.name = state_attr(enabled, 'name') | default(base) %}
+                {% set ns.time = '00:00:00' %}
+                {% for suffix in ['start1_time', 'start2_time', 'start3_time', 'start_time'] %}
+                  {% set candidate = states('time.' ~ base ~ '_' ~ suffix) %}
+                  {% if candidate not in ['unknown', 'unavailable', 'none', '', '00:00:00'] %}
+                    {% set ns.time = candidate %}
+                  {% endif %}
+                {% endfor %}
+              {% endif %}
+            {% endif %}
+          {% endfor %}
+          {% if ns.days == 999 %}
+            No schedule enabled
+          {% else %}
+            {% set parts = ns.time.split(':') %}
+            {% set run_at = (now() + timedelta(days=ns.days)).replace(
+              hour=parts[0] | int(0),
+              minute=parts[1] | int(0),
+              second=0, microsecond=0) %}
+            {% if (parts[0] | int(0)) == 0 and (parts[1] | int(0)) == 0 %}
+              {{ run_at.strftime('%A, %b %d') }}
+            {% else %}
+              {{ run_at.strftime('%A, %b %d at %I:%M %p') }}
+            {% endif %}
+          {% endif %}
+        {% endif %}
+      attributes:
+        program: >
+          {% set ns = namespace(name='', days=999) %}
+          {% for e in states.number if 'starting_in_days' in e.entity_id %}
+            {% set base = e.entity_id | replace('number.', '') | replace('_starting_in_days', '') %}
+            {% set enabled = 'switch.' ~ base ~ '_program_enabled' %}
+            {% if is_state(enabled, 'on') %}
+              {% set d = e.state | int(999) %}
+              {% if d < ns.days %}
+                {% set ns.days = d %}
+                {% set ns.name = state_attr(enabled, 'name') | default(base) %}
+              {% endif %}
+            {% endif %}
+          {% endfor %}
+          {{ ns.name if ns.days != 999 else 'None' }}
+        days_until: >
+          {% set ns = namespace(days=999) %}
+          {% for e in states.number if 'starting_in_days' in e.entity_id %}
+            {% set base = e.entity_id | replace('number.', '') | replace('_starting_in_days', '') %}
+            {% if is_state('switch.' ~ base ~ '_program_enabled', 'on') %}
+              {% set d = e.state | int(999) %}
+              {% if d < ns.days %}{% set ns.days = d %}{% endif %}
+            {% endif %}
+          {% endfor %}
+          {{ ns.days if ns.days != 999 else '' }}

@@ -1,0 +1,18 @@
+name: Docker Host Runner
+
+on:
+  push:
+    paths:
+      - 'runner/**'
+      - '.github/workflows/runner.yml'
+  workflow_dispatch:
+
+jobs:
+  ensure-runner:
+    runs-on: [self-hosted, docker-host]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Ensure runner is running
+        run: ./runner/manage.sh status || ./runner/manage.sh start

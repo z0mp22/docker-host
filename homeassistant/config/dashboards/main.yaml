@@ -1,0 +1,107 @@
+title: Home
+theme: RedditMushroom
+views:
+  - title: Home
+    path: home
+    icon: mdi:home
+    theme: RedditMushroom
+    cards:
+      - type: custom:mushroom-title-card
+        title: Home
+        subtitle: "{{ states('weather.home') | title }} · {{ states('sensor.irrigation_next_run') | default('No irrigation schedule') }}"
+
+      - type: custom:mushroom-chips-card
+        alignment: center
+        chips:
+          - type: template
+            icon: mdi:weather-partly-cloudy
+            content: "{{ state_attr('weather.home', 'temperature') | default('—') }}° {{ states('weather.home') }}"
+          - type: template
+            icon: mdi:shield-home
+            content: >
+              {% if is_state('binary_sensor.driveway_motion', 'on') or is_state('binary_sensor.garage_motion', 'on')
+                 or is_state('binary_sensor.basement_motion', 'on') or is_state('binary_sensor.bambu_motion', 'on') %}
+              Motion detected
+              {% else %}
+              All clear
+              {% endif %}
+          - type: template
+            icon: mdi:sprinkler
+            content: "{{ states('sensor.irrigation_next_run') | default('No schedule') }}"
+
+      - type: custom:mushroom-template-card
+        primary: Now Playing
+        secondary: >
+          {% set mp = 'media_player.plex_plex_for_roku_z_roku_ultra' %}
+          {% if is_state(mp, 'playing') or is_state(mp, 'paused') %}
+            {% if state_attr(mp, 'media_content_type') == 'tvshow' %}
+              {{ state_attr(mp, 'media_series_title') }} S{{ state_attr(mp, 'media_season') }}E{{ state_attr(mp, 'media_episode') }} · {{ state_attr(mp, 'media_title') }}
+            {% else %}
+              {{ state_attr(mp, 'media_title') | default(states(mp)) }}
+            {% endif %}
+          {% else %}
+            Nothing playing
+          {% endif %}
+        icon: mdi:play-circle
+        tap_action:
+          action: more-info
+        entity: media_player.plex_plex_for_roku_z_roku_ultra
+
+      - type: custom:mushroom-title-card
+        title: Weather
+        subtitle: Forecast
+
+      - type: weather-forecast
+        entity: weather.home
+        show_forecast: true
+
+      - type: custom:mushroom-title-card
+        title: Outdoor
+        subtitle: Front yard lights and fan
+
+      - type: grid
+        columns: 2
+        square: false
+        cards:
+          - type: custom:mushroom-switch-card
+            entity: switch.front_lights_shelly_1_plus
+            name: Outdoor Garage Lights
+            icon: mdi:garage
+            layout: vertical
+
+          - type: custom:mushroom-switch-card
+            entity: switch.front_door_light_shelly_1
+            name: Front Door Light
+            icon: mdi:door-sliding
+            layout: vertical
+
+          - type: custom:mushroom-switch-card
+            entity: switch.whole_house_fan_switch_1
+            name: Whole House Fan
+            icon: mdi:fan
+            layout: vertical
+
+          - type: custom:mushroom-light-card
+            entity: light.basement
+            name: Basement Light
+            icon: mdi:lightbulb
+            layout: vertical
+
+      - type: custom:mushroom-title-card
+        title: Media
+        subtitle: Living room
+
+      - type: custom:mushroom-media-player-card
+        entity: media_player.plex_plex_for_roku_z_roku_ultra
+        name: Living Room Plex
+
+      - type: custom:mushroom-title-card
+        title: Yard Schedule
+        subtitle: Sunset and sunrise automations
+
+      - type: entities
+        entities:
+          - automation.front_yard_lights_on_at_sunset
+          - automation.front_yard_lights_off_at_23_00
+          - automation.front_yard_lights_on_at_04_45_if_dark
+          - automation.front_yard_lights_off_at_sunrise

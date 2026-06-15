@@ -1,0 +1,78 @@
+# Main stack for Raspberry Pi docker host (10.0.0.4).
+# Runtime path: /docker/docker-compose.yml (synced by scripts/deploy.sh)
+
+services:
+  homeassistant:
+    container_name: homeassistant
+    image: ghcr.io/home-assistant/home-assistant:stable
+    restart: unless-stopped
+    volumes:
+      - /docker/homeassistant:/config
+      - /etc/localtime:/etc/localtime:ro
+    ports:
+      - "8123:8123"
+
+  mosquitto:
+    container_name: mosquitto
+    image: eclipse-mosquitto:2.0.15
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+    volumes:
+      - /docker/mosquitto/config:/mosquitto/config
+      - /docker/mosquitto/data:/mosquitto/data
+      - /docker/mosquitto/log:/mosquitto/log
+    networks:
+      - mqtt_network
+
+  npm:
+    container_name: npm
+    image: jc21/nginx-proxy-manager:latest
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "81:81"
+      - "443:443"
+    volumes:
+      - /docker/npm/data:/data
+      - /docker/npm/letsencrypt:/etc/letsencrypt
+    networks:
+      - docker_default
+
+  pihole:
+    container_name: pihole
+    image: pihole/pihole:latest
+    restart: unless-stopped
+    ports:
+      - "53:53/tcp"
+      - "53:53/udp"
+      - "8053:8053"
+    environment:
+      TZ: America/Denver
+      WEB_PORT: 8053
+      WEBPASSWORD: ${PIHOLE_WEBPASSWORD:-}
+    volumes:
+      - /docker/pihole/etc-pihole:/etc/pihole
+      - /docker/pihole/etc-dnsmasq.d:/etc/dnsmasq.d
+    networks:
+      - docker_default
+
+  portainer:
+    container_name: portainer
+    image: portainer/portainer-ce:latest
+    restart: unless-stopped
+    ports:
+      - "9000:9000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /docker/portainer:/data
+    networks:
+      - docker_default
+
+networks:
+  mqtt_network:
+    external: true
+    name: mqtt_network
+  docker_default:
+    external: true
+    name: docker_default

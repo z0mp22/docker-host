@@ -1,0 +1,35 @@
+*.env
+!.env.example
+**/.env
+!**/.env.example
+
+# Home Assistant runtime (on host only)
+homeassistant/config/secrets.yaml
+**/secrets.yaml
+!**/secrets.yaml.example
+**/.storage/
+**/custom_components/
+**/home-assistant.log*
+**/deps/
+**/*.db
+**/.cloud/
+
+# Pi-hole / NPM / Portainer runtime data
+**/etc-pihole/
+**/etc-dnsmasq.d/
+npm/data/
+pihole/
+portainer/
+mosquitto/data/
+mosquitto/log/
+
+# UniFi poller credentials
+unifi-poller/up.conf
+!unifi-poller/up.conf.example
+
+# Legacy / scratch
+*.log
+*.tmp
+.DS_Store
+.idea/
+.vscode/

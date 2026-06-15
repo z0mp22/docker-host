@@ -1,0 +1,15 @@
+version: '3.3'
+
+services:
+  npm-metrics-exporter:
+    build: .
+    image: npm-metrics-exporter:local
+    container_name: npm-metrics-exporter
+    restart: unless-stopped
+    ports:
+      - "9114:9114"
+    environment:
+      DB_PATH: /data/database.sqlite
+      LOG_DIR: /data/logs
+    volumes:
+      - /docker/npm/data:/data:ro

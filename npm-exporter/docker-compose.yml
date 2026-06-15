@@ -1,0 +1,18 @@
+version: '3.3'
+
+services:
+  npm-exporter:
+    image: nginx/nginx-prometheus-exporter:1.4.2
+    container_name: npm-exporter
+    restart: unless-stopped
+    command:
+      - '--nginx.scrape-uri=http://npm:82/nginx_status'
+    ports:
+      - "9113:9113"
+    networks:
+      - docker_default
+
+networks:
+  docker_default:
+    external: true
+    name: docker_default

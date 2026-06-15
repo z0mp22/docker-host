@@ -1,0 +1,46 @@
+# Loads default set of integrations. Do not remove, or else!
+default_config:
+
+# Load frontend themes from the themes folder
+frontend:
+  themes: !include_dir_merge_named themes
+
+# Load dashboards
+lovelace:
+  mode: storage
+  dashboards:
+    lovelace-main:
+      mode: yaml
+      title: Home
+      icon: mdi:home
+      show_in_sidebar: true
+      filename: dashboards/main.yaml
+    lovelace-life:
+      mode: yaml
+      title: Yard
+      icon: mdi:sprinkler
+      show_in_sidebar: true
+      filename: dashboards/life.yaml
+    lovelace-security:
+      mode: yaml
+      title: Security
+      icon: mdi:shield-home
+      show_in_sidebar: true
+      filename: dashboards/security.yaml
+
+http:
+  use_x_forwarded_for: true
+  trusted_proxies:
+    - 10.0.0.0/8
+    - 172.16.0.0/12
+    - 192.168.0.0/16
+    - 172.19.0.0/16
+
+logger:
+  logs:
+    homeassistant.components.unifi: error
+
+automation: !include automations.yaml
+script: !include scripts.yaml
+scene: !include scenes.yaml
+template: !include templates.yaml

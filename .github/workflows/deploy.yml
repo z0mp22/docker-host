@@ -1,0 +1,25 @@
+name: Docker Host Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, docker-host]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Deploy to /docker
+        env:
+          PULL_IMAGES: "0"
+        run: bash scripts/deploy.sh
+
+      - name: Validate services
+        run: bash scripts/validate.sh
+
+      - name: Show stack status
+        run: |
+          docker ps --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}'

@@ -1,0 +1,112 @@
+- id: '1735850400001'
+  alias: Front yard lights on at sunset
+  description: ''
+  trigger:
+  - platform: sun
+    event: sunset
+  condition: []
+  action:
+  - service: homeassistant.turn_on
+    target:
+      area_id:
+      - front_yard
+  mode: single
+- id: '1735850400002'
+  alias: Front yard lights off at 21:00
+  description: ''
+  triggers:
+  - at: '21:00:00'
+    trigger: time
+  conditions: []
+  actions:
+  - target:
+      area_id:
+      - front_yard
+    action: homeassistant.turn_off
+    data: {}
+  mode: single
+- id: '1735850400003'
+  alias: Front yard lights on at 04:45 if dark
+  description: ''
+  trigger:
+  - platform: time
+    at: 04:45:00
+  condition:
+  - condition: state
+    entity_id: sun.sun
+    state: below_horizon
+  action:
+  - service: homeassistant.turn_on
+    target:
+      area_id:
+      - front_yard
+  mode: single
+- id: '1735850400004'
+  alias: Front yard lights off at sunrise
+  description: ''
+  trigger:
+  - platform: sun
+    event: sunrise
+  condition: []
+  action:
+  - service: homeassistant.turn_off
+    target:
+      area_id:
+      - front_yard
+  mode: single
+- id: '1735948800001'
+  alias: Apply RedditMushroom theme on startup
+  description: Sets the custom theme after Home Assistant starts
+  trigger:
+  - platform: homeassistant
+    event: start
+  condition: []
+  action:
+  - service: frontend.set_theme
+    data:
+      name: RedditMushroom
+  mode: single
+- id: '1764729976993'
+  alias: Off Christmas tree
+  description: ''
+  triggers:
+  - trigger: time
+    at: '21:00:00'
+    weekday:
+    - sat
+    - fri
+    - thu
+    - wed
+    - tue
+    - mon
+    - sun
+  conditions: []
+  actions:
+  - action: switch.turn_off
+    metadata: {}
+    data: {}
+    target:
+      entity_id: switch.christmas_tree
+  mode: single
+- id: '1764730092689'
+  alias: Christmas tree on
+  description: ''
+  triggers:
+  - trigger: time
+    at: 04:45:00
+    weekday:
+    - sun
+    - mon
+    - tue
+    - wed
+    - thu
+    - fri
+    - sat
+  conditions: []
+  actions:
+  - action: switch.turn_on
+    metadata: {}
+    data: {}
+    target:
+      entity_id: switch.christmas_tree
+  mode: single

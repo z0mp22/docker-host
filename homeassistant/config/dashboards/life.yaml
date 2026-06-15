@@ -1,0 +1,73 @@
+title: Yard
+theme: RedditMushroom
+views:
+  - title: Irrigation
+    path: irrigation
+    icon: mdi:sprinkler
+    theme: RedditMushroom
+    cards:
+      - type: custom:mushroom-template-card
+        primary: "{{ 'Watering now' if is_state('binary_sensor.front_main_grass_station_running', 'on') or is_state('binary_sensor.front_north_side_grass_station_running', 'on') or is_state('binary_sensor.front_south_side_grass_station_running', 'on') or is_state('binary_sensor.back_mid_grass_station_running', 'on') or is_state('binary_sensor.back_north_grass_station_running', 'on') or is_state('binary_sensor.back_south_grass_station_running', 'on') or is_state('binary_sensor.back_step_wildflower_station_running', 'on') or is_state('binary_sensor.drip_station_running', 'on') else 'System idle' }}"
+        secondary: "{{ states('sensor.irrigation_next_run') }}"
+        icon: mdi:sprinkler-variant
+        tap_action:
+          action: more-info
+        entity: sensor.irrigation_next_run
+
+      - type: custom:mushroom-chips-card
+        alignment: center
+        chips:
+          - type: entity
+            entity: sensor.opensprinkler_water_level
+          - type: entity
+            entity: sensor.opensprinkler_last_run
+          - type: entity
+            entity: sensor.drip_station_status
+
+      - type: custom:mushroom-title-card
+        title: Stations
+        subtitle: "{{ state_attr('sensor.irrigation_next_run', 'program') | default('') }}"
+
+      - type: grid
+        columns: 2
+        square: false
+        cards:
+          - type: custom:mushroom-entity-card
+            entity: binary_sensor.front_main_grass_station_running
+            name: Front Main Grass
+            icon: mdi:grass
+
+          - type: custom:mushroom-entity-card
+            entity: binary_sensor.front_north_side_grass_station_running
+            name: Front North Grass
+            icon: mdi:grass
+
+          - type: custom:mushroom-entity-card
+            entity: binary_sensor.front_south_side_grass_station_running
+            name: Front South Grass
+            icon: mdi:grass
+
+          - type: custom:mushroom-entity-card
+            entity: binary_sensor.back_mid_grass_station_running
+            name: Back Mid Grass
+            icon: mdi:grass
+
+          - type: custom:mushroom-entity-card
+            entity: binary_sensor.back_north_grass_station_running
+            name: Back North Grass
+            icon: mdi:grass
+
+          - type: custom:mushroom-entity-card
+            entity: binary_sensor.back_south_grass_station_running
+            name: Back South Grass
+            icon: mdi:grass
+
+          - type: custom:mushroom-entity-card
+            entity: binary_sensor.back_step_wildflower_station_running
+            name: Back Wildflower
+            icon: mdi:flower
+
+          - type: custom:mushroom-entity-card
+            entity: binary_sensor.drip_station_running
+            name: Drip
+            icon: mdi:water
