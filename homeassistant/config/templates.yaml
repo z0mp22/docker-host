@@ -3,41 +3,105 @@
       unique_id: living_room_now_playing
       icon: mdi:television
       state: >
-        {% set plex = 'media_player.plex_plex_for_roku_z_roku_ultra' %}
         {% set roku = 'media_player.z_roku_ultra' %}
-        {% if is_state(plex, 'playing') or is_state(plex, 'paused') %}
-          {% if state_attr(plex, 'media_content_type') == 'tvshow' %}
-            Plex · {{ state_attr(plex, 'media_series_title') }} S{{ state_attr(plex, 'media_season') }}E{{ state_attr(plex, 'media_episode') }} · {{ state_attr(plex, 'media_title') }}
+        {% set preferred = ['media_player.plex_plex_for_roku_z_roku_ultra'] %}
+        {% set ns = namespace(plex='') %}
+        {% for entity_id in preferred %}
+          {% if states(entity_id) not in ['unavailable', 'unknown', 'none']
+             and (is_state(entity_id, 'playing') or is_state(entity_id, 'paused')) %}
+            {% set ns.plex = entity_id %}
+          {% endif %}
+        {% endfor %}
+        {% if not ns.plex %}
+          {% for entity in states.media_player %}
+            {% if entity.entity_id.startswith('media_player.plex_')
+               and ('z_roku' in entity.entity_id or 'roku_ultra' in entity.entity_id)
+               and (is_state(entity.entity_id, 'playing') or is_state(entity.entity_id, 'paused')) %}
+              {% set ns.plex = entity.entity_id %}
+            {% endif %}
+          {% endfor %}
+        {% endif %}
+        {% if not ns.plex and (is_state(roku, 'playing') or is_state(roku, 'paused')) %}
+          {% if 'plex' in (state_attr(roku, 'app_name') | default('') | lower) %}
+            {% for entity in states.media_player %}
+              {% if entity.entity_id.startswith('media_player.plex_')
+                 and (is_state(entity.entity_id, 'playing') or is_state(entity.entity_id, 'paused')) %}
+                {% set ns.plex = entity.entity_id %}
+              {% endif %}
+            {% endfor %}
+          {% endif %}
+        {% endif %}
+        {% if ns.plex %}
+          {% if state_attr(ns.plex, 'media_content_type') == 'tvshow' %}
+            {{ state_attr(ns.plex, 'media_series_title') }} S{{ state_attr(ns.plex, 'media_season') }}E{{ state_attr(ns.plex, 'media_episode') }} · {{ state_attr(ns.plex, 'media_title') }}
           {% else %}
-            Plex · {{ state_attr(plex, 'media_title') | default(states(plex)) }}
+            {{ state_attr(ns.plex, 'media_title') | default('Plex') }}
           {% endif %}
         {% elif is_state(roku, 'playing') or is_state(roku, 'paused') %}
-          {{ state_attr(roku, 'app_name') | default(states(roku)) }} · {{ state_attr(roku, 'media_title') | default(states(roku)) }}
+          {{ state_attr(roku, 'app_name') | default(states(roku)) }}
         {% elif states(roku) not in ['unavailable', 'unknown'] %}
           Idle
         {% else %}
           Unavailable
         {% endif %}
+      attributes:
+        plex_entity: >
+          {% set ns = namespace(id='') %}
+          {% for entity in states.media_player %}
+            {% if entity.entity_id.startswith('media_player.plex_')
+               and ('z_roku' in entity.entity_id or 'roku_ultra' in entity.entity_id)
+               and states(entity.entity_id) not in ['unavailable', 'unknown'] %}
+              {% set ns.id = entity.entity_id %}
+            {% endif %}
+          {% endfor %}
+          {{ ns.id }}
 
     - name: Basement Now Playing
       unique_id: basement_now_playing
       icon: mdi:television
       state: >
-        {% set plex = 'media_player.plex_plex_for_roku_basement_roku' %}
         {% set roku = 'media_player.basement_roku' %}
-        {% if is_state(plex, 'playing') or is_state(plex, 'paused') %}
-          {% if state_attr(plex, 'media_content_type') == 'tvshow' %}
-            Plex · {{ state_attr(plex, 'media_series_title') }} S{{ state_attr(plex, 'media_season') }}E{{ state_attr(plex, 'media_episode') }} · {{ state_attr(plex, 'media_title') }}
+        {% set preferred = ['media_player.plex_plex_for_roku_basement_roku'] %}
+        {% set ns = namespace(plex='') %}
+        {% for entity_id in preferred %}
+          {% if states(entity_id) not in ['unavailable', 'unknown', 'none']
+             and (is_state(entity_id, 'playing') or is_state(entity_id, 'paused')) %}
+            {% set ns.plex = entity_id %}
+          {% endif %}
+        {% endfor %}
+        {% if not ns.plex %}
+          {% for entity in states.media_player %}
+            {% if entity.entity_id.startswith('media_player.plex_')
+               and 'basement' in entity.entity_id
+               and (is_state(entity.entity_id, 'playing') or is_state(entity.entity_id, 'paused')) %}
+              {% set ns.plex = entity.entity_id %}
+            {% endif %}
+          {% endfor %}
+        {% endif %}
+        {% if ns.plex %}
+          {% if state_attr(ns.plex, 'media_content_type') == 'tvshow' %}
+            {{ state_attr(ns.plex, 'media_series_title') }} S{{ state_attr(ns.plex, 'media_season') }}E{{ state_attr(ns.plex, 'media_episode') }} · {{ state_attr(ns.plex, 'media_title') }}
           {% else %}
-            Plex · {{ state_attr(plex, 'media_title') | default(states(plex)) }}
+            {{ state_attr(ns.plex, 'media_title') | default('Plex') }}
           {% endif %}
         {% elif is_state(roku, 'playing') or is_state(roku, 'paused') %}
-          {{ state_attr(roku, 'app_name') | default(states(roku)) }} · {{ state_attr(roku, 'media_title') | default(states(roku)) }}
+          {{ state_attr(roku, 'app_name') | default(states(roku)) }}
         {% elif states(roku) not in ['unavailable', 'unknown'] %}
           Idle
         {% else %}
           Unavailable
         {% endif %}
+      attributes:
+        plex_entity: >
+          {% set ns = namespace(id='') %}
+          {% for entity in states.media_player %}
+            {% if entity.entity_id.startswith('media_player.plex_')
+               and 'basement' in entity.entity_id
+               and states(entity.entity_id) not in ['unavailable', 'unknown'] %}
+              {% set ns.id = entity.entity_id %}
+            {% endif %}
+          {% endfor %}
+          {{ ns.id }}
 
     - name: Irrigation Next Run
       unique_id: irrigation_next_run

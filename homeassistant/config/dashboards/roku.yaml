@@ -30,7 +30,16 @@ views:
 
       - type: custom:mushroom-template-card
         primary: "{{ states('sensor.living_room_now_playing') }}"
-        secondary: "{{ state_attr('media_player.z_roku_ultra', 'app_name') | default('Roku') }}"
+        secondary: >
+          {% set plex = state_attr('sensor.living_room_now_playing', 'plex_entity') %}
+          {% if plex and states(plex) not in ['unavailable', 'unknown', 'none'] %}
+            Plex · {{ states(plex) | title }}
+          {% else %}
+            {{ state_attr('media_player.z_roku_ultra', 'app_name') | default('Roku') }}
+            {% if 'plex' in (state_attr('media_player.z_roku_ultra', 'app_name') | default('') | lower) %}
+              · Plex client unavailable in HA
+            {% endif %}
+          {% endif %}
         icon: mdi:sofa
         entity: sensor.living_room_now_playing
         tap_action:
@@ -45,10 +54,23 @@ views:
             name: Roku
             use_media_info: true
 
-          - type: custom:mushroom-media-player-card
-            entity: media_player.plex_plex_for_roku_z_roku_ultra
-            name: Plex
-            use_media_info: true
+          - type: custom:mushroom-template-card
+            primary: Plex
+            secondary: >
+              {% set plex = state_attr('sensor.living_room_now_playing', 'plex_entity') %}
+              {% if plex and states(plex) not in ['unavailable', 'unknown', 'none'] %}
+                {% if is_state(plex, 'playing') or is_state(plex, 'paused') %}
+                  {{ states('sensor.living_room_now_playing') }}
+                {% else %}
+                  {{ states(plex) | title }}
+                {% endif %}
+              {% else %}
+                Unavailable — reload Plex integration
+              {% endif %}
+            icon: mdi:plex
+            tap_action:
+              action: more-info
+              entity: "{{ state_attr('sensor.living_room_now_playing', 'plex_entity') | default('media_player.plex_plex_for_roku_z_roku_ultra', true) }}"
 
       - type: custom:mushroom-chips-card
         alignment: center
