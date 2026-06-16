@@ -214,28 +214,27 @@ deploy_exporters() {
 }
 
 restart_homeassistant_if_running() {
+  if docker ps --format '{{.Names}}' | grep -qx 'homeassistant'; then
+    log "restarting homeassistant to load config changes"
+    docker restart homeassistant
+    sleep 30
+  fi
+}
+
+repair_homeassistant_config_entries() {
+  local repair="${REPO_ROOT}/scripts/repair-ha-config-entries.py"
+  if [ ! -f "${repair}" ]; then
+    return 0
+  fi
   if ! docker ps -a --format '{{.Names}}' | grep -qx 'homeassistant'; then
     return 0
   fi
-
   if docker ps --format '{{.Names}}' | grep -qx 'homeassistant'; then
-    log "stopping homeassistant to load config changes"
+    log "stopping homeassistant for config entry repair"
     docker stop homeassistant
   fi
-
-  ensure_roku_config_entries_storage
-
-  log "starting homeassistant"
-  docker start homeassistant
-  sleep 45
-}
-
-ensure_roku_config_entries_storage() {
-  local repair="${REPO_ROOT}/scripts/repair-ha-config-entries.py"
-  if [ -f "${repair}" ]; then
-    log "repairing homeassistant config entries if needed"
-    sudo python3 "${repair}" || log "config entry repair skipped"
-  fi
+  log "repairing homeassistant config entries"
+  sudo python3 "${repair}" || log "config entry repair skipped"
 }
 
 add_roku_integrations() {
@@ -268,6 +267,7 @@ main() {
   reload_npm
   migrate_legacy_exporters
   deploy_exporters
+  repair_homeassistant_config_entries
   restart_homeassistant_if_running
   add_roku_integrations
   log "deploy complete"
