@@ -3,7 +3,7 @@
 set -euo pipefail
 
 HOST="${VALIDATE_HOST:-127.0.0.1}"
-RETRIES="${VALIDATE_RETRIES:-12}"
+RETRIES="${VALIDATE_RETRIES:-18}"
 SLEEP="${VALIDATE_SLEEP:-5}"
 
 wait_for_metrics() {

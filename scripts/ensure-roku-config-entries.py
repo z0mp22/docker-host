@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import json
 import secrets
+import shutil
 import sys
 import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 STORAGE = Path("/docker/homeassistant/.storage/core.config_entries")
@@ -16,6 +17,16 @@ ROKUS = (
     ("10.0.0.208", "Living Room"),
     ("10.0.0.188", "Basement"),
 )
+ENTRY_DEFAULTS = {
+    "discovery_keys": {},
+    "disabled_by": None,
+    "minor_version": 1,
+    "options": {},
+    "pref_disable_new_entities": False,
+    "pref_disable_polling": False,
+    "source": "user",
+    "version": 1,
+}
 
 
 def log(message: str) -> None:
@@ -39,7 +50,16 @@ def roku_info(host: str) -> dict[str, str]:
 
 
 def now_iso() -> str:
-    return datetime.now(UTC).isoformat()
+    return datetime.now(timezone.utc).isoformat()
+
+
+def normalize_entry(entry: dict) -> bool:
+    changed = False
+    for key, value in ENTRY_DEFAULTS.items():
+        if key not in entry:
+            entry[key] = value
+            changed = True
+    return changed
 
 
 def main() -> int:
@@ -49,7 +69,13 @@ def main() -> int:
 
     data = json.loads(STORAGE.read_text())
     entries = data.setdefault("data", {}).setdefault("entries", [])
-    existing = {
+    changed = False
+
+    for entry in entries:
+        if normalize_entry(entry):
+            changed = True
+
+    existing_hosts = {
         entry.get("data", {}).get("host")
         for entry in entries
         if entry.get("domain") == "roku"
@@ -60,9 +86,8 @@ def main() -> int:
         if entry.get("domain") == "roku" and entry.get("unique_id")
     }
 
-    added = 0
     for host, label in ROKUS:
-        if host in existing:
+        if host in existing_hosts:
             log(f"already configured: {label} ({host})")
             continue
 
@@ -76,32 +101,29 @@ def main() -> int:
             log(f"already configured by unique_id: {info['title']} ({info['unique_id']})")
             continue
 
-        entries.append(
-            {
-                "created_at": now_iso(),
-                "data": {"host": host},
-                "disabled_by": None,
-                "domain": "roku",
-                "entry_id": secrets.token_hex(16),
-                "minor_version": 1,
-                "modified_at": now_iso(),
-                "options": {},
-                "pref_disable_new_entities": False,
-                "pref_disable_polling": False,
-                "source": "user",
-                "title": info["title"],
-                "unique_id": info["unique_id"],
-                "version": 1,
-            }
-        )
-        existing.add(host)
+        entry = {
+            "created_at": now_iso(),
+            "data": {"host": host},
+            "domain": "roku",
+            "entry_id": secrets.token_hex(16),
+            "modified_at": now_iso(),
+            "title": info["title"],
+            "unique_id": info["unique_id"],
+        }
+        entry.update(ENTRY_DEFAULTS)
+        entries.append(entry)
+        existing_hosts.add(host)
         existing_unique.add(info["unique_id"])
-        added += 1
+        changed = True
         log(f"added {info['title']} ({host})")
 
-    if added:
-        STORAGE.write_text(json.dumps(data, indent=2) + "\n")
+    if not changed:
+        return 0
 
+    backup = STORAGE.with_suffix(".config_entries.bak")
+    shutil.copy2(STORAGE, backup)
+    STORAGE.write_text(json.dumps(data, indent=2) + "\n")
+    log(f"updated {STORAGE}")
     return 0
 
 

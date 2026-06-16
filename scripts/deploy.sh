@@ -227,7 +227,7 @@ restart_homeassistant_if_running() {
 
   log "starting homeassistant"
   docker start homeassistant
-  sleep 15
+  sleep 45
 }
 
 ensure_roku_config_entries_storage() {
