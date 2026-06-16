@@ -236,7 +236,7 @@ ensure_roku_config_entries_storage() {
     return 0
   fi
   log "ensuring roku config entries in storage"
-  if python3 "${script}"; then
+  if sudo python3 "${script}"; then
     log "roku config entries ready"
   else
     log "roku config entries skipped (configure manually in UI if needed)"
