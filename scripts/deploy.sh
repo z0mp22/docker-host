@@ -214,9 +214,13 @@ deploy_exporters() {
 }
 
 restart_homeassistant_if_running() {
-  if docker ps --format '{{.Names}}' | grep -qx 'homeassistant'; then
+  if docker ps -a --format '{{.Names}}' | grep -qx 'homeassistant'; then
     log "restarting homeassistant to load config changes"
-    docker restart homeassistant
+    if docker ps --format '{{.Names}}' | grep -qx 'homeassistant'; then
+      docker restart homeassistant
+    else
+      docker start homeassistant
+    fi
     sleep 30
   fi
 }
