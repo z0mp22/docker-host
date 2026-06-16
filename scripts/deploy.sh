@@ -231,15 +231,10 @@ restart_homeassistant_if_running() {
 }
 
 ensure_roku_config_entries_storage() {
-  local script="${REPO_ROOT}/scripts/ensure-roku-config-entries.py"
-  if [ ! -f "${script}" ]; then
-    return 0
-  fi
-  log "ensuring roku config entries in storage"
-  if sudo python3 "${script}"; then
-    log "roku config entries ready"
-  else
-    log "roku config entries skipped (configure manually in UI if needed)"
+  local repair="${REPO_ROOT}/scripts/repair-ha-config-entries.py"
+  if [ -f "${repair}" ]; then
+    log "repairing homeassistant config entries if needed"
+    sudo python3 "${repair}" || log "config entry repair skipped"
   fi
 }
 
