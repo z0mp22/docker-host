@@ -214,10 +214,32 @@ deploy_exporters() {
 }
 
 restart_homeassistant_if_running() {
+  if ! docker ps -a --format '{{.Names}}' | grep -qx 'homeassistant'; then
+    return 0
+  fi
+
   if docker ps --format '{{.Names}}' | grep -qx 'homeassistant'; then
-    log "restarting homeassistant to load config changes"
-    docker restart homeassistant
-    sleep 15
+    log "stopping homeassistant to load config changes"
+    docker stop homeassistant
+  fi
+
+  ensure_roku_config_entries_storage
+
+  log "starting homeassistant"
+  docker start homeassistant
+  sleep 15
+}
+
+ensure_roku_config_entries_storage() {
+  local script="${REPO_ROOT}/scripts/ensure-roku-config-entries.py"
+  if [ ! -f "${script}" ]; then
+    return 0
+  fi
+  log "ensuring roku config entries in storage"
+  if python3 "${script}"; then
+    log "roku config entries ready"
+  else
+    log "roku config entries skipped (configure manually in UI if needed)"
   fi
 }
 
@@ -226,11 +248,11 @@ add_roku_integrations() {
   if [ ! -x "${script}" ]; then
     return 0
   fi
-  log "ensuring roku integrations"
+  log "ensuring roku integrations via API"
   if bash "${script}"; then
     log "roku integrations ready"
   else
-    log "roku integrations skipped (add ha_long_lived_access_token to secrets.yaml or configure in UI)"
+    log "roku API setup skipped (storage entries are used when available)"
   fi
 }
 
