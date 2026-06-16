@@ -1,4 +1,44 @@
 - sensor:
+    - name: Living Room Now Playing
+      unique_id: living_room_now_playing
+      icon: mdi:television
+      state: >
+        {% set plex = 'media_player.plex_plex_for_roku_z_roku_ultra' %}
+        {% set roku = 'media_player.z_roku_ultra' %}
+        {% if is_state(plex, 'playing') or is_state(plex, 'paused') %}
+          {% if state_attr(plex, 'media_content_type') == 'tvshow' %}
+            Plex · {{ state_attr(plex, 'media_series_title') }} S{{ state_attr(plex, 'media_season') }}E{{ state_attr(plex, 'media_episode') }} · {{ state_attr(plex, 'media_title') }}
+          {% else %}
+            Plex · {{ state_attr(plex, 'media_title') | default(states(plex)) }}
+          {% endif %}
+        {% elif is_state(roku, 'playing') or is_state(roku, 'paused') %}
+          {{ state_attr(roku, 'app_name') | default(states(roku)) }} · {{ state_attr(roku, 'media_title') | default(states(roku)) }}
+        {% elif states(roku) not in ['unavailable', 'unknown'] %}
+          Idle
+        {% else %}
+          Unavailable
+        {% endif %}
+
+    - name: Basement Now Playing
+      unique_id: basement_now_playing
+      icon: mdi:television
+      state: >
+        {% set plex = 'media_player.plex_plex_for_roku_basement_roku' %}
+        {% set roku = 'media_player.basement_roku' %}
+        {% if is_state(plex, 'playing') or is_state(plex, 'paused') %}
+          {% if state_attr(plex, 'media_content_type') == 'tvshow' %}
+            Plex · {{ state_attr(plex, 'media_series_title') }} S{{ state_attr(plex, 'media_season') }}E{{ state_attr(plex, 'media_episode') }} · {{ state_attr(plex, 'media_title') }}
+          {% else %}
+            Plex · {{ state_attr(plex, 'media_title') | default(states(plex)) }}
+          {% endif %}
+        {% elif is_state(roku, 'playing') or is_state(roku, 'paused') %}
+          {{ state_attr(roku, 'app_name') | default(states(roku)) }} · {{ state_attr(roku, 'media_title') | default(states(roku)) }}
+        {% elif states(roku) not in ['unavailable', 'unknown'] %}
+          Idle
+        {% else %}
+          Unavailable
+        {% endif %}
+
     - name: Irrigation Next Run
       unique_id: irrigation_next_run
       icon: mdi:calendar-clock

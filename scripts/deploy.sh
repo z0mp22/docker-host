@@ -217,6 +217,20 @@ restart_homeassistant_if_running() {
   if docker ps --format '{{.Names}}' | grep -qx 'homeassistant'; then
     log "restarting homeassistant to load config changes"
     docker restart homeassistant
+    sleep 15
+  fi
+}
+
+add_roku_integrations() {
+  local script="${REPO_ROOT}/scripts/add-roku-integrations.sh"
+  if [ ! -x "${script}" ]; then
+    return 0
+  fi
+  log "ensuring roku integrations"
+  if bash "${script}"; then
+    log "roku integrations ready"
+  else
+    log "roku integrations skipped (add ha_long_lived_access_token to secrets.yaml or configure in UI)"
   fi
 }
 
@@ -238,6 +252,7 @@ main() {
   migrate_legacy_exporters
   deploy_exporters
   restart_homeassistant_if_running
+  add_roku_integrations
   log "deploy complete"
 }
 

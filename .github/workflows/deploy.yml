@@ -15,6 +15,7 @@ jobs:
       - name: Deploy to /docker
         env:
           PULL_IMAGES: "0"
+          HA_TOKEN: ${{ secrets.HA_LONG_LIVED_ACCESS_TOKEN }}
         run: bash scripts/deploy.sh
 
       - name: Validate services
