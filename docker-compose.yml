@@ -6,11 +6,17 @@ services:
     container_name: homeassistant
     image: ghcr.io/home-assistant/home-assistant:stable
     restart: unless-stopped
+    network_mode: host
+    privileged: true
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    environment:
+      TZ: America/Denver
     volumes:
       - /docker/homeassistant:/config
       - /etc/localtime:/etc/localtime:ro
-    ports:
-      - "8123:8123"
+      - /run/dbus:/run/dbus:ro
 
   mosquitto:
     container_name: mosquitto
