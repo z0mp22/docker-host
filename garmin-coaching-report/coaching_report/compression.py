@@ -4,7 +4,45 @@ from copy import deepcopy
 from typing import Any
 
 HistoryCompression = str  # none | stripped | monthly_aggregates
-WeekCompression = str  # full | downsampled | structured
+WeekCompression = str  # full | downsampled | structured | compact
+
+
+def _strip_time_series(obj: Any) -> Any:
+    """Remove long intra-day series while keeping summary fields."""
+    if isinstance(obj, dict):
+        cleaned = {}
+        for k, v in obj.items():
+            if k in ("values", "samples", "data", "timeSeries", "stressValuesArray", "heartRateValues"):
+                continue
+            if isinstance(v, list) and len(v) > 30:
+                continue
+            cleaned[k] = _strip_time_series(v)
+        return cleaned
+    if isinstance(obj, list) and len(obj) > 30:
+        return _downsample_list(obj, 30)
+    return obj
+
+
+def _compress_daily_health(entry: dict[str, Any], level: WeekCompression) -> dict[str, Any]:
+    if level == "full":
+        return entry
+    slim = deepcopy(entry)
+    for key in ("stress", "heart_rates", "steps", "body_battery", "body_battery_events"):
+        if key in slim:
+            slim[key] = _strip_time_series(slim.get(key))
+    if level == "compact":
+        keep = (
+            "date",
+            "stats",
+            "user_summary",
+            "training_readiness",
+            "training_status",
+            "sleep",
+            "hrv",
+            "resting_hr",
+        )
+        slim = {k: slim[k] for k in keep if k in slim}
+    return slim
 
 
 def strip_large_fields(activity: dict[str, Any]) -> dict[str, Any]:
@@ -83,10 +121,26 @@ def compress_week(week_full: dict[str, Any], level: WeekCompression) -> dict[str
             slim = deepcopy(entry)
             slim["details"] = _strip_raw_series(slim.get("details"))
             details_out.append(slim)
+        elif level == "compact":
+            slim = {
+                "activity_id": entry.get("activity_id"),
+                "summary": entry.get("summary"),
+                "splits": entry.get("splits"),
+                "weather": entry.get("weather"),
+                "hr_zones": entry.get("hr_zones"),
+                "gear": entry.get("gear"),
+                "training_effect": entry.get("training_effect"),
+            }
+            details_out.append(slim)
         else:
             details_out.append(entry)
 
     compressed["activity_details"] = details_out
+    compressed["daily_health"] = [
+        _compress_daily_health(d, level) for d in compressed.get("daily_health", [])
+    ]
+    if level in ("structured", "compact"):
+        compressed.pop("activities", None)
     compressed["week_compression_applied"] = level
     return compressed
 

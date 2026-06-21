@@ -11,7 +11,7 @@ from .errors import CoachError
 from .prompts import load_system_prompt, prompt_version
 
 HistoryLevel = Literal["none", "stripped", "monthly_aggregates"]
-WeekLevel = Literal["full", "downsampled", "structured"]
+WeekLevel = Literal["full", "downsampled", "structured", "compact"]
 
 
 @dataclass
@@ -80,6 +80,7 @@ def generate_coach_report(
         ("monthly_aggregates", "full"),
         ("monthly_aggregates", "downsampled"),
         ("monthly_aggregates", "structured"),
+        ("monthly_aggregates", "compact"),
     ]
 
     user_content: dict[str, Any] = {}

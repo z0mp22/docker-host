@@ -39,3 +39,4 @@ garmin-coaching-report/cron.log
 .DS_Store
 .idea/
 .vscode/
+**/__pycache__/
