@@ -6,11 +6,12 @@ from typing import Any, Literal
 
 import anthropic
 
-from .collector import monthly_sport_aggregates, strip_large_fields
+from .compression import compress_week, monthly_sport_aggregates, strip_large_fields
 from .errors import CoachError
 from .prompts import load_system_prompt, prompt_version
 
-CompressionLevel = Literal["none", "stripped", "monthly_aggregates"]
+HistoryLevel = Literal["none", "stripped", "monthly_aggregates"]
+WeekLevel = Literal["full", "downsampled", "structured"]
 
 
 @dataclass
@@ -20,19 +21,22 @@ class CoachResult:
     input_tokens: int
     output_tokens: int
     estimated_input_tokens: int
-    history_compression: CompressionLevel
+    history_compression: HistoryLevel
+    week_compression: WeekLevel
     prompt_version: str
 
 
 def _prepare_user_content(
-    payload: dict[str, Any], compression: CompressionLevel
+    payload: dict[str, Any],
+    history_level: HistoryLevel,
+    week_level: WeekLevel,
 ) -> dict[str, Any]:
-    week_full = payload["week_full"]
+    week_full = compress_week(payload["week_full"], week_level)
     history = payload["history_summaries"]
 
-    if compression == "none":
+    if history_level == "none":
         history_out: Any = history
-    elif compression == "stripped":
+    elif history_level == "stripped":
         history_out = [strip_large_fields(a) for a in history]
     else:
         history_out = monthly_sport_aggregates(history)
@@ -42,7 +46,8 @@ def _prepare_user_content(
         "week_full": week_full,
         "history_summaries": history_out,
         "history_range": payload["history_range"],
-        "history_compression_applied": compression,
+        "history_compression_applied": history_level,
+        "week_compression_applied": week_level,
     }
 
 
@@ -54,7 +59,7 @@ def _estimate_tokens(client: anthropic.Anthropic, model: str, system: str, user_
             messages=[{"role": "user", "content": user_json}],
         ).input_tokens
     except Exception:
-        return len(user_json) // 4
+        return len(user_json) // 3
 
 
 def generate_coach_report(
@@ -63,28 +68,40 @@ def generate_coach_report(
     model: str,
     max_input_tokens: int,
 ) -> tuple[CoachResult, dict[str, Any]]:
-    """
-    Call Claude with full week data and progressively compressed history.
-
-    Returns CoachResult and the final user content dict (for debug JSON save).
-    """
+    """Call Claude with progressive compression until within token budget."""
     client = anthropic.Anthropic(api_key=api_key)
     system = load_system_prompt()
     pver = prompt_version()
 
-    compression_order: list[CompressionLevel] = ["none", "stripped", "monthly_aggregates"]
+    # History compresses first; week raw GPS is the usual bottleneck.
+    compression_steps: list[tuple[HistoryLevel, WeekLevel]] = [
+        ("none", "full"),
+        ("stripped", "full"),
+        ("monthly_aggregates", "full"),
+        ("monthly_aggregates", "downsampled"),
+        ("monthly_aggregates", "structured"),
+    ]
+
     user_content: dict[str, Any] = {}
     user_json = ""
     estimated = 0
-    compression_used: CompressionLevel = "none"
+    history_used: HistoryLevel = "none"
+    week_used: WeekLevel = "full"
 
-    for level in compression_order:
-        user_content = _prepare_user_content(payload, level)
+    for history_level, week_level in compression_steps:
+        user_content = _prepare_user_content(payload, history_level, week_level)
         user_json = json.dumps(user_content, default=str, ensure_ascii=False)
         estimated = _estimate_tokens(client, model, system, user_json)
-        compression_used = level
+        history_used = history_level
+        week_used = week_level
         if estimated <= max_input_tokens:
             break
+
+    if estimated > max_input_tokens:
+        raise CoachError(
+            f"Payload still too large after compression: ~{estimated:,} tokens "
+            f"(max {max_input_tokens:,}). history={history_used} week={week_used}"
+        )
 
     try:
         response = client.messages.create(
@@ -109,7 +126,8 @@ def generate_coach_report(
         input_tokens=input_tokens,
         output_tokens=output_tokens,
         estimated_input_tokens=estimated,
-        history_compression=compression_used,
+        history_compression=history_used,
+        week_compression=week_used,
         prompt_version=pver,
     )
     return result, user_content

@@ -1,0 +1,136 @@
+"""Token-size reduction for Garmin payloads."""
+
+from copy import deepcopy
+from typing import Any
+
+HistoryCompression = str  # none | stripped | monthly_aggregates
+WeekCompression = str  # full | downsampled | structured
+
+
+def strip_large_fields(activity: dict[str, Any]) -> dict[str, Any]:
+    """Remove nested blobs from activity summaries for token reduction."""
+    cleaned = dict(activity)
+    for key in ("metadataDTO", "eventType", "privacy", "ownerId"):
+        cleaned.pop(key, None)
+    return cleaned
+
+
+def _downsample_list(items: list[Any], max_points: int) -> list[Any]:
+    if len(items) <= max_points:
+        return items
+    if max_points <= 2:
+        return items[:max_points]
+    step = max(1, (len(items) - 1) // (max_points - 1))
+    indices = sorted({0, *(range(0, len(items), step)), len(items) - 1})
+    return [items[i] for i in indices[:max_points]]
+
+
+def _truncate_long_lists(obj: Any, max_len: int = 120, depth: int = 0) -> Any:
+    if depth > 25:
+        return obj
+    if isinstance(obj, list):
+        sampled = _downsample_list(obj, max_len) if len(obj) > max_len else obj
+        return [_truncate_long_lists(x, max_len, depth + 1) for x in sampled]
+    if isinstance(obj, dict):
+        return {k: _truncate_long_lists(v, max_len, depth + 1) for k, v in obj.items()}
+    return obj
+
+
+def _strip_raw_series(details: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Keep summary metrics; drop bulky raw GPS/chart arrays from activity details."""
+    if not details or not isinstance(details, dict):
+        return details
+
+    cleaned = deepcopy(details)
+    for key in (
+        "geoPolylineDTO",
+        "polyline",
+        "chartData",
+        "chartDTO",
+        "metricDTOs",
+        "metrics",
+        "samples",
+    ):
+        cleaned.pop(key, None)
+
+    # Nested activity detail payloads often store series under activityDetailMetrics
+    if "activityDetailMetrics" in cleaned and isinstance(cleaned["activityDetailMetrics"], list):
+        metrics = []
+        for m in cleaned["activityDetailMetrics"]:
+            if not isinstance(m, dict):
+                continue
+            slim = {k: v for k, v in m.items() if k not in ("values", "chartData", "samples")}
+            metrics.append(slim)
+        cleaned["activityDetailMetrics"] = metrics
+
+    return cleaned
+
+
+def compress_week(week_full: dict[str, Any], level: WeekCompression) -> dict[str, Any]:
+    if level == "full":
+        return week_full
+
+    compressed = deepcopy(week_full)
+    details_out = []
+
+    for entry in compressed.get("activity_details", []):
+        if level == "downsampled":
+            slim = deepcopy(entry)
+            if slim.get("details"):
+                slim["details"] = _truncate_long_lists(slim["details"], max_len=120)
+            details_out.append(slim)
+        elif level == "structured":
+            slim = deepcopy(entry)
+            slim["details"] = _strip_raw_series(slim.get("details"))
+            details_out.append(slim)
+        else:
+            details_out.append(entry)
+
+    compressed["activity_details"] = details_out
+    compressed["week_compression_applied"] = level
+    return compressed
+
+
+def monthly_sport_aggregates(activities: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Compress history to monthly per-sport aggregates."""
+    buckets: dict[tuple[str, str], dict[str, Any]] = {}
+
+    for act in activities:
+        start = act.get("startTimeLocal") or act.get("startTimeGMT") or ""
+        month = start[:7] if len(start) >= 7 else "unknown"
+        sport = (act.get("activityType") or {}).get("typeKey", "unknown")
+        key = (month, sport)
+
+        if key not in buckets:
+            buckets[key] = {
+                "month": month,
+                "sport": sport,
+                "count": 0,
+                "total_distance_m": 0.0,
+                "total_duration_s": 0.0,
+                "total_elevation_m": 0.0,
+                "avg_hr_sum": 0.0,
+                "avg_hr_count": 0,
+            }
+
+        b = buckets[key]
+        b["count"] += 1
+        b["total_distance_m"] += float(act.get("distance") or 0)
+        b["total_duration_s"] += float(act.get("duration") or 0)
+        b["total_elevation_m"] += float(act.get("elevationGain") or 0)
+        avg_hr = act.get("averageHR")
+        if avg_hr:
+            b["avg_hr_sum"] += float(avg_hr)
+            b["avg_hr_count"] += 1
+
+    result = []
+    for b in buckets.values():
+        if b["avg_hr_count"]:
+            b["avg_hr"] = round(b["avg_hr_sum"] / b["avg_hr_count"], 1)
+        else:
+            b["avg_hr"] = None
+        del b["avg_hr_sum"]
+        del b["avg_hr_count"]
+        result.append(b)
+
+    return sorted(result, key=lambda x: (x["month"], x["sport"]))

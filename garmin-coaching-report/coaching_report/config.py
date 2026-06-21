@@ -38,11 +38,11 @@ def load_app_config() -> AppConfig:
     return AppConfig(
         garmin=garmin,
         anthropic_api_key=api_key,
-        anthropic_model=os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-20250514"),
+        anthropic_model=os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-6"),
         gmail_user=gmail_user,
         gmail_app_password=gmail_password,
         report_output_dir=Path(os.environ.get("REPORT_OUTPUT_DIR", "/reports")),
         unit_system=os.environ.get("UNIT_SYSTEM", "metric"),
-        max_input_tokens=int(os.environ.get("MAX_INPUT_TOKENS", "150000")),
+        max_input_tokens=int(os.environ.get("MAX_INPUT_TOKENS", "900000")),
         save_debug_input=os.environ.get("SAVE_DEBUG_INPUT", "true").lower() in ("1", "true", "yes"),
     )

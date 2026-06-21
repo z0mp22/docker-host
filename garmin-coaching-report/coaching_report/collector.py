@@ -43,7 +43,7 @@ def _collect_activity_full(client: GarminClientWrapper, activity_id: int) -> dic
     return {
         "activity_id": activity_id,
         "summary": _safe(client, "get_activity", activity_id),
-        "details": _safe(client, "get_activity_details", activity_id, maxchart=2000, maxpoly=4000),
+        "details": _safe(client, "get_activity_details", activity_id, maxchart=1000, maxpoly=1000),
         "splits": _safe(client, "get_activity_splits", activity_id),
         "weather": _safe(client, "get_activity_weather", activity_id),
         "hr_zones": _safe(client, "get_activity_hr_in_timezones", activity_id),
@@ -95,57 +95,7 @@ def collect_history_summaries(
         raise DataCollectionError(f"Failed to fetch history activities: {exc}") from exc
 
 
-def strip_large_fields(activity: dict[str, Any]) -> dict[str, Any]:
-    """Remove nested blobs from activity summaries for token reduction."""
-    cleaned = dict(activity)
-    for key in ("metadataDTO", "eventType", "privacy", "ownerId"):
-        cleaned.pop(key, None)
-    return cleaned
-
-
-def monthly_sport_aggregates(activities: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Compress history to monthly per-sport aggregates."""
-    buckets: dict[tuple[str, str], dict[str, Any]] = {}
-
-    for act in activities:
-        start = act.get("startTimeLocal") or act.get("startTimeGMT") or ""
-        month = start[:7] if len(start) >= 7 else "unknown"
-        sport = (act.get("activityType") or {}).get("typeKey", "unknown")
-        key = (month, sport)
-
-        if key not in buckets:
-            buckets[key] = {
-                "month": month,
-                "sport": sport,
-                "count": 0,
-                "total_distance_m": 0.0,
-                "total_duration_s": 0.0,
-                "total_elevation_m": 0.0,
-                "avg_hr_sum": 0.0,
-                "avg_hr_count": 0,
-            }
-
-        b = buckets[key]
-        b["count"] += 1
-        b["total_distance_m"] += float(act.get("distance") or 0)
-        b["total_duration_s"] += float(act.get("duration") or 0)
-        b["total_elevation_m"] += float(act.get("elevationGain") or 0)
-        avg_hr = act.get("averageHR")
-        if avg_hr:
-            b["avg_hr_sum"] += float(avg_hr)
-            b["avg_hr_count"] += 1
-
-    result = []
-    for b in buckets.values():
-        if b["avg_hr_count"]:
-            b["avg_hr"] = round(b["avg_hr_sum"] / b["avg_hr_count"], 1)
-        else:
-            b["avg_hr"] = None
-        del b["avg_hr_sum"]
-        del b["avg_hr_count"]
-        result.append(b)
-
-    return sorted(result, key=lambda x: (x["month"], x["sport"]))
+from .compression import strip_large_fields
 
 
 def build_payload(
