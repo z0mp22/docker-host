@@ -1,9 +1,10 @@
 """Token-size reduction for Garmin payloads."""
 
 from copy import deepcopy
+from datetime import datetime
 from typing import Any
 
-HistoryCompression = str  # none | stripped | monthly_aggregates
+HistoryCompression = str  # weekly_aggregates | stripped | monthly_aggregates
 WeekCompression = str  # full | downsampled | structured | compact
 
 
@@ -188,3 +189,60 @@ def monthly_sport_aggregates(activities: list[dict[str, Any]]) -> list[dict[str,
         result.append(b)
 
     return sorted(result, key=lambda x: (x["month"], x["sport"]))
+
+
+def _activity_iso_week(activity: dict[str, Any]) -> str:
+    start = activity.get("startTimeLocal") or activity.get("startTimeGMT") or ""
+    if len(start) < 10:
+        return "unknown"
+    dt = datetime.strptime(start[:10], "%Y-%m-%d")
+    iso = dt.isocalendar()
+    return f"{iso.year}-W{iso.week:02d}"
+
+
+def weekly_sport_aggregates(activities: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Compress history to ISO-week per-sport aggregates (ideal for 8-week lookback)."""
+    buckets: dict[tuple[str, str], dict[str, Any]] = {}
+
+    for act in activities:
+        week = _activity_iso_week(act)
+        sport = (act.get("activityType") or {}).get("typeKey", "unknown")
+        key = (week, sport)
+
+        if key not in buckets:
+            buckets[key] = {
+                "week": week,
+                "sport": sport,
+                "count": 0,
+                "total_distance_m": 0.0,
+                "total_duration_s": 0.0,
+                "total_elevation_m": 0.0,
+                "avg_hr_sum": 0.0,
+                "avg_hr_count": 0,
+                "max_hr": None,
+            }
+
+        b = buckets[key]
+        b["count"] += 1
+        b["total_distance_m"] += float(act.get("distance") or 0)
+        b["total_duration_s"] += float(act.get("duration") or 0)
+        b["total_elevation_m"] += float(act.get("elevationGain") or 0)
+        avg_hr = act.get("averageHR")
+        if avg_hr:
+            b["avg_hr_sum"] += float(avg_hr)
+            b["avg_hr_count"] += 1
+        max_hr = act.get("maxHR")
+        if max_hr:
+            b["max_hr"] = max(b["max_hr"] or 0, int(max_hr))
+
+    result = []
+    for b in buckets.values():
+        if b["avg_hr_count"]:
+            b["avg_hr"] = round(b["avg_hr_sum"] / b["avg_hr_count"], 1)
+        else:
+            b["avg_hr"] = None
+        del b["avg_hr_sum"]
+        del b["avg_hr_count"]
+        result.append(b)
+
+    return sorted(result, key=lambda x: (x["week"], x["sport"]))

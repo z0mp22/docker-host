@@ -6,6 +6,7 @@ from typing import Any
 
 from garmin_connect_mcp.client import GarminClientWrapper
 
+from .config import AppConfig
 from .errors import DataCollectionError
 
 
@@ -39,20 +40,34 @@ def _collect_day_health(client: GarminClientWrapper, day: date) -> dict[str, Any
     }
 
 
-def _collect_activity_full(client: GarminClientWrapper, activity_id: int) -> dict[str, Any]:
-    return {
+def _collect_activity(
+    client: GarminClientWrapper,
+    activity_id: int,
+    maxchart: int,
+    maxpoly: int,
+) -> dict[str, Any]:
+    entry: dict[str, Any] = {
         "activity_id": activity_id,
         "summary": _safe(client, "get_activity", activity_id),
-        "details": _safe(client, "get_activity_details", activity_id, maxchart=1000, maxpoly=1000),
         "splits": _safe(client, "get_activity_splits", activity_id),
         "weather": _safe(client, "get_activity_weather", activity_id),
         "hr_zones": _safe(client, "get_activity_hr_in_timezones", activity_id),
         "gear": _safe(client, "get_activity_gear", activity_id),
         "training_effect": _safe(client, "get_training_effect", activity_id),
     }
+    if maxchart > 0 or maxpoly > 0:
+        entry["details"] = _safe(
+            client, "get_activity_details", activity_id, maxchart=maxchart, maxpoly=maxpoly
+        )
+    return entry
 
 
-def collect_week_full(client: GarminClientWrapper, week_end: date) -> dict[str, Any]:
+def collect_week_full(
+    client: GarminClientWrapper,
+    week_end: date,
+    maxchart: int,
+    maxpoly: int,
+) -> dict[str, Any]:
     """Last 7 calendar days ending on week_end (inclusive)."""
     week_start = week_end - timedelta(days=6)
     start_s = _date_str(week_start)
@@ -69,7 +84,9 @@ def collect_week_full(client: GarminClientWrapper, week_end: date) -> dict[str, 
     for act in activities:
         act_id = act.get("activityId")
         if act_id is not None:
-            activity_details.append(_collect_activity_full(client, int(act_id)))
+            activity_details.append(
+                _collect_activity(client, int(act_id), maxchart, maxpoly)
+            )
 
     return {
         "range": {"start": start_s, "end": end_s},
@@ -82,7 +99,7 @@ def collect_week_full(client: GarminClientWrapper, week_end: date) -> dict[str, 
 def collect_history_summaries(
     client: GarminClientWrapper, history_start: date, history_end: date
 ) -> list[dict[str, Any]]:
-    """Six months of activity list summaries (no per-activity GPS/time-series)."""
+    """Activity list summaries for comparison context (no GPS/time-series)."""
     try:
         activities = client.safe_call(
             "get_activities_by_date",
@@ -95,22 +112,24 @@ def collect_history_summaries(
         raise DataCollectionError(f"Failed to fetch history activities: {exc}") from exc
 
 
-from .compression import strip_large_fields
-
-
 def build_payload(
     client: GarminClientWrapper,
+    config: AppConfig,
     report_date: date | None = None,
 ) -> dict[str, Any]:
-    """Build full coaching input payload."""
+    """Build coaching input payload."""
     today = report_date or date.today()
-    # Monday report covers prior Mon–Sun; week ends yesterday when run Monday AM
     week_end = today - timedelta(days=1)
     week_start = week_end - timedelta(days=6)
     history_end = week_start - timedelta(days=1)
-    history_start = history_end - timedelta(days=180)
+    history_start = week_start - timedelta(weeks=config.history_weeks)
 
-    week_full = collect_week_full(client, week_end)
+    week_full = collect_week_full(
+        client,
+        week_end,
+        maxchart=config.garmin_maxchart,
+        maxpoly=config.garmin_maxpoly,
+    )
     history = collect_history_summaries(client, history_start, history_end)
 
     return {
@@ -120,6 +139,7 @@ def build_payload(
         "history_range": {
             "start": _date_str(history_start),
             "end": _date_str(history_end),
+            "weeks": config.history_weeks,
         },
     }
 

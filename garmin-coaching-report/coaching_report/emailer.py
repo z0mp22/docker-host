@@ -30,6 +30,9 @@ def _metadata_footer(result: CoachResult) -> str:
 | Estimated input tokens | {result.estimated_input_tokens:,} |
 | History compression | {result.history_compression} |
 | Week compression | {result.week_compression} |
+| Fallback model used | {result.used_fallback_model} |
+| Cache read tokens | {result.cache_read_tokens:,} |
+| Cache write tokens | {result.cache_creation_tokens:,} |
 | Prompt version | {result.prompt_version} |
 """
 
@@ -78,6 +81,9 @@ def save_outputs(
         "estimated_input_tokens": result.estimated_input_tokens,
         "history_compression": result.history_compression,
         "week_compression": result.week_compression,
+        "used_fallback_model": result.used_fallback_model,
+        "cache_read_tokens": result.cache_read_tokens,
+        "cache_creation_tokens": result.cache_creation_tokens,
         "prompt_version": result.prompt_version,
         "markdown_path": str(md_path),
     }
@@ -98,7 +104,8 @@ def save_outputs(
     log_line = (
         f"[coaching-report] {stamp} model={result.model} "
         f"in={result.input_tokens} out={result.output_tokens} "
-        f"compression={result.history_compression}/{result.week_compression}"
+        f"compression={result.history_compression}/{result.week_compression} "
+        f"cache_read={result.cache_read_tokens}"
     )
     print(log_line, file=sys.stderr)
 

@@ -36,12 +36,15 @@ def main() -> int:
         return 1
 
     try:
-        payload = build_payload(client, report_date)
+        payload = build_payload(client, config, report_date)
         result, user_content = generate_coach_report(
             payload,
             api_key=config.anthropic_api_key,
             model=config.anthropic_model,
+            fallback_model=config.anthropic_fallback_model,
             max_input_tokens=config.max_input_tokens,
+            max_output_tokens=config.max_output_tokens,
+            enable_prompt_cache=config.enable_prompt_cache,
         )
         md_path = save_outputs(config, report_date, result, user_content, payload)
         full_md = md_path.read_text(encoding="utf-8")

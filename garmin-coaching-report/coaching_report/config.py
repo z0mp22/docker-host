@@ -14,11 +14,17 @@ class AppConfig:
     garmin: GarminConfig
     anthropic_api_key: str
     anthropic_model: str
+    anthropic_fallback_model: str
     gmail_user: str
     gmail_app_password: str
     report_output_dir: Path
     unit_system: str
     max_input_tokens: int
+    max_output_tokens: int
+    history_weeks: int
+    garmin_maxchart: int
+    garmin_maxpoly: int
+    enable_prompt_cache: bool
     save_debug_input: bool
 
 
@@ -39,10 +45,20 @@ def load_app_config() -> AppConfig:
         garmin=garmin,
         anthropic_api_key=api_key,
         anthropic_model=os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-6"),
+        anthropic_fallback_model=os.environ.get(
+            "ANTHROPIC_FALLBACK_MODEL", "claude-haiku-4-5-20251001"
+        ),
         gmail_user=gmail_user,
         gmail_app_password=gmail_password,
         report_output_dir=Path(os.environ.get("REPORT_OUTPUT_DIR", "/reports")),
         unit_system=os.environ.get("UNIT_SYSTEM", "metric"),
-        max_input_tokens=int(os.environ.get("MAX_INPUT_TOKENS", "900000")),
-        save_debug_input=os.environ.get("SAVE_DEBUG_INPUT", "true").lower() in ("1", "true", "yes"),
+        max_input_tokens=int(os.environ.get("MAX_INPUT_TOKENS", "180000")),
+        max_output_tokens=int(os.environ.get("MAX_OUTPUT_TOKENS", "4096")),
+        history_weeks=int(os.environ.get("HISTORY_WEEKS", "8")),
+        garmin_maxchart=int(os.environ.get("GARMIN_MAXCHART", "500")),
+        garmin_maxpoly=int(os.environ.get("GARMIN_MAXPOLY", "0")),
+        enable_prompt_cache=os.environ.get("ENABLE_PROMPT_CACHE", "true").lower()
+        in ("1", "true", "yes"),
+        save_debug_input=os.environ.get("SAVE_DEBUG_INPUT", "false").lower()
+        in ("1", "true", "yes"),
     )
