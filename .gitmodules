@@ -1,0 +1,3 @@
+[submodule "garmin-coaching-report/vendor/garmin-connect-mcp"]
+	path = garmin-coaching-report/vendor/garmin-connect-mcp
+	url = https://github.com/eddmann/garmin-connect-mcp.git

@@ -1,0 +1,11 @@
+version: '3.3'
+
+services:
+  garmin-coaching-report:
+    build: .
+    image: garmin-coaching-report:local
+    env_file:
+      - .env
+    volumes:
+      - /docker/garmin-coaching-report/tokens:/root/.garminconnect
+      - /docker/garmin-coaching-report/reports:/reports

@@ -211,6 +211,28 @@ deploy_exporters() {
     [ "${PULL_IMAGES:-0}" = "1" ] && docker compose pull
     docker compose up -d
   )
+
+  deploy_garmin_coaching_report
+}
+
+deploy_garmin_coaching_report() {
+  log "deploying garmin-coaching-report"
+  if [ -f "${REPO_ROOT}/.gitmodules" ]; then
+    git -C "${REPO_ROOT}" submodule update --init garmin-coaching-report/vendor/garmin-connect-mcp 2>/dev/null \
+      || log "WARN: submodule init skipped (not a git checkout?)"
+  fi
+  sync_exporter_stack "garmin-coaching-report"
+  preserve_env_file "garmin-coaching-report"
+  mkdir -p "${DEPLOY_ROOT}/garmin-coaching-report/tokens" \
+           "${DEPLOY_ROOT}/garmin-coaching-report/reports"
+  install_file "${REPO_ROOT}/garmin-coaching-report/scripts/run-report.sh" \
+    "${DEPLOY_ROOT}/garmin-coaching-report/scripts/run-report.sh" 755
+  install_file "${REPO_ROOT}/garmin-coaching-report/cron/garmin-coaching-report" \
+    "/etc/cron.d/garmin-coaching-report" 644
+  (
+    cd "${DEPLOY_ROOT}/garmin-coaching-report"
+    docker compose build
+  )
 }
 
 restart_homeassistant_if_running() {
@@ -260,7 +282,7 @@ main() {
   sync_homeassistant
   sync_mosquitto
   sync_npm_custom
-  for svc in node-exporter pihole-exporter npm-exporter npm-metrics-exporter unifi-poller; do
+  for svc in node-exporter pihole-exporter npm-exporter npm-metrics-exporter unifi-poller garmin-coaching-report; do
     sync_exporter_stack "${svc}"
   done
   preserve_env_file "pihole-exporter"

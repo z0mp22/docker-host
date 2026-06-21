@@ -18,6 +18,7 @@ Push to `main` → GitHub Actions deploys to `/docker` on the Pi via a self-host
 | npm-exporter | 9113 | `npm-exporter/` |
 | npm-metrics-exporter | 9114 | `npm-metrics-exporter/` |
 | unifi-poller | 9130 | `unifi-poller/` (optional) |
+| garmin-coaching-report | — (Mon 6:00 cron) | `garmin-coaching-report/` |
 
 Frigate NVR runs on **minipc** (`10.0.0.6`) — see [czampino/frigate](https://github.com/czampino/frigate).  
 Prometheus/Grafana scrape this host from **minipc** — see [z0mp22/minipc](https://github.com/z0mp22/minipc).
@@ -40,6 +41,9 @@ Set `PULL_IMAGES=1` to pull latest images (optional; off by default to avoid mic
 | `/docker/pihole-exporter/.env` | Pi-hole API password for exporter |
 | `/docker/unifi-poller/up.conf` | UniFi controller credentials |
 | `/docker/homeassistant/secrets.yaml` | HA integrations |
+| `/docker/garmin-coaching-report/.env` | Garmin, Anthropic, Gmail credentials |
+| `/docker/garmin-coaching-report/tokens/` | Garmin OAuth token cache |
+| `/docker/garmin-coaching-report/reports/` | Coaching reports + debug JSON |
 | `/docker/npm/data/` | NPM proxy hosts + SSL (managed in NPM UI) |
 | `/docker/pihole/etc-pihole/` | Pi-hole gravity/lists |
 | `/docker/portainer/` | Portainer DB |
@@ -96,7 +100,8 @@ docker-host/
 ├── pihole-exporter/
 ├── npm-exporter/
 ├── npm-metrics-exporter/
-└── unifi-poller/
+├── unifi-poller/
+└── garmin-coaching-report/  # weekly coaching report (cron batch)
 ```
 
 Runtime on Pi mirrors this under `/docker/`.

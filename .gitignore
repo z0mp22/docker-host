@@ -27,6 +27,12 @@ mosquitto/log/
 unifi-poller/up.conf
 !unifi-poller/up.conf.example
 
+# Garmin coaching report runtime (on host only)
+garmin-coaching-report/.env
+garmin-coaching-report/tokens/
+garmin-coaching-report/reports/
+garmin-coaching-report/cron.log
+
 # Legacy / scratch
 *.log
 *.tmp

@@ -1,0 +1,4 @@
+# docker-host: garmin-coaching-report — Monday 6:00 AM local
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+0 6 * * 1 root /docker/garmin-coaching-report/scripts/run-report.sh >> /docker/garmin-coaching-report/cron.log 2>&1
