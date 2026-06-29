@@ -8,6 +8,7 @@ from garmin_connect_mcp.client import GarminClientWrapper
 
 from .config import AppConfig
 from .errors import DataCollectionError
+from .timezone_util import athlete_tz_name
 
 
 def _date_str(d: date) -> str:
@@ -21,23 +22,31 @@ def _safe(client: GarminClientWrapper, method: str, *args, **kwargs) -> Any:
         return None
 
 
-def _collect_day_health(client: GarminClientWrapper, day: date) -> dict[str, Any]:
+def _collect_day_health(client: GarminClientWrapper, day: date, compact: bool = True) -> dict[str, Any]:
     ds = _date_str(day)
-    return {
+    entry: dict[str, Any] = {
         "date": ds,
         "stats": _safe(client, "get_stats", ds),
         "user_summary": _safe(client, "get_user_summary", ds),
         "training_readiness": _safe(client, "get_training_readiness", ds),
         "training_status": _safe(client, "get_training_status", ds),
-        "body_battery": _safe(client, "get_body_battery", ds, ds),
-        "body_battery_events": _safe(client, "get_body_battery_events", ds),
         "sleep": _safe(client, "get_sleep_data", ds),
         "hrv": _safe(client, "get_hrv_data", ds),
         "resting_hr": _safe(client, "get_rhr_day", ds),
-        "heart_rates": _safe(client, "get_heart_rates", ds),
-        "stress": _safe(client, "get_stress_data", ds),
-        "steps": _safe(client, "get_steps_data", ds),
     }
+    if not compact:
+        entry.update(
+            {
+                "body_battery": _safe(client, "get_body_battery", ds, ds),
+                "body_battery_events": _safe(client, "get_body_battery_events", ds),
+                "heart_rates": _safe(client, "get_heart_rates", ds),
+                "stress": _safe(client, "get_stress_data", ds),
+                "steps": _safe(client, "get_steps_data", ds),
+            }
+        )
+    else:
+        entry["body_battery"] = _safe(client, "get_body_battery", ds, ds)
+    return entry
 
 
 def _collect_activity(
@@ -78,7 +87,10 @@ def collect_week_full(
     except Exception as exc:
         raise DataCollectionError(f"Failed to fetch week activities: {exc}") from exc
 
-    daily_health = [_collect_day_health(client, week_start + timedelta(days=i)) for i in range(7)]
+    daily_health = [
+        _collect_day_health(client, week_start + timedelta(days=i), compact=True)
+        for i in range(7)
+    ]
 
     activity_details = []
     for act in activities:
@@ -90,7 +102,6 @@ def collect_week_full(
 
     return {
         "range": {"start": start_s, "end": end_s},
-        "activities": activities,
         "activity_details": activity_details,
         "daily_health": daily_health,
     }
@@ -132,8 +143,16 @@ def build_payload(
     )
     history = collect_history_summaries(client, history_start, history_end)
 
+    tz = athlete_tz_name(config.athlete_timezone)
     return {
         "report_date": _date_str(today),
+        "athlete_context": {
+            "timezone": tz,
+            "timezone_label": "Mountain Time (MT)",
+            "location": config.athlete_location,
+            "time_format": "All *_mt fields are local wall-clock times in MT",
+            "unit_system": config.unit_system,
+        },
         "week_full": week_full,
         "history_summaries": history,
         "history_range": {

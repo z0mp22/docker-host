@@ -39,7 +39,11 @@ def _prepare_user_content(
     history_level: HistoryLevel,
     week_level: WeekLevel,
 ) -> dict[str, Any]:
-    week_full = compress_week(payload["week_full"], week_level)
+    week_input = dict(payload["week_full"])
+    if payload.get("athlete_context"):
+        week_input["athlete_context"] = payload["athlete_context"]
+
+    week_full = compress_week(week_input, week_level)
     history = payload["history_summaries"]
 
     if history_level == "weekly_aggregates":
@@ -51,6 +55,7 @@ def _prepare_user_content(
 
     return {
         "report_date": payload["report_date"],
+        "athlete_context": payload.get("athlete_context"),
         "week_full": week_full,
         "history_summaries": history_out,
         "history_range": payload["history_range"],
@@ -59,14 +64,42 @@ def _prepare_user_content(
     }
 
 
-def _system_param(system: str, enable_cache: bool) -> str | list[dict[str, Any]]:
-    if not enable_cache:
-        return system
+def _split_user_content(user_content: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Split stable history context from dynamic week data for prompt caching."""
+    cached = {
+        "history_summaries": user_content["history_summaries"],
+        "history_range": user_content["history_range"],
+        "history_compression_applied": user_content["history_compression_applied"],
+        "week_compression_applied": user_content["week_compression_applied"],
+    }
+    dynamic = {
+        "report_date": user_content["report_date"],
+        "athlete_context": user_content.get("athlete_context"),
+        "week_full": user_content["week_full"],
+    }
+    return cached, dynamic
+
+
+def _user_messages(
+    user_content: dict[str, Any], enable_cache: bool
+) -> list[dict[str, Any]]:
+    cached, dynamic = _split_user_content(user_content)
+    cached_json = json.dumps(cached, default=str, ensure_ascii=False)
+    dynamic_json = json.dumps(dynamic, default=str, ensure_ascii=False)
+
+    cached_block: dict[str, Any] = {"type": "text", "text": cached_json}
+    if enable_cache:
+        # System prompt alone is below the 1,024-token cache minimum; include
+        # history summaries in the cached prefix so re-runs within TTL hit cache.
+        cached_block["cache_control"] = {"type": "ephemeral"}
+
     return [
         {
-            "type": "text",
-            "text": system,
-            "cache_control": {"type": "ephemeral"},
+            "role": "user",
+            "content": [
+                cached_block,
+                {"type": "text", "text": dynamic_json},
+            ],
         }
     ]
 
@@ -74,31 +107,32 @@ def _system_param(system: str, enable_cache: bool) -> str | list[dict[str, Any]]
 def _estimate_tokens(
     client: anthropic.Anthropic,
     model: str,
-    system: str | list[dict[str, Any]],
-    user_json: str,
+    system: str,
+    messages: list[dict[str, Any]],
 ) -> int:
     try:
         return client.messages.count_tokens(
             model=model,
             system=system,
-            messages=[{"role": "user", "content": user_json}],
+            messages=messages,
         ).input_tokens
     except Exception:
-        return len(user_json) // 3
+        payload_len = sum(len(str(m)) for m in messages)
+        return payload_len // 3
 
 
 def _call_model(
     client: anthropic.Anthropic,
     model: str,
-    system: str | list[dict[str, Any]],
-    user_json: str,
+    system: str,
+    messages: list[dict[str, Any]],
     max_output_tokens: int,
 ) -> anthropic.types.Message:
     return client.messages.create(
         model=model,
         max_tokens=max_output_tokens,
         system=system,
-        messages=[{"role": "user", "content": user_json}],
+        messages=messages,
     )
 
 
@@ -116,8 +150,7 @@ def generate_coach_report(
     Haiku fallback if still over token budget.
     """
     client = anthropic.Anthropic(api_key=api_key)
-    system_text = load_system_prompt()
-    system = _system_param(system_text, enable_prompt_cache)
+    system = load_system_prompt()
     pver = prompt_version()
 
     compression_steps: list[tuple[HistoryLevel, WeekLevel]] = [
@@ -130,7 +163,7 @@ def generate_coach_report(
         models.append(fallback_model)
 
     user_content: dict[str, Any] = {}
-    user_json = ""
+    messages: list[dict[str, Any]] = []
     estimated = 0
     history_used: HistoryLevel = "weekly_aggregates"
     week_used: WeekLevel = "compact"
@@ -142,8 +175,8 @@ def generate_coach_report(
             used_fallback = True
         for history_level, week_level in compression_steps:
             user_content = _prepare_user_content(payload, history_level, week_level)
-            user_json = json.dumps(user_content, default=str, ensure_ascii=False)
-            estimated = _estimate_tokens(client, chosen_model, system, user_json)
+            messages = _user_messages(user_content, enable_prompt_cache)
+            estimated = _estimate_tokens(client, chosen_model, system, messages)
             history_used = history_level
             week_used = week_level
             if estimated <= max_input_tokens:
@@ -160,7 +193,7 @@ def generate_coach_report(
 
     try:
         response = _call_model(
-            client, chosen_model, system, user_json, max_output_tokens
+            client, chosen_model, system, messages, max_output_tokens
         )
     except Exception as exc:
         raise CoachError(f"Anthropic API call failed: {exc}") from exc

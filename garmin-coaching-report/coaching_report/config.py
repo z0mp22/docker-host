@@ -26,6 +26,8 @@ class AppConfig:
     garmin_maxpoly: int
     enable_prompt_cache: bool
     save_debug_input: bool
+    athlete_timezone: str
+    athlete_location: str
 
 
 def load_app_config() -> AppConfig:
@@ -61,4 +63,6 @@ def load_app_config() -> AppConfig:
         in ("1", "true", "yes"),
         save_debug_input=os.environ.get("SAVE_DEBUG_INPUT", "false").lower()
         in ("1", "true", "yes"),
+        athlete_timezone=os.environ.get("ATHLETE_TIMEZONE", "America/Denver"),
+        athlete_location=os.environ.get("ATHLETE_LOCATION", "Fort Collins, CO"),
     )
