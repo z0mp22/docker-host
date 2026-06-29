@@ -141,31 +141,48 @@ def sleep_time_fields(sleep: Any, tz_name: str) -> dict[str, str | None]:
 
 
 def slim_weather(weather: Any, unit_system: str = "metric") -> Any:
-    """Keep activity weather with explicit units (Garmin stores °C)."""
+    """Keep activity weather with explicit units.
+
+    Garmin's get_activity_weather returns temperature in Fahrenheit and wind
+    speed in mph (US account display units), unlike activity summaryDTO temps
+    which are Celsius. Emit both temp_f and temp_c so the model is never forced
+    to guess the unit.
+    """
     if not isinstance(weather, dict):
         return weather
 
-    temp_c = weather.get("temp") or weather.get("temperature")
-    if temp_c is None:
-        for key in ("tempMax", "tempMin", "temperatureMax", "temperatureMin"):
-            if weather.get(key) is not None:
-                temp_c = weather.get(key)
-                break
+    temp_f = weather.get("temp")
+    if temp_f is None:
+        temp_f = weather.get("apparentTemp")
 
     slim: dict[str, Any] = {}
-    if temp_c is not None:
+    if temp_f is not None:
         try:
-            c = float(temp_c)
-            slim["temp_c"] = round(c, 1)
-            if unit_system == "imperial":
-                slim["temp_f"] = round(c * 9 / 5 + 32, 1)
+            f = float(temp_f)
+            slim["temp_f"] = round(f, 1)
+            slim["temp_c"] = round((f - 32) * 5 / 9, 1)
         except (TypeError, ValueError):
             pass
 
-    for key in ("condition", "weatherType", "windSpeed", "humidity"):
-        if weather.get(key) is not None:
-            slim[key] = weather.get(key)
+    apparent = weather.get("apparentTemp")
+    if apparent is not None and apparent != weather.get("temp"):
+        try:
+            slim["apparent_temp_f"] = round(float(apparent), 1)
+        except (TypeError, ValueError):
+            pass
+
+    wind = weather.get("windSpeed")
+    if wind is not None:
+        slim["wind_mph"] = wind
+
+    humidity = weather.get("relativeHumidity")
+    if humidity is not None:
+        slim["humidity_pct"] = humidity
+
+    wt = weather.get("weatherTypeDTO")
+    if isinstance(wt, dict) and wt.get("desc"):
+        slim["condition"] = wt.get("desc")
 
     if slim:
-        slim["note"] = "Activity-time conditions only (not bedroom/evening ambient)"
+        slim["note"] = "Activity-time outdoor conditions only (not bedroom/evening ambient)"
     return slim or None

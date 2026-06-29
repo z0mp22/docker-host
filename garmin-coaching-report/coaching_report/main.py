@@ -1,8 +1,9 @@
 """Entrypoint for weekly mountain sports coaching report."""
 
+import os
 import sys
 import traceback
-from datetime import date
+from datetime import date, datetime
 
 from .coach import generate_coach_report
 from .collector import build_payload
@@ -19,7 +20,17 @@ def main() -> int:
         print(f"[coaching-report] Configuration error: {exc}", file=sys.stderr)
         return 1
 
-    report_date = date.today()
+    override = os.environ.get("REPORT_DATE", "").strip()
+    try:
+        report_date = (
+            datetime.strptime(override, "%Y-%m-%d").date() if override else date.today()
+        )
+    except ValueError:
+        print(
+            f"[coaching-report] Invalid REPORT_DATE '{override}', using today",
+            file=sys.stderr,
+        )
+        report_date = date.today()
 
     try:
         client = connect_with_tokens(config.garmin)

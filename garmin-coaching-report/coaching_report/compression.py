@@ -21,6 +21,14 @@ def _athlete_context(week_full: dict[str, Any]) -> dict[str, Any]:
     return ctx if isinstance(ctx, dict) else {}
 
 
+def _m_to_ft(meters: Any) -> int | None:
+    """Convert meters to whole feet (elevation/altitude reported in feet)."""
+    try:
+        return round(float(meters) * 3.28084)
+    except (TypeError, ValueError):
+        return None
+
+
 def _strip_time_series(obj: Any) -> Any:
     """Remove long intra-day series while keeping summary fields."""
     if isinstance(obj, dict):
@@ -237,7 +245,6 @@ def _slim_summary(summary: Any, tz_name: str) -> Any:
         "averageHR",
         "maxHR",
         "calories",
-        "elevationGain",
         "averageSpeed",
         "maxSpeed",
         "averagePower",
@@ -254,6 +261,12 @@ def _slim_summary(summary: Any, tz_name: str) -> Any:
     slim = {k: flat[k] for k in keep if k in flat}
     slim.update(activity_time_fields(summary, tz_name))
 
+    for src, dst in (("elevationGain", "elevation_gain_ft"), ("maxElevation", "max_elevation_ft")):
+        if flat.get(src) is not None:
+            ft = _m_to_ft(flat[src])
+            if ft is not None:
+                slim[dst] = ft
+
     for temp_key in ("minTemperature", "maxTemperature"):
         if temp_key in flat and flat[temp_key] is not None:
             slim[f"{temp_key}_c"] = flat[temp_key]
@@ -269,22 +282,24 @@ def _slim_splits(splits: Any) -> Any:
     for lap in laps[:50]:
         if not isinstance(lap, dict):
             continue
-        slim_laps.append(
-            {
-                k: lap[k]
-                for k in (
-                    "startTimeGMT",
-                    "distance",
-                    "duration",
-                    "averageHR",
-                    "maxHR",
-                    "averageSpeed",
-                    "elevationGain",
-                    "averagePower",
-                )
-                if k in lap
-            }
-        )
+        slim_lap = {
+            k: lap[k]
+            for k in (
+                "startTimeGMT",
+                "distance",
+                "duration",
+                "averageHR",
+                "maxHR",
+                "averageSpeed",
+                "averagePower",
+            )
+            if k in lap
+        }
+        if lap.get("elevationGain") is not None:
+            ft = _m_to_ft(lap["elevationGain"])
+            if ft is not None:
+                slim_lap["elevation_gain_ft"] = ft
+        slim_laps.append(slim_lap)
     return {"lap_count": len(laps), "laps": slim_laps}
 
 
@@ -395,6 +410,8 @@ def monthly_sport_aggregates(activities: list[dict[str, Any]]) -> list[dict[str,
             b["avg_hr"] = round(b["avg_hr_sum"] / b["avg_hr_count"], 1)
         else:
             b["avg_hr"] = None
+        b["total_elevation_ft"] = _m_to_ft(b["total_elevation_m"]) or 0
+        del b["total_elevation_m"]
         del b["avg_hr_sum"]
         del b["avg_hr_count"]
         result.append(b)
@@ -463,6 +480,8 @@ def weekly_sport_aggregates(activities: list[dict[str, Any]]) -> list[dict[str, 
             b["avg_hr"] = round(b["avg_hr_sum"] / b["avg_hr_count"], 1)
         else:
             b["avg_hr"] = None
+        b["total_elevation_ft"] = _m_to_ft(b["total_elevation_m"]) or 0
+        del b["total_elevation_m"]
         del b["avg_hr_sum"]
         del b["avg_hr_count"]
         result.append(b)
