@@ -1,17 +1,23 @@
 #!/usr/bin/env python3
-"""Ensure a single MQTT broker config: prefer YAML broker over UI config entry."""
+"""Ensure Home Assistant has a Mosquitto MQTT config entry (UI flow, not YAML broker)."""
 from __future__ import annotations
 
 import json
+import uuid
+from datetime import UTC, datetime
 from pathlib import Path
 
 STORAGE = Path("/docker/homeassistant/.storage/core.config_entries")
-CONFIG = Path("/docker/homeassistant/configuration.yaml")
-MQTT_YAML = Path("/docker/homeassistant/mqtt.yaml")
+BROKER = "127.0.0.1"
+PORT = 1883
 
 
 def log(message: str) -> None:
     print(f"[repair-mqtt] {message}")
+
+
+def now_iso() -> str:
+    return datetime.now(UTC).isoformat()
 
 
 def main() -> int:
@@ -19,32 +25,49 @@ def main() -> int:
         log("missing config entries storage")
         return 0
 
-    uses_yaml_broker = False
-    if CONFIG.exists() and "mqtt:" in CONFIG.read_text():
-        uses_yaml_broker = True
-    if MQTT_YAML.exists() and "broker:" in MQTT_YAML.read_text():
-        uses_yaml_broker = True
-
     data = json.loads(STORAGE.read_text())
     entries = data.get("data", {}).get("entries", [])
     mqtt_entries = [entry for entry in entries if entry.get("domain") == "mqtt"]
 
-    if not mqtt_entries:
-        log("no UI mqtt config entries")
+    if mqtt_entries:
+        changed = False
+        for entry in mqtt_entries:
+            broker = entry.get("data", {}).get("broker")
+            port = entry.get("data", {}).get("port")
+            if broker != BROKER or port != PORT:
+                entry.setdefault("data", {})
+                entry["data"]["broker"] = BROKER
+                entry["data"]["port"] = PORT
+                entry["modified_at"] = now_iso()
+                changed = True
+                log(f"updated mqtt entry broker to {BROKER}:{PORT}")
+        if not changed:
+            log(f"mqtt config entry already present ({len(mqtt_entries)})")
         return 0
 
-    if not uses_yaml_broker:
-        log(f"keeping {len(mqtt_entries)} UI mqtt config entr(y/ies)")
-        return 0
-
-    kept = [entry for entry in entries if entry.get("domain") != "mqtt"]
-    removed = len(entries) - len(kept)
-    if removed:
-        data["data"]["entries"] = kept
-        STORAGE.write_text(json.dumps(data, indent=2) + "\n")
-        log(f"removed {removed} UI mqtt config entr(y/ies); YAML broker is authoritative")
-    else:
-        log("UI mqtt entries already removed")
+    stamp = now_iso()
+    entries.append(
+        {
+            "created_at": stamp,
+            "data": {"broker": BROKER, "port": PORT},
+            "disabled_by": None,
+            "domain": "mqtt",
+            "entry_id": str(uuid.uuid4()),
+            "minor_version": 2,
+            "modified_at": stamp,
+            "options": {},
+            "pref_disable_new_entities": False,
+            "pref_disable_polling": False,
+            "source": "user",
+            "title": "Mosquitto",
+            "unique_id": None,
+            "version": 1,
+            "discovery_keys": {},
+        }
+    )
+    data["data"]["entries"] = entries
+    STORAGE.write_text(json.dumps(data, indent=2) + "\n")
+    log(f"created mqtt config entry for {BROKER}:{PORT}")
     return 0
 
 

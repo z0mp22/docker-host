@@ -14,7 +14,8 @@ log() { echo "[validate-mqtt] $*"; }
 check_topic() {
   local topic="$1"
   if docker exec mosquitto mosquitto_sub -h 127.0.0.1 -t "${topic}" -C 1 -W 3 >/tmp/mqtt-check.txt 2>/dev/null; then
-    log "OK topic ${topic}: $(head -c 120 /tmp/mqtt-check.txt)"
+    msg="$(tr -d '\000' </tmp/mqtt-check.txt | head -c 120)"
+    log "OK topic ${topic}: ${msg}"
     return 0
   fi
   log "WARN topic ${topic}: no retained/live message"

@@ -1,7 +1,0 @@
-broker: 127.0.0.1
-port: 1883
-discovery: true
-birth_topic: homeassistant/status
-birth_payload: online
-will_topic: homeassistant/status
-will_payload: offline
