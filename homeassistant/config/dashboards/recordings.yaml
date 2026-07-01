@@ -21,56 +21,154 @@ views:
             content: "{{ state_attr('sensor.plex_recordings_sync_meta', 'matched') | default('?') }} matched"
           - type: template
             icon: mdi:sync
-            content: "{{ state_attr('sensor.plex_recordings_sync_meta', 'ran_at') | default('never') }}"
+            content: >-
+              {% set ran = state_attr('sensor.plex_recordings_sync_meta', 'ran_at') | default('never') %}
+              {% if ran != 'never' %}{{ as_timestamp(ran) | timestamp_custom('%b %d %I:%M %p') }}{% else %}never{% endif %}
 
       - type: custom:mushroom-title-card
         title: In Plex DVR
-        subtitle: Active subscriptions on media-laptop
+        subtitle: Queued recordings and when they land in your library
 
-      - type: markdown
-        content: >
-          {% set queue = state_attr('sensor.plex_recordings_sync_meta', 'plex_queue') | default([], true) %}
-          {% if queue is string or queue | length == 0 %}
-          No active Plex DVR subscriptions right now.
-          {% else %}
-          {% for item in queue %}
-          - **{{ item.show or item.title }}**{% if item.show and item.title %} — {{ item.title }}{% endif %}  
-            {% if item.air_time %}{{ item.air_time }}{% endif %}
-          {% endfor %}
-          {% endif %}
+      - type: custom:mushroom-template-card
+        layout: horizontal
+        icon: mdi:television-classic
+        icon_color: blue
+        primary: >-
+          {% set q = state_attr('sensor.plex_recordings_sync_meta', 'plex_queue') | default([], true) %}
+          {% set item = q[0] if q is not string and q | length > 0 else none %}
+          {% if item %}{{ item.show or item.title }}{% if item.show and item.title %} — {{ item.title }}{% endif %}{% else %}No active subscriptions{% endif %}
+        secondary: >-
+          {% set q = state_attr('sensor.plex_recordings_sync_meta', 'plex_queue') | default([], true) %}
+          {% set item = q[0] if q is not string and q | length > 0 else none %}
+          {% if item and item.air_time %}
+          Airs {{ as_timestamp(item.air_time) | timestamp_custom('%a %b %d, %I:%M %p') }}{% if item.lands_after %} · Lands ~{{ as_timestamp(item.lands_after) | timestamp_custom('%a %b %d, %I:%M %p') }}{% endif %}
+          {% elif item %}Air time pending from guide{% else %}Nothing queued in Plex right now{% endif %}
+        visibility:
+          - condition: template
+            value_template: "{{ (state_attr('sensor.plex_recordings_sync_meta', 'plex_queue') | default([], true) | length) > 0 }}"
+
+      - type: custom:mushroom-template-card
+        layout: horizontal
+        icon: mdi:television-classic
+        icon_color: blue
+        primary: >-
+          {% set q = state_attr('sensor.plex_recordings_sync_meta', 'plex_queue') | default([], true) %}
+          {% set item = q[1] %}
+          {{ item.show or item.title }}{% if item.show and item.title %} — {{ item.title }}{% endif %}
+        secondary: >-
+          {% set q = state_attr('sensor.plex_recordings_sync_meta', 'plex_queue') | default([], true) %}
+          {% set item = q[1] %}
+          {% if item.air_time %}
+          Airs {{ as_timestamp(item.air_time) | timestamp_custom('%a %b %d, %I:%M %p') }}{% if item.lands_after %} · Lands ~{{ as_timestamp(item.lands_after) | timestamp_custom('%a %b %d, %I:%M %p') }}{% endif %}
+          {% else %}Air time pending from guide{% endif %}
+        visibility:
+          - condition: template
+            value_template: "{{ (state_attr('sensor.plex_recordings_sync_meta', 'plex_queue') | default([], true) | length) > 1 }}"
+
+      - type: custom:mushroom-template-card
+        layout: horizontal
+        icon: mdi:television-classic
+        icon_color: blue
+        primary: >-
+          {% set q = state_attr('sensor.plex_recordings_sync_meta', 'plex_queue') | default([], true) %}
+          {% set item = q[2] %}
+          {{ item.show or item.title }}{% if item.show and item.title %} — {{ item.title }}{% endif %}
+        secondary: >-
+          {% set q = state_attr('sensor.plex_recordings_sync_meta', 'plex_queue') | default([], true) %}
+          {% set item = q[2] %}
+          {% if item.air_time %}
+          Airs {{ as_timestamp(item.air_time) | timestamp_custom('%a %b %d, %I:%M %p') }}{% if item.lands_after %} · Lands ~{{ as_timestamp(item.lands_after) | timestamp_custom('%a %b %d, %I:%M %p') }}{% endif %}
+          {% else %}Air time pending from guide{% endif %}
+        visibility:
+          - condition: template
+            value_template: "{{ (state_attr('sensor.plex_recordings_sync_meta', 'plex_queue') | default([], true) | length) > 2 }}"
 
       - type: custom:mushroom-title-card
         title: Last sync
-        subtitle: New bookings from the GitOps sync
+        subtitle: GitOps sync results
+
+      - type: custom:mushroom-template-card
+        layout: horizontal
+        icon: mdi:calendar-plus
+        icon_color: green
+        primary: >-
+          {% set upcoming = state_attr('sensor.plex_recordings_sync_meta', 'scheduled') | default([], true) %}
+          {% set item = upcoming[0] if upcoming is not string and upcoming | length > 0 else none %}
+          {% if item %}New: {{ item.team }} — {{ item.title }}{% else %}No new bookings{% endif %}
+        secondary: >-
+          {% set upcoming = state_attr('sensor.plex_recordings_sync_meta', 'scheduled') | default([], true) %}
+          {% set item = upcoming[0] if upcoming is not string and upcoming | length > 0 else none %}
+          {% if item and item.air_time %}Airs {{ as_timestamp(item.air_time) | timestamp_custom('%a %b %d, %I:%M %p') }}{% endif %}
+        visibility:
+          - condition: template
+            value_template: "{{ (state_attr('sensor.plex_recordings_sync_meta', 'scheduled') | default([], true) | length) > 0 }}"
+
+      - type: custom:mushroom-template-card
+        layout: horizontal
+        icon: mdi:check-circle
+        icon_color: disabled
+        primary: >-
+          {% set queued = state_attr('sensor.plex_recordings_sync_meta', 'skipped_existing') | default([], true) %}
+          {% set item = queued[0] if queued is not string and queued | length > 0 else none %}
+          {% if item %}Already in Plex: {{ item.team }} — {{ item.title }}{% endif %}
+        secondary: >-
+          {% set queued = state_attr('sensor.plex_recordings_sync_meta', 'skipped_existing') | default([], true) %}
+          {% set item = queued[0] if queued is not string and queued | length > 0 else none %}
+          {% if item and item.air_time %}Airs {{ as_timestamp(item.air_time) | timestamp_custom('%a %b %d, %I:%M %p') }}{% endif %}
+        visibility:
+          - condition: template
+            value_template: "{{ (state_attr('sensor.plex_recordings_sync_meta', 'skipped_existing') | default([], true) | length) > 0 }}"
+
+      - type: custom:mushroom-template-card
+        layout: horizontal
+        icon: mdi:alert-circle
+        icon_color: red
+        primary: >-
+          {% set errors = state_attr('sensor.plex_recordings_sync_meta', 'errors') | default([], true) %}
+          {% set item = errors[0] if errors is not string and errors | length > 0 else none %}
+          {% if item %}{{ item.team }} — {{ item.title }}{% endif %}
+        secondary: >-
+          {% set errors = state_attr('sensor.plex_recordings_sync_meta', 'errors') | default([], true) %}
+          {% set item = errors[0] if errors is not string and errors | length > 0 else none %}
+          {{ item.error | default('Plex API error') if item else '' }}
+        visibility:
+          - condition: template
+            value_template: "{{ (state_attr('sensor.plex_recordings_sync_meta', 'errors') | default([], true) | length) > 0 }}"
+
+      - type: custom:mushroom-template-card
+        layout: horizontal
+        icon: mdi:alert-circle
+        icon_color: red
+        primary: >-
+          {% set errors = state_attr('sensor.plex_recordings_sync_meta', 'errors') | default([], true) %}
+          {% set item = errors[1] %}
+          {{ item.team }} — {{ item.title }}
+        secondary: "{{ item.error | default('Plex API error') }}"
+        visibility:
+          - condition: template
+            value_template: "{{ (state_attr('sensor.plex_recordings_sync_meta', 'errors') | default([], true) | length) > 1 }}"
+
+      - type: custom:mushroom-template-card
+        layout: horizontal
+        icon: mdi:alert-circle
+        icon_color: red
+        primary: >-
+          {% set errors = state_attr('sensor.plex_recordings_sync_meta', 'errors') | default([], true) %}
+          {% set item = errors[2] %}
+          {{ item.team }} — {{ item.title }}
+        secondary: "{{ item.error | default('Plex API error') }}"
+        visibility:
+          - condition: template
+            value_template: "{{ (state_attr('sensor.plex_recordings_sync_meta', 'errors') | default([], true) | length) > 2 }}"
 
       - type: markdown
-        content: >
-          {% set upcoming = state_attr('sensor.plex_recordings_sync_meta', 'scheduled') | default([], true) %}
-          {% set queued = state_attr('sensor.plex_recordings_sync_meta', 'skipped_existing') | default([], true) %}
-          {% set errors = state_attr('sensor.plex_recordings_sync_meta', 'errors') | default([], true) %}
-          {% if upcoming is not string and upcoming | length > 0 %}
-          **Newly scheduled**
-          {% for item in upcoming %}
-          - **{{ item.team }}** — {{ item.title }}{% if item.show %} · {{ item.show }}{% endif %}  
-            {{ item.air_time }}
-          {% endfor %}
-          {% endif %}
-          {% if queued is not string and queued | length > 0 %}
-          **Matched and already in Plex**
-          {% for item in queued %}
-          - **{{ item.team }}** — {{ item.title }}  
-            {{ item.air_time }}
-          {% endfor %}
-          {% endif %}
-          {% if errors is not string and errors | length > 0 %}
-          **Could not schedule (Plex API error)**
-          {% for item in errors %}
-          - **{{ item.team }}** — {{ item.title }}
-          {% endfor %}
-          {% endif %}
-          {% if (upcoming is string or upcoming | length == 0) and (queued is string or queued | length == 0) and (errors is string or errors | length == 0) %}
-          Nothing new from the last sync window.
-          {% endif %}
+        content: Nothing new from the last sync window.
+        visibility:
+          - condition: template
+            value_template: >-
+              {{ (state_attr('sensor.plex_recordings_sync_meta', 'scheduled') | default([], true) | length) == 0
+                 and (state_attr('sensor.plex_recordings_sync_meta', 'skipped_existing') | default([], true) | length) == 0
+                 and (state_attr('sensor.plex_recordings_sync_meta', 'errors') | default([], true) | length) == 0 }}
 
       - type: grid
         columns: 2

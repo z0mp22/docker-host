@@ -8,7 +8,7 @@ views:
     cards:
       - type: custom:mushroom-template-card
         primary: >
-          {% set animals = ['person', 'cat', 'dog', 'bear'] %}
+          {% set animals = ['person', 'cat', 'dog', 'bear', 'raccoon'] %}
           {% set ns = namespace(active=[]) %}
           {% for camera in ['basement', 'garage', 'driveway'] %}
             {% for animal in animals %}
@@ -19,7 +19,7 @@ views:
           {% endfor %}
           {% if ns.active | length > 0 %}Activity now{% else %}Yard is quiet{% endif %}
         secondary: >
-          {% set animals = ['person', 'cat', 'dog', 'bear'] %}
+          {% set animals = ['person', 'cat', 'dog', 'bear', 'raccoon'] %}
           {% set ns = namespace(active=[]) %}
           {% for camera in ['basement', 'garage', 'driveway'] %}
             {% for animal in animals %}
@@ -28,7 +28,7 @@ views:
               {% endif %}
             {% endfor %}
           {% endfor %}
-          {{ ns.active | join(' · ') if ns.active | length > 0 else 'Person, cat, dog, and bear only (Frigate history)' }}
+          {{ ns.active | join(' · ') if ns.active | length > 0 else 'Person, cat, dog, bear, and raccoon (Frigate)' }}
         icon: mdi:paw
         fill_container: true
 
@@ -44,6 +44,9 @@ views:
           - type: template
             icon: mdi:dog
             content: Dog
+          - type: template
+            icon: mdi:raccoon
+            content: Raccoon
           - type: template
             icon: mdi:paw
             content: Bear
@@ -123,5 +126,26 @@ views:
             aspect_ratio: 16:9
           - type: picture-entity
             entity: image.driveway_bear
+            name: Driveway
+            aspect_ratio: 16:9
+
+      - type: custom:mushroom-title-card
+        title: Raccoons
+        subtitle: Tracked in Frigate — snapshots appear after a detection
+
+      - type: grid
+        columns: 3
+        square: false
+        cards:
+          - type: picture-entity
+            entity: image.basement_raccoon
+            name: Basement
+            aspect_ratio: 16:9
+          - type: picture-entity
+            entity: image.garage_raccoon
+            name: Garage
+            aspect_ratio: 16:9
+          - type: picture-entity
+            entity: image.driveway_raccoon
             name: Driveway
             aspect_ratio: 16:9
