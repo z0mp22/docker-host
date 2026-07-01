@@ -45,8 +45,8 @@ views:
 
       - type: markdown
         content: >
-          {% set upcoming = state_attr('sensor.plex_recordings_status', 'scheduled') | default([]) %}
-          {% set queued = state_attr('sensor.plex_recordings_status', 'skipped_existing') | default([]) %}
+          {% set upcoming = state_attr('sensor.plex_recordings_sync_meta', 'scheduled') | default([]) %}
+          {% set queued = state_attr('sensor.plex_recordings_sync_meta', 'skipped_existing') | default([]) %}
           {% if upcoming | length == 0 and queued | length == 0 %}
           No upcoming team recordings in the next sync window.
           {% else %}
@@ -62,4 +62,4 @@ views:
 
       - type: custom:mushroom-title-card
         title: Sync
-        subtitle: "{{ state_attr('sensor.plex_recordings_status', 'ran_at') | default('Waiting for first sync') }}"
+        subtitle: "{{ state_attr('sensor.plex_recordings_sync_meta', 'ran_at') | default('Waiting for first sync') }}"

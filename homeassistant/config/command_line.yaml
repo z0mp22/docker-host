@@ -1,0 +1,38 @@
+- sensor:
+    name: Plex Recordings Status
+    unique_id: plex_recordings_status_file
+    command: >-
+      python3 -c "import json; print(json.load(open('/config/plex_recordings_state.json'))['status'])"
+    scan_interval: 30
+    icon: mdi:television-classic
+
+  - sensor:
+      name: Plex Recording Last Event
+      unique_id: plex_recording_last_event_file
+      command: >-
+        python3 -c "import json; print(json.load(open('/config/plex_recordings_state.json'))['last_scheduled'])"
+      scan_interval: 30
+      icon: mdi:record-rec
+
+  - sensor:
+      name: Plex Recording Last Completed
+      unique_id: plex_recording_last_completed_file
+      command: >-
+        python3 -c "import json; print(json.load(open('/config/plex_recordings_state.json'))['last_completed'])"
+      scan_interval: 30
+      icon: mdi:check-circle
+
+- sensor:
+    name: Plex Recordings Sync Meta
+    unique_id: plex_recordings_sync_meta_file
+    command: cat /config/plex_recordings_state.json
+    scan_interval: 30
+    value_template: "{{ value_json.ran_at | default('unknown') }}"
+    json_attributes:
+      - scheduled
+      - skipped_existing
+      - ran_at
+      - matched
+      - status
+      - last_scheduled
+      - last_completed

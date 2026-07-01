@@ -116,12 +116,12 @@ Runtime on Pi mirrors this under `/docker/`.
 | `home/plex_recordings/completed` | New file in Plex Recordings library |
 | `home/plex_recordings/status` | Retained sync summary (upcoming queue) |
 
-HA config: `homeassistant/config/mqtt.yaml`, `dashboards/recordings.yaml`, and notify automations in `automations.yaml`.
+HA config: `homeassistant/config/command_line.yaml`, `dashboards/recordings.yaml`, `scripts/plex-mqtt-bridge.sh`, and notify automations in `automations.yaml`.
 
 ## Home Assistant note
 
 HA config previously lived in [czampino/homeassistant](https://github.com/czampino/homeassistant).  
-This repo is now the source of truth. `custom_components/` (HACS, Frigate, etc.) stay on the host only.
+**This repo (`docker-host/homeassistant/config/`) is the GitOps source of truth** deployed to `/docker/homeassistant/` on the Pi. Mirror changes to `czampino/homeassistant` if you keep that repo for reference.
 
 ## Workflows
 

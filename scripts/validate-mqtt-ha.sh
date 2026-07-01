@@ -32,9 +32,20 @@ main() {
     check_topic "${topic}" || true
   done
 
+  if [ -f /docker/homeassistant/plex_recordings_state.json ]; then
+    log "OK state file: $(head -c 120 /docker/homeassistant/plex_recordings_state.json)"
+  else
+    log "WARN missing /docker/homeassistant/plex_recordings_state.json"
+  fi
+
+  if [ -f /docker/homeassistant/.storage/core.entity_registry ]; then
+    log "plex entities in registry:"
+    grep -o 'sensor\.plex[^"\\]*' /docker/homeassistant/.storage/core.entity_registry | sort -u | head -10 || true
+  fi
+
   if docker ps --format '{{.Names}}' | grep -qx homeassistant; then
     log "recent homeassistant mqtt log lines:"
-    docker logs homeassistant 2>&1 | grep -iE 'mqtt|plex_recordings' | tail -20 || true
+    docker logs homeassistant --since 10m 2>&1 | grep -iE 'mqtt|plex_recordings|command_line' | tail -20 || true
   fi
 
   log "done"

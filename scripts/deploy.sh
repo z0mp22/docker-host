@@ -276,6 +276,15 @@ add_roku_integrations() {
   fi
 }
 
+install_plex_mqtt_bridge() {
+  log "installing plex mqtt bridge"
+  install_file "${REPO_ROOT}/scripts/plex-mqtt-bridge.sh" \
+    "/usr/local/bin/plex-mqtt-bridge.sh" 755
+  install_file "${REPO_ROOT}/cron/plex-mqtt-bridge" \
+    "/etc/cron.d/plex-mqtt-bridge" 644
+  bash /usr/local/bin/plex-mqtt-bridge.sh || log "WARN: plex mqtt bridge initial run failed"
+}
+
 main() {
   require_docker
   ensure_networks
@@ -294,6 +303,7 @@ main() {
   migrate_legacy_exporters
   deploy_exporters
   repair_homeassistant_config_entries
+  install_plex_mqtt_bridge
   restart_homeassistant_if_running
   add_roku_integrations
   log "deploy complete"
