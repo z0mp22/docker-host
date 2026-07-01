@@ -112,32 +112,64 @@
   mode: single
 - id: '1769900000001'
   alias: Plex recording scheduled
-  description: Notify when plex_recordings schedules a new OTA recording
+  description: Push to mobile when plex_recordings schedules a new OTA recording
   triggers:
   - trigger: mqtt
     topic: home/plex_recordings/scheduled
-  conditions: []
+  - trigger: state
+    entity_id:
+    - sensor.plex_recording_last_event
+  conditions:
+  - condition: template
+    value_template: >-
+      {% if trigger.platform == 'mqtt' %}
+        true
+      {% else %}
+        {{ trigger.to_state.state not in ['unknown', 'unavailable', 'None queued']
+           and trigger.from_state is not none
+           and trigger.from_state.state != trigger.to_state.state }}
+      {% endif %}
   actions:
-  - action: notify.notify
+  - action: script.notify_mobile_recording
     data:
       title: Recording scheduled
-      message: >
-        {{ trigger.payload_json.team }} — {{ trigger.payload_json.title }}
-        {% if trigger.payload_json.air_time is defined %}
-        ({{ trigger.payload_json.air_time }})
+      message: >-
+        {% if trigger.platform == 'mqtt' %}
+          {{ trigger.payload_json.team }} — {{ trigger.payload_json.title }}
+          {% if trigger.payload_json.air_time is defined %}
+          ({{ trigger.payload_json.air_time }})
+          {% endif %}
+        {% else %}
+          {{ trigger.to_state.state }}
         {% endif %}
   mode: single
 - id: '1769900000002'
   alias: Plex recording completed
-  description: Notify when a team recording lands in the Plex library
+  description: Push to mobile when a team recording lands in the Plex library
   triggers:
   - trigger: mqtt
     topic: home/plex_recordings/completed
-  conditions: []
+  - trigger: state
+    entity_id:
+    - sensor.plex_recording_last_completed
+  conditions:
+  - condition: template
+    value_template: >-
+      {% if trigger.platform == 'mqtt' %}
+        true
+      {% else %}
+        {{ trigger.to_state.state not in ['unknown', 'unavailable', 'None yet']
+           and trigger.from_state is not none
+           and trigger.from_state.state != trigger.to_state.state }}
+      {% endif %}
   actions:
-  - action: notify.notify
+  - action: script.notify_mobile_recording
     data:
       title: Recording ready
-      message: >
-        {{ trigger.payload_json.team }} — {{ trigger.payload_json.title }}
+      message: >-
+        {% if trigger.platform == 'mqtt' %}
+          {{ trigger.payload_json.team }} — {{ trigger.payload_json.title }}
+        {% else %}
+          {{ trigger.to_state.state }}
+        {% endif %}
   mode: single

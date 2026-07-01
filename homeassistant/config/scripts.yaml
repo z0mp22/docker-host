@@ -1,0 +1,54 @@
+notify_mobile_recording:
+  alias: Notify all Companion mobile apps
+  description: Sends a push notification to every registered Home Assistant mobile app.
+  fields:
+    title:
+      description: Notification title
+      example: Recording scheduled
+      required: true
+      selector:
+        text:
+    message:
+      description: Notification body
+      example: USA · World Cup vs Bosnia
+      required: true
+      selector:
+        text:
+  sequence:
+    - variables:
+        mobile_notifiers: >-
+          {{ states.notify
+             | selectattr('entity_id', 'search', 'mobile_app')
+             | map(attribute='entity_id')
+             | list }}
+    - choose:
+        - conditions:
+            - condition: template
+              value_template: "{{ mobile_notifiers | count > 0 }}"
+          sequence:
+            - repeat:
+                for_each: "{{ mobile_notifiers }}"
+                sequence:
+                  - action: "{{ repeat.item }}"
+                    data:
+                      title: "{{ title }}"
+                      message: "{{ message }}"
+                      data:
+                        tag: plex-recordings
+                        channel: Recordings
+                        importance: high
+                        priority: high
+                        ttl: 0
+                        push:
+                          sound:
+                            name: default
+                            critical: 0
+                          interruption-level: active
+        - conditions:
+            - condition: template
+              value_template: "{{ mobile_notifiers | count == 0 }}"
+          sequence:
+            - action: persistent_notification.create
+              data:
+                title: "{{ title }}"
+                message: "{{ message }} (no mobile app registered)"
