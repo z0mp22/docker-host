@@ -134,13 +134,16 @@
     data:
       title: Recording scheduled
       message: >-
-        {% if trigger.platform == 'mqtt' %}
-          {{ trigger.payload_json.team }} — {{ trigger.payload_json.title }}
-          {% if trigger.payload_json.air_time is defined %}
-          ({{ trigger.payload_json.air_time }})
-          {% endif %}
-        {% else %}
+        {% if trigger.platform == 'state' %}
           {{ trigger.to_state.state }}
+        {% else %}
+          {% set p = trigger.payload_json
+             if trigger.payload_json is defined
+             else trigger.payload | from_json(default={}) %}
+          {{ p.get('team', '') }} — {{ p.get('title', '') }}
+          {% if p.get('air_time') %}
+          ({{ p.air_time }})
+          {% endif %}
         {% endif %}
   mode: single
 - id: '1769900000002'
@@ -167,9 +170,12 @@
     data:
       title: Recording ready
       message: >-
-        {% if trigger.platform == 'mqtt' %}
-          {{ trigger.payload_json.team }} — {{ trigger.payload_json.title }}
-        {% else %}
+        {% if trigger.platform == 'state' %}
           {{ trigger.to_state.state }}
+        {% else %}
+          {% set p = trigger.payload_json
+             if trigger.payload_json is defined
+             else trigger.payload | from_json(default={}) %}
+          {{ p.get('team', '') }} — {{ p.get('title', '') }}
         {% endif %}
   mode: single
