@@ -6,21 +6,21 @@
     scan_interval: 30
     icon: mdi:television-classic
 
-  - sensor:
-      name: Plex Recording Last Event
-      unique_id: plex_recording_last_event_file
-      command: >-
-        python3 -c "import json; print(json.load(open('/config/plex_recordings_state.json'))['last_scheduled'])"
-      scan_interval: 30
-      icon: mdi:record-rec
+- sensor:
+    name: Plex Recording Last Event
+    unique_id: plex_recording_last_event_file
+    command: >-
+      python3 -c "import json; print(json.load(open('/config/plex_recordings_state.json'))['last_scheduled'])"
+    scan_interval: 30
+    icon: mdi:record-rec
 
-  - sensor:
-      name: Plex Recording Last Completed
-      unique_id: plex_recording_last_completed_file
-      command: >-
-        python3 -c "import json; print(json.load(open('/config/plex_recordings_state.json'))['last_completed'])"
-      scan_interval: 30
-      icon: mdi:check-circle
+- sensor:
+    name: Plex Recording Last Completed
+    unique_id: plex_recording_last_completed_file
+    command: >-
+      python3 -c "import json; print(json.load(open('/config/plex_recordings_state.json'))['last_completed'])"
+    scan_interval: 30
+    icon: mdi:check-circle
 
 - sensor:
     name: Plex Recordings Sync Meta
