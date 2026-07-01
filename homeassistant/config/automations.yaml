@@ -112,70 +112,54 @@
   mode: single
 - id: '1769900000001'
   alias: Plex recording scheduled
-  description: Push to mobile when plex_recordings schedules a new OTA recording
+  description: Push to mobile when plex_recordings books a new OTA recording
   triggers:
   - trigger: mqtt
-    topic: home/plex_recordings/scheduled
-  - trigger: state
-    entity_id:
-    - sensor.plex_recording_last_event
+    topic: home/plex_recordings/events/scheduled
   conditions:
   - condition: template
     value_template: >-
-      {% if trigger.platform == 'mqtt' %}
-        true
-      {% else %}
-        {{ trigger.to_state.state not in ['unknown', 'unavailable', 'None queued']
-           and trigger.from_state is not none
-           and trigger.from_state.state != trigger.to_state.state }}
-      {% endif %}
+      {% set p = trigger.payload_json
+         if trigger.payload_json is defined
+         else trigger.payload | from_json(default={}) %}
+      {{ (p.get('message') or p.get('title') or p.get('show')) | length > 0 }}
   actions:
   - action: script.notify_mobile_recording
     data:
       title: Recording scheduled
       message: >-
-        {% if trigger.platform == 'state' %}
-          {{ trigger.to_state.state }}
-        {% else %}
-          {% set p = trigger.payload_json
-             if trigger.payload_json is defined
-             else trigger.payload | from_json(default={}) %}
-          {{ p.get('team', '') }} — {{ p.get('title', '') }}
-          {% if p.get('air_time') %}
-          ({{ p.air_time }})
-          {% endif %}
-        {% endif %}
-  mode: single
+        {% set p = trigger.payload_json
+           if trigger.payload_json is defined
+           else trigger.payload | from_json(default={}) %}
+        {{ p.get('message') or (
+             (p.get('show') ~ ' — ' ~ p.get('title') if p.get('show') and p.get('title') else p.get('title') or p.get('show'))
+             ~ ('\nAirs ' ~ (as_timestamp(p.air_time) | timestamp_custom('%a %b %d, %I:%M %p')) if p.get('air_time') else '')
+           ) }}
+  mode: queued
+  max: 5
 - id: '1769900000002'
   alias: Plex recording completed
   description: Push to mobile when a team recording lands in the Plex library
   triggers:
   - trigger: mqtt
-    topic: home/plex_recordings/completed
-  - trigger: state
-    entity_id:
-    - sensor.plex_recording_last_completed
+    topic: home/plex_recordings/events/completed
   conditions:
   - condition: template
     value_template: >-
-      {% if trigger.platform == 'mqtt' %}
-        true
-      {% else %}
-        {{ trigger.to_state.state not in ['unknown', 'unavailable', 'None yet']
-           and trigger.from_state is not none
-           and trigger.from_state.state != trigger.to_state.state }}
-      {% endif %}
+      {% set p = trigger.payload_json
+         if trigger.payload_json is defined
+         else trigger.payload | from_json(default={}) %}
+      {{ (p.get('message') or p.get('title') or p.get('show')) | length > 0 }}
   actions:
   - action: script.notify_mobile_recording
     data:
       title: Recording ready
       message: >-
-        {% if trigger.platform == 'state' %}
-          {{ trigger.to_state.state }}
-        {% else %}
-          {% set p = trigger.payload_json
-             if trigger.payload_json is defined
-             else trigger.payload | from_json(default={}) %}
-          {{ p.get('team', '') }} — {{ p.get('title', '') }}
-        {% endif %}
-  mode: single
+        {% set p = trigger.payload_json
+           if trigger.payload_json is defined
+           else trigger.payload | from_json(default={}) %}
+        {{ p.get('message') or (
+             'Ready to watch: ' ~ (p.get('show') ~ ' — ' ~ p.get('title') if p.get('show') and p.get('title') else p.get('title') or p.get('show'))
+           ) }}
+  mode: queued
+  max: 5
