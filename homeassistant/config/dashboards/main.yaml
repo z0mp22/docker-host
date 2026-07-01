@@ -78,7 +78,7 @@ views:
         cards:
           - type: custom:mushroom-title-card
             title: Weather
-            subtitle: "{{ state_attr('sensor.home_weather_forecast', 'temperature') | default('—') }}°F · {{ state_attr('sensor.home_weather_forecast', 'condition') | default(states('weather.home')) | title }}"
+            subtitle: "{{ states('weather.home') | replace('_', ' ') | title }} · {{ state_attr('weather.home', 'temperature') | default('—', true) }}°F"
 
           - type: weather-forecast
             entity: weather.home
