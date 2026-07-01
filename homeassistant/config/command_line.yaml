@@ -2,7 +2,7 @@
     name: Plex Recordings Status
     unique_id: plex_recordings_status_file
     command: >-
-      python3 -c "import json; print(json.load(open('/config/plex_recordings_state.json'))['status'])"
+      python3 -c "import json,re; d=json.load(open('/config/plex_recordings_state.json')); s=d.get('status','unknown'); print(re.sub(r'[\x00-\x1f<>]','',str(s)).strip())"
     scan_interval: 30
     icon: mdi:television-classic
 
@@ -10,7 +10,7 @@
     name: Plex Recording Last Event
     unique_id: plex_recording_last_event_file
     command: >-
-      python3 -c "import json; print(json.load(open('/config/plex_recordings_state.json'))['last_scheduled'])"
+      python3 -c "import json,re; d=json.load(open('/config/plex_recordings_state.json')); s=d.get('last_scheduled','None queued'); print(re.sub(r'[\x00-\x1f<>]','',str(s)).strip())"
     scan_interval: 30
     icon: mdi:record-rec
 
@@ -18,7 +18,7 @@
     name: Plex Recording Last Completed
     unique_id: plex_recording_last_completed_file
     command: >-
-      python3 -c "import json; print(json.load(open('/config/plex_recordings_state.json'))['last_completed'])"
+      python3 -c "import json,re; d=json.load(open('/config/plex_recordings_state.json')); s=d.get('last_completed','None yet'); print(re.sub(r'[\x00-\x1f<>]','',str(s)).strip())"
     scan_interval: 30
     icon: mdi:check-circle
 
@@ -27,7 +27,7 @@
     unique_id: plex_recordings_sync_meta_file
     command: cat /config/plex_recordings_state.json
     scan_interval: 30
-    value_template: "{{ value_json.ran_at | default('unknown') }}"
+    value_template: "{{ value_json.ran_at | default(value_json.status, true) | default('unknown') }}"
     json_attributes:
       - scheduled
       - skipped_existing

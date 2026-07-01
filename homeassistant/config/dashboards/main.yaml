@@ -8,7 +8,7 @@ views:
     cards:
       - type: custom:mushroom-title-card
         title: Home
-        subtitle: "{{ states('weather.home') | title }} · {{ states('sensor.irrigation_next_run') | default('No irrigation schedule') }}"
+        subtitle: "{{ states('weather.home') | title }} · {{ state_attr('weather.home', 'temperature') | default('—') }}°F"
 
       - type: custom:mushroom-chips-card
         alignment: center
@@ -27,12 +27,12 @@ views:
               {% endif %}
           - type: template
             icon: mdi:sprinkler
-            content: "{{ states('sensor.irrigation_next_run') | default('No schedule') }}"
+            content: "Water {{ states('sensor.irrigation_next_run') | default('No schedule') }}"
           - type: template
             icon: mdi:bird
             content: >
               {% set cameras = ['basement', 'garage', 'driveway'] %}
-              {% set animals = ['bird', 'deer', 'raccoon', 'fox', 'squirrel', 'rabbit', 'skunk', 'bear'] %}
+              {% set animals = ['bird', 'bear', 'cat', 'dog', 'cow', 'horse', 'sheep'] %}
               {% set ns = namespace(count=0) %}
               {% for camera in cameras %}
                 {% for animal in animals %}
@@ -61,7 +61,7 @@ views:
 
       - type: custom:mushroom-template-card
         primary: Plex Recordings
-        secondary: "{{ states('sensor.plex_recordings_status') | default('No sync yet') }}"
+        secondary: "{{ states('sensor.plex_recordings_status') | regex_replace('^[\\x00-\\x1f<>]+', '') | trim | default('No sync yet') }}"
         icon: mdi:television-classic
         entity: sensor.plex_recordings_status
         tap_action:
@@ -74,7 +74,9 @@ views:
 
       - type: weather-forecast
         entity: weather.home
+        forecast_type: daily
         show_forecast: true
+        show_current: true
 
       - type: custom:mushroom-title-card
         title: Outdoor
@@ -121,6 +123,6 @@ views:
       - type: entities
         entities:
           - automation.front_yard_lights_on_at_sunset
-          - automation.front_yard_lights_off_at_21_00
+          - automation.front_yard_lights_off_at_23_00
           - automation.front_yard_lights_on_at_04_45_if_dark
           - automation.front_yard_lights_off_at_sunrise

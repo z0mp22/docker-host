@@ -22,27 +22,47 @@ export STATUS LAST_SCHEDULED LAST_COMPLETED STATUS_JSON OUT
 python3 - <<'PY'
 import json
 import os
+import re
+from datetime import UTC, datetime
 from pathlib import Path
 
-data = {
-    "status": os.environ.get("STATUS") or "unknown",
-    "last_scheduled": os.environ.get("LAST_SCHEDULED") or "None queued",
-    "last_completed": os.environ.get("LAST_COMPLETED") or "None yet",
-}
-raw = os.environ.get("STATUS_JSON", "").strip()
-if raw:
+
+def clean_text(value: object) -> str:
+    if value is None:
+        return ""
+    text = str(value)
+    text = re.sub(r"[\x00-\x1f<>]", "", text)
+    return text.strip()
+
+
+def parse_json(raw: str) -> dict:
+    raw = clean_text(raw)
+    if not raw:
+        return {}
     try:
         payload = json.loads(raw)
-        data.update(
-            {
-                "ran_at": payload.get("ran_at"),
-                "matched": payload.get("matched"),
-                "scheduled": payload.get("scheduled") or [],
-                "skipped_existing": payload.get("skipped_existing") or [],
-            }
-        )
     except json.JSONDecodeError:
-        pass
+        start = raw.find("{")
+        if start < 0:
+            return {}
+        try:
+            payload = json.loads(raw[start:])
+        except json.JSONDecodeError:
+            return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+status_json = parse_json(os.environ.get("STATUS_JSON", ""))
+data = {
+    "status": clean_text(os.environ.get("STATUS")) or clean_text(status_json.get("status")) or "unknown",
+    "last_scheduled": clean_text(os.environ.get("LAST_SCHEDULED")) or "None queued",
+    "last_completed": clean_text(os.environ.get("LAST_COMPLETED")) or "None yet",
+    "ran_at": status_json.get("ran_at") or datetime.now(UTC).isoformat(),
+    "matched": status_json.get("matched"),
+    "scheduled": status_json.get("scheduled") or [],
+    "skipped_existing": status_json.get("skipped_existing") or [],
+}
+
 out = Path(os.environ["OUT"])
 tmp = out.with_suffix(".json.tmp")
 tmp.write_text(json.dumps(data, indent=2))

@@ -9,14 +9,16 @@ views:
       - type: custom:mushroom-template-card
         primary: Now Playing
         secondary: >
-          {% if states('sensor.living_room_now_playing') not in ['Idle', 'Unavailable', 'unknown', 'unavailable']
-             or states('sensor.basement_now_playing') not in ['Idle', 'Unavailable', 'unknown', 'unavailable'] %}
-            Living room · {{ states('sensor.living_room_now_playing') }}
-            Basement · {{ states('sensor.basement_now_playing') }}
-          {% elif states('sensor.living_room_now_playing') not in ['Idle', 'Unavailable', 'unknown', 'unavailable'] %}
-            Living room · {{ states('sensor.living_room_now_playing') }}
-          {% elif states('sensor.basement_now_playing') not in ['Idle', 'Unavailable', 'unknown', 'unavailable'] %}
-            Basement · {{ states('sensor.basement_now_playing') }}
+          {% set lr = states('sensor.living_room_now_playing') %}
+          {% set bs = states('sensor.basement_now_playing') %}
+          {% set idle = ['Idle', 'Unavailable', 'unknown', 'unavailable', ''] %}
+          {% if lr not in idle and bs not in idle %}
+            Living room · {{ lr }}
+            Basement · {{ bs }}
+          {% elif lr not in idle %}
+            Living room · {{ lr }}
+          {% elif bs not in idle %}
+            Basement · {{ bs }}
           {% else %}
             Nothing playing
           {% endif %}
@@ -26,7 +28,7 @@ views:
 
       - type: custom:mushroom-title-card
         title: Living Room
-        subtitle: Z Roku Ultra · 10.0.0.208
+        subtitle: Roku Ultra · 10.0.0.208
 
       - type: custom:mushroom-template-card
         primary: "{{ states('sensor.living_room_now_playing') }}"
@@ -35,10 +37,7 @@ views:
           {% if plex and states(plex) not in ['unavailable', 'unknown', 'none'] %}
             Plex · {{ states(plex) | title }}
           {% else %}
-            {{ state_attr('media_player.z_roku_ultra', 'app_name') | default('Roku') }}
-            {% if 'plex' in (state_attr('media_player.z_roku_ultra', 'app_name') | default('') | lower) %}
-              · Plex client unavailable in HA
-            {% endif %}
+            {{ state_attr('media_player.roku_4800x_a029', 'app_name') | default(states('media_player.roku_4800x_a029') | title) }}
           {% endif %}
         icon: mdi:sofa
         entity: sensor.living_room_now_playing
@@ -50,22 +49,22 @@ views:
         square: false
         cards:
           - type: custom:mushroom-media-player-card
-            entity: media_player.z_roku_ultra
+            entity: media_player.roku_4800x_a029
             name: Roku
             use_media_info: true
 
           - type: custom:mushroom-template-card
             primary: Plex
             secondary: >
-              {% set plex = state_attr('sensor.living_room_now_playing', 'plex_entity') %}
-              {% if plex and states(plex) not in ['unavailable', 'unknown', 'none'] %}
+              {% set plex = state_attr('sensor.living_room_now_playing', 'plex_entity') | default('media_player.plex_plex_for_roku_z_roku_ultra', true) %}
+              {% if states(plex) not in ['unavailable', 'unknown', 'none'] %}
                 {% if is_state(plex, 'playing') or is_state(plex, 'paused') %}
                   {{ states('sensor.living_room_now_playing') }}
                 {% else %}
                   {{ states(plex) | title }}
                 {% endif %}
               {% else %}
-                Unavailable — reload Plex integration
+                Idle — open Plex on the Roku
               {% endif %}
             icon: mdi:plex
             tap_action:
@@ -76,17 +75,23 @@ views:
         alignment: center
         chips:
           - type: entity
-            entity: media_player.z_roku_ultra
-          - type: entity
-            entity: sensor.z_roku_ultra_active_app
+            entity: media_player.roku_4800x_a029
+          - type: template
+            icon: mdi:application
+            content: "{{ state_attr('media_player.roku_4800x_a029', 'app_name') | default(states('media_player.roku_4800x_a029') | title) }}"
 
       - type: custom:mushroom-title-card
         title: Basement
         subtitle: Basement Roku · 10.0.0.188
 
       - type: custom:mushroom-template-card
-        primary: "{{ states('sensor.basement_now_playing') }}"
-        secondary: "{{ state_attr('media_player.basement_roku', 'app_name') | default('Roku') }}"
+        primary: Basement Roku
+        secondary: >
+          {% if is_state('media_player.basement_roku', 'unavailable') %}
+            Enable Network control on the Roku (Settings → System → Advanced → Control by mobile apps).
+          {% else %}
+            {{ states('sensor.basement_now_playing') }}
+          {% endif %}
         icon: mdi:home-floor-b
         entity: sensor.basement_now_playing
         tap_action:

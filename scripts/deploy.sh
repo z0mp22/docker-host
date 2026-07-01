@@ -249,6 +249,7 @@ restart_homeassistant_if_running() {
 
 repair_homeassistant_config_entries() {
   local repair="${REPO_ROOT}/scripts/repair-ha-config-entries.py"
+  local tune="${REPO_ROOT}/scripts/tune-ha-lovelace.py"
   if [ ! -f "${repair}" ]; then
     return 0
   fi
@@ -261,6 +262,10 @@ repair_homeassistant_config_entries() {
   fi
   log "repairing homeassistant config entries"
   sudo python3 "${repair}" || log "config entry repair skipped"
+  if [ -f "${tune}" ]; then
+    log "tuning lovelace sidebar and stale weather entries"
+    sudo python3 "${tune}" || log "lovelace tune skipped"
+  fi
 }
 
 add_roku_integrations() {
