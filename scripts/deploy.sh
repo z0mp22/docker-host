@@ -243,7 +243,7 @@ restart_homeassistant_if_running() {
     else
       docker start homeassistant
     fi
-    sleep 30
+    sleep 90
   fi
 }
 

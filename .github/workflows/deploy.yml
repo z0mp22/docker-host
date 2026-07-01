@@ -21,6 +21,10 @@ jobs:
       - name: Validate services
         run: bash scripts/validate.sh
 
+      - name: Dump Home Assistant logs on failure
+        if: failure()
+        run: docker logs homeassistant 2>&1 | tail -80
+
       - name: Validate MQTT topics for Plex recordings
         run: bash scripts/validate-mqtt-ha.sh
 

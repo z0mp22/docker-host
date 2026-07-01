@@ -59,6 +59,7 @@ def main() -> int:
             "pref_disable_new_entities": False,
             "pref_disable_polling": False,
             "source": "user",
+            "subentries": [],
             "title": "Mosquitto",
             "unique_id": None,
             "version": 1,
