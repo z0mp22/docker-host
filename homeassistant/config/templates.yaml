@@ -196,6 +196,9 @@
           {{ states('weather.home') | title }}
         {% endif %}
       attributes:
-        forecast: "{{ daily['weather.home'].forecast | default([]) }}"
-        temperature: "{{ state_attr('weather.home', 'temperature') }}"
-        condition: "{{ states('weather.home') }}"
+        forecast:
+          value: "{{ daily['weather.home'].forecast | default([]) }}"
+        temperature:
+          value: "{{ state_attr('weather.home', 'temperature') }}"
+        condition:
+          value: "{{ states('weather.home') }}"
