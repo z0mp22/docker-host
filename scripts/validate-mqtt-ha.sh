@@ -1,0 +1,42 @@
+#!/bin/bash
+# Validate Mosquitto topics and surface Home Assistant MQTT log lines.
+set -euo pipefail
+
+HOST="${VALIDATE_HOST:-127.0.0.1}"
+TOPICS=(
+  "home/plex_recordings/state/status"
+  "home/plex_recordings/state/last_scheduled"
+  "home/plex_recordings/status"
+)
+
+log() { echo "[validate-mqtt] $*"; }
+
+check_topic() {
+  local topic="$1"
+  if docker exec mosquitto mosquitto_sub -h 127.0.0.1 -t "${topic}" -C 1 -W 3 >/tmp/mqtt-check.txt 2>/dev/null; then
+    log "OK topic ${topic}: $(head -c 120 /tmp/mqtt-check.txt)"
+    return 0
+  fi
+  log "WARN topic ${topic}: no retained/live message"
+  return 0
+}
+
+main() {
+  if ! docker ps --format '{{.Names}}' | grep -qx mosquitto; then
+    log "SKIP mosquitto container not running"
+    exit 0
+  fi
+
+  for topic in "${TOPICS[@]}"; do
+    check_topic "${topic}" || true
+  done
+
+  if docker ps --format '{{.Names}}' | grep -qx homeassistant; then
+    log "recent homeassistant mqtt log lines:"
+    docker logs homeassistant 2>&1 | grep -iE 'mqtt|plex_recordings' | tail -20 || true
+  fi
+
+  log "done"
+}
+
+main "$@"

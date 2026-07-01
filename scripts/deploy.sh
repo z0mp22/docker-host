@@ -263,6 +263,18 @@ repair_homeassistant_config_entries() {
   sudo python3 "${repair}" || log "config entry repair skipped"
 }
 
+repair_homeassistant_mqtt() {
+  local repair="${REPO_ROOT}/scripts/repair-ha-mqtt.py"
+  if [ ! -f "${repair}" ]; then
+    return 0
+  fi
+  if ! docker ps -a --format '{{.Names}}' | grep -qx 'homeassistant'; then
+    return 0
+  fi
+  log "repairing homeassistant mqtt broker config"
+  sudo python3 "${repair}" || log "mqtt repair skipped"
+}
+
 add_roku_integrations() {
   local script="${REPO_ROOT}/scripts/add-roku-integrations.sh"
   if [ ! -x "${script}" ]; then
@@ -294,6 +306,7 @@ main() {
   migrate_legacy_exporters
   deploy_exporters
   repair_homeassistant_config_entries
+  repair_homeassistant_mqtt
   restart_homeassistant_if_running
   add_roku_integrations
   log "deploy complete"

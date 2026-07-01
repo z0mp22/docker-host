@@ -1,28 +1,7 @@
 broker: 127.0.0.1
 port: 1883
-discovery: false
-
-sensor:
-  - name: Plex Recording Last Event
-    unique_id: plex_recording_last_event
-    state_topic: home/plex_recordings/scheduled
-    value_template: "{{ value_json.team }} · {{ value_json.title }}"
-    json_attributes_topic: home/plex_recordings/scheduled
-    icon: mdi:record-rec
-
-  - name: Plex Recordings Status
-    unique_id: plex_recordings_status
-    state_topic: home/plex_recordings/status
-    value_template: >
-      {% set upcoming = value_json.scheduled | default([]) %}
-      {% set queued = value_json.skipped_existing | default([]) %}
-      {{ (upcoming | length) + (queued | length) }} queued
-    json_attributes_topic: home/plex_recordings/status
-    icon: mdi:television-classic
-
-  - name: Plex Recording Last Completed
-    unique_id: plex_recording_last_completed
-    state_topic: home/plex_recordings/completed
-    value_template: "{{ value_json.team }} · {{ value_json.title }}"
-    json_attributes_topic: home/plex_recordings/completed
-    icon: mdi:check-circle
+discovery: true
+birth_topic: homeassistant/status
+birth_payload: online
+will_topic: homeassistant/status
+will_payload: offline

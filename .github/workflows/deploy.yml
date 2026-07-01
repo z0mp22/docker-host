@@ -21,6 +21,9 @@ jobs:
       - name: Validate services
         run: bash scripts/validate.sh
 
+      - name: Validate MQTT topics for Plex recordings
+        run: bash scripts/validate-mqtt-ha.sh
+
       - name: Show stack status
         run: |
           docker ps --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}'
