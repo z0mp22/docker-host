@@ -106,6 +106,18 @@ docker-host/
 
 Runtime on Pi mirrors this under `/docker/`.
 
+## Plex recordings (MQTT)
+
+`media-laptop` (`10.0.0.22`) runs [czampino/plex_recordings](https://github.com/czampino/plex_recordings) and publishes to Mosquitto on this host:
+
+| Topic | Purpose |
+|-------|---------|
+| `home/plex_recordings/scheduled` | New one-shot DVR booking |
+| `home/plex_recordings/completed` | New file in Plex Recordings library |
+| `home/plex_recordings/status` | Retained sync summary (upcoming queue) |
+
+HA config: `homeassistant/config/mqtt.yaml`, `dashboards/recordings.yaml`, and notify automations in `automations.yaml`.
+
 ## Home Assistant note
 
 HA config previously lived in [czampino/homeassistant](https://github.com/czampino/homeassistant).  

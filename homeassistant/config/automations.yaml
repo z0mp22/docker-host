@@ -110,3 +110,34 @@
     target:
       entity_id: switch.christmas_tree
   mode: single
+- id: '1769900000001'
+  alias: Plex recording scheduled
+  description: Notify when plex_recordings schedules a new OTA recording
+  triggers:
+  - trigger: mqtt
+    topic: home/plex_recordings/scheduled
+  conditions: []
+  actions:
+  - action: notify.notify
+    data:
+      title: Recording scheduled
+      message: >
+        {{ trigger.payload_json.team }} — {{ trigger.payload_json.title }}
+        {% if trigger.payload_json.air_time is defined %}
+        ({{ trigger.payload_json.air_time }})
+        {% endif %}
+  mode: single
+- id: '1769900000002'
+  alias: Plex recording completed
+  description: Notify when a team recording lands in the Plex library
+  triggers:
+  - trigger: mqtt
+    topic: home/plex_recordings/completed
+  conditions: []
+  actions:
+  - action: notify.notify
+    data:
+      title: Recording ready
+      message: >
+        {{ trigger.payload_json.team }} — {{ trigger.payload_json.title }}
+  mode: single
