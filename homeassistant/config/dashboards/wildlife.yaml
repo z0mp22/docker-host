@@ -8,118 +8,73 @@ views:
     cards:
       - type: custom:mushroom-template-card
         primary: >
-          {% set cameras = ['basement', 'garage', 'driveway'] %}
-          {% set animals = ['bird', 'bear', 'cat', 'dog', 'cow', 'horse', 'sheep'] %}
+          {% set animals = ['person', 'cat', 'dog', 'bear'] %}
           {% set ns = namespace(active=[]) %}
-          {% for camera in cameras %}
+          {% for camera in ['basement', 'garage', 'driveway'] %}
             {% for animal in animals %}
-              {% set entity = 'binary_sensor.' ~ camera ~ '_' ~ animal ~ '_occupancy' %}
-              {% if states(entity) == 'on' %}
-                {% set ns.active = ns.active + [animal ~ ' @ ' ~ camera] %}
-              {% endif %}
-            {% endfor %}
-          {% endfor %}
-          {% if ns.active | length > 0 %}
-            Wildlife active now
-          {% else %}
-            Yard is peaceful
-          {% endif %}
-        secondary: >
-          {% set cameras = ['basement', 'garage', 'driveway'] %}
-          {% set animals = ['bird', 'bear', 'cat', 'dog', 'cow', 'horse', 'sheep'] %}
-          {% set ns = namespace(active=[]) %}
-          {% for camera in cameras %}
-            {% for animal in animals %}
-              {% set entity = 'binary_sensor.' ~ camera ~ '_' ~ animal ~ '_occupancy' %}
-              {% if states(entity) == 'on' %}
+              {% if is_state('binary_sensor.' ~ camera ~ '_' ~ animal ~ '_occupancy', 'on') %}
                 {% set ns.active = ns.active + [animal | title ~ ' (' ~ camera | title ~ ')'] %}
               {% endif %}
             {% endfor %}
           {% endfor %}
-          {% if ns.active | length > 0 %}
-            {{ ns.active | join(' · ') }}
-          {% else %}
-            No wildlife detected right now
-          {% endif %}
-        icon: >
-          {% set cameras = ['basement', 'garage', 'driveway'] %}
-          {% set animals = ['bird', 'bear', 'cat', 'dog', 'cow', 'horse', 'sheep'] %}
-          {% set ns = namespace(active=false) %}
-          {% for camera in cameras %}
+          {% if ns.active | length > 0 %}Activity now{% else %}Yard is quiet{% endif %}
+        secondary: >
+          {% set animals = ['person', 'cat', 'dog', 'bear'] %}
+          {% set ns = namespace(active=[]) %}
+          {% for camera in ['basement', 'garage', 'driveway'] %}
             {% for animal in animals %}
               {% if is_state('binary_sensor.' ~ camera ~ '_' ~ animal ~ '_occupancy', 'on') %}
-                {% set ns.active = true %}
+                {% set ns.active = ns.active + [animal | title ~ ' @ ' ~ camera] %}
               {% endif %}
             {% endfor %}
           {% endfor %}
-          {{ 'mdi:bird' if ns.active else 'mdi:tree' }}
+          {{ ns.active | join(' · ') if ns.active | length > 0 else 'Person, cat, dog, and bear only (Frigate history)' }}
+        icon: mdi:paw
         fill_container: true
 
       - type: custom:mushroom-chips-card
         alignment: center
         chips:
           - type: template
-            icon: mdi:bird
-            content: >
-              {% set ns = namespace(count=0) %}
-              {% for camera in ['basement', 'garage', 'driveway'] %}
-                {% if is_state('binary_sensor.' ~ camera ~ '_bird_occupancy', 'on') %}
-                  {% set ns.count = ns.count + 1 %}
-                {% endif %}
-              {% endfor %}
-              {{ ns.count }} bird{{ 's' if ns.count != 1 else '' }} now
+            icon: mdi:account
+            content: Person
+          - type: template
+            icon: mdi:cat
+            content: Cat
+          - type: template
+            icon: mdi:dog
+            content: Dog
           - type: template
             icon: mdi:paw
-            content: 7 species tracked
+            content: Bear
           - type: template
             icon: mdi:cctv
             content: Basement · Garage · Driveway
 
       - type: custom:mushroom-title-card
-        title: Birds
-        subtitle: Latest detections from Frigate
+        title: People
+        subtitle: Recent person detections
 
       - type: grid
         columns: 3
         square: false
         cards:
           - type: picture-entity
-            entity: image.basement_bird
+            entity: image.basement_person
             name: Basement
             aspect_ratio: 16:9
           - type: picture-entity
-            entity: image.garage_bird
+            entity: image.garage_person
             name: Garage
             aspect_ratio: 16:9
           - type: picture-entity
-            entity: image.driveway_bird
+            entity: image.driveway_person
             name: Driveway
             aspect_ratio: 16:9
 
       - type: custom:mushroom-title-card
-        title: Bears
-        subtitle: Large wildlife detections
-
-      - type: grid
-        columns: 3
-        square: false
-        cards:
-          - type: picture-entity
-            entity: image.basement_bear
-            name: Basement · Bear
-            aspect_ratio: 16:9
-          - type: picture-entity
-            entity: image.garage_bear
-            name: Garage · Bear
-            aspect_ratio: 16:9
-          - type: picture-entity
-            entity: image.driveway_bear
-            name: Driveway · Bear
-            aspect_ratio: 16:9
-
-      - type: custom:mushroom-title-card
-        title: Pets & farm animals
-        subtitle: Cats, dogs, and livestock when detected
+        title: Pets
+        subtitle: Cats and dogs when seen on camera
 
       - type: grid
         columns: 3
@@ -149,68 +104,24 @@ views:
             entity: image.driveway_dog
             name: Driveway · Dog
             aspect_ratio: 16:9
-          - type: picture-entity
-            entity: image.basement_cow
-            name: Basement · Cow
-            aspect_ratio: 16:9
-          - type: picture-entity
-            entity: image.garage_cow
-            name: Garage · Cow
-            aspect_ratio: 16:9
-          - type: picture-entity
-            entity: image.driveway_cow
-            name: Driveway · Cow
-            aspect_ratio: 16:9
-          - type: picture-entity
-            entity: image.basement_horse
-            name: Basement · Horse
-            aspect_ratio: 16:9
-          - type: picture-entity
-            entity: image.garage_horse
-            name: Garage · Horse
-            aspect_ratio: 16:9
-          - type: picture-entity
-            entity: image.driveway_horse
-            name: Driveway · Horse
-            aspect_ratio: 16:9
-          - type: picture-entity
-            entity: image.basement_sheep
-            name: Basement · Sheep
-            aspect_ratio: 16:9
-          - type: picture-entity
-            entity: image.garage_sheep
-            name: Garage · Sheep
-            aspect_ratio: 16:9
-          - type: picture-entity
-            entity: image.driveway_sheep
-            name: Driveway · Sheep
-            aspect_ratio: 16:9
 
       - type: custom:mushroom-title-card
-        title: Active detections
-        subtitle: Live occupancy sensors from Frigate
+        title: Bear
+        subtitle: Rare large wildlife detections
 
-      - type: entities
-        entities:
-          - binary_sensor.basement_bird_occupancy
-          - binary_sensor.garage_bird_occupancy
-          - binary_sensor.driveway_bird_occupancy
-          - binary_sensor.basement_bear_occupancy
-          - binary_sensor.garage_bear_occupancy
-          - binary_sensor.driveway_bear_occupancy
-          - binary_sensor.basement_cat_occupancy
-          - binary_sensor.garage_cat_occupancy
-          - binary_sensor.driveway_cat_occupancy
-          - binary_sensor.basement_dog_occupancy
-          - binary_sensor.garage_dog_occupancy
-          - binary_sensor.driveway_dog_occupancy
-          - binary_sensor.basement_cow_occupancy
-          - binary_sensor.garage_cow_occupancy
-          - binary_sensor.driveway_cow_occupancy
-          - binary_sensor.basement_horse_occupancy
-          - binary_sensor.garage_horse_occupancy
-          - binary_sensor.driveway_horse_occupancy
-          - binary_sensor.basement_sheep_occupancy
-          - binary_sensor.garage_sheep_occupancy
-          - binary_sensor.driveway_sheep_occupancy
-        state_color: true
+      - type: grid
+        columns: 3
+        square: false
+        cards:
+          - type: picture-entity
+            entity: image.basement_bear
+            name: Basement
+            aspect_ratio: 16:9
+          - type: picture-entity
+            entity: image.garage_bear
+            name: Garage
+            aspect_ratio: 16:9
+          - type: picture-entity
+            entity: image.driveway_bear
+            name: Driveway
+            aspect_ratio: 16:9

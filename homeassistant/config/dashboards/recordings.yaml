@@ -14,59 +14,80 @@ views:
         alignment: center
         chips:
           - type: template
-            icon: mdi:calendar-clock
+            icon: mdi:television-classic
             content: "{{ states('sensor.plex_recordings_status') | regex_replace('^[\\x00-\\x1f<>]+', '') | trim }}"
           - type: template
-            icon: mdi:record-rec
-            content: "{{ states('sensor.plex_recording_last_event') | regex_replace('^[\\x00-\\x1f<>]+', '') | trim | default('Nothing scheduled') }}"
+            icon: mdi:calendar-search
+            content: "{{ state_attr('sensor.plex_recordings_sync_meta', 'matched') | default('?') }} matched"
           - type: template
-            icon: mdi:check-circle
-            content: "{{ states('sensor.plex_recording_last_completed') | regex_replace('^[\\x00-\\x1f<>]+', '') | trim | default('No recent recordings') }}"
-
-      - type: custom:mushroom-template-card
-        primary: Last scheduled
-        secondary: "{{ states('sensor.plex_recording_last_event') | regex_replace('^[\\x00-\\x1f<>]+', '') | trim }}"
-        icon: mdi:record-rec
-        entity: sensor.plex_recording_last_event
-        tap_action:
-          action: more-info
-
-      - type: custom:mushroom-template-card
-        primary: Last completed
-        secondary: "{{ states('sensor.plex_recording_last_completed') | regex_replace('^[\\x00-\\x1f<>]+', '') | trim }}"
-        icon: mdi:check-circle
-        entity: sensor.plex_recording_last_completed
-        tap_action:
-          action: more-info
+            icon: mdi:sync
+            content: "{{ state_attr('sensor.plex_recordings_sync_meta', 'ran_at') | default('never') }}"
 
       - type: custom:mushroom-title-card
-        title: Upcoming
-        subtitle: Scheduled and already queued in Plex
+        title: In Plex DVR
+        subtitle: Active subscriptions on media-laptop
+
+      - type: markdown
+        content: >
+          {% set queue = state_attr('sensor.plex_recordings_sync_meta', 'plex_queue') | default([], true) %}
+          {% if queue is string or queue | length == 0 %}
+          No active Plex DVR subscriptions right now.
+          {% else %}
+          {% for item in queue %}
+          - **{{ item.show or item.title }}**{% if item.show and item.title %} — {{ item.title }}{% endif %}  
+            {% if item.air_time %}{{ item.air_time }}{% endif %}
+          {% endfor %}
+          {% endif %}
+
+      - type: custom:mushroom-title-card
+        title: Last sync
+        subtitle: New bookings from the GitOps sync
 
       - type: markdown
         content: >
           {% set upcoming = state_attr('sensor.plex_recordings_sync_meta', 'scheduled') | default([], true) %}
           {% set queued = state_attr('sensor.plex_recordings_sync_meta', 'skipped_existing') | default([], true) %}
-          {% if upcoming is string or queued is string %}
-          Sync metadata loading — check again after the next bridge run.
-          {% elif upcoming | length == 0 and queued | length == 0 %}
-          {% if states('sensor.plex_recording_last_event') not in ['unknown', 'unavailable', 'None queued', ''] %}
-          **Queued in Plex**
-          - {{ states('sensor.plex_recording_last_event') | regex_replace('^[\\x00-\\x1f<>]+', '') | trim }}
-          {% else %}
-          No upcoming team recordings in the next sync window.
-          {% endif %}
-          {% else %}
+          {% set errors = state_attr('sensor.plex_recordings_sync_meta', 'errors') | default([], true) %}
+          {% if upcoming is not string and upcoming | length > 0 %}
+          **Newly scheduled**
           {% for item in upcoming %}
           - **{{ item.team }}** — {{ item.title }}{% if item.show %} · {{ item.show }}{% endif %}  
             {{ item.air_time }}
           {% endfor %}
+          {% endif %}
+          {% if queued is not string and queued | length > 0 %}
+          **Matched and already in Plex**
           {% for item in queued %}
-          - **{{ item.team }}** — {{ item.title }} *(already in Plex)*  
+          - **{{ item.team }}** — {{ item.title }}  
             {{ item.air_time }}
           {% endfor %}
           {% endif %}
+          {% if errors is not string and errors | length > 0 %}
+          **Could not schedule (Plex API error)**
+          {% for item in errors %}
+          - **{{ item.team }}** — {{ item.title }}
+          {% endfor %}
+          {% endif %}
+          {% if (upcoming is string or upcoming | length == 0) and (queued is string or queued | length == 0) and (errors is string or errors | length == 0) %}
+          Nothing new from the last sync window.
+          {% endif %}
 
-      - type: custom:mushroom-title-card
-        title: Sync
-        subtitle: "{{ state_attr('sensor.plex_recordings_sync_meta', 'ran_at') | default('Waiting for first sync') }}"
+      - type: grid
+        columns: 2
+        square: false
+        cards:
+          - type: custom:mushroom-template-card
+            primary: Last scheduled
+            secondary: "{{ states('sensor.plex_recording_last_event') | regex_replace('^[\\x00-\\x1f<>]+', '') | trim }}"
+            icon: mdi:record-rec
+            entity: sensor.plex_recording_last_event
+            tap_action:
+              action: more-info
+
+          - type: custom:mushroom-template-card
+            primary: Last completed
+            secondary: "{{ states('sensor.plex_recording_last_completed') | regex_replace('^[\\x00-\\x1f<>]+', '') | trim }}"
+            icon: mdi:check-circle
+            entity: sensor.plex_recording_last_completed
+            tap_action:
+              action: more-info

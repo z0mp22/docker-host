@@ -170,3 +170,32 @@
             {% endif %}
           {% endfor %}
           {{ ns.days if ns.days != 999 else '' }}
+
+- trigger:
+    - platform: time_pattern
+      hours: "/1"
+      minutes: "10"
+    - platform: homeassistant
+      event: start
+  action:
+    - action: weather.get_forecasts
+      target:
+        entity_id: weather.home
+      data:
+        type: daily
+      response_variable: daily
+  sensor:
+    - name: Home Weather Forecast
+      unique_id: home_weather_forecast
+      icon: mdi:weather-partly-cloudy
+      state: >
+        {% set fc = daily['weather.home'].forecast %}
+        {% if fc and fc | length > 0 %}
+          {{ fc[0].condition | replace('_', ' ') | title }}
+        {% else %}
+          {{ states('weather.home') | title }}
+        {% endif %}
+      attributes:
+        forecast: "{{ daily['weather.home'].forecast | default([]) }}"
+        temperature: "{{ state_attr('weather.home', 'temperature') }}"
+        condition: "{{ states('weather.home') }}"

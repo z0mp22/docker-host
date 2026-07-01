@@ -31,6 +31,8 @@
     json_attributes:
       - scheduled
       - skipped_existing
+      - plex_queue
+      - errors
       - ran_at
       - matched
       - status
