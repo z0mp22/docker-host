@@ -32,7 +32,6 @@ frontend:
 # Load dashboards
 lovelace:
   mode: storage
-  default_dashboard: lovelace-main
   dashboards:
     lovelace-main:
       mode: yaml

@@ -57,6 +57,12 @@ main() {
   done
 
   wait_for_http "homeassistant" "http://${HOST}:8123/"
+
+  if [ -f "$(dirname "$0")/validate-ha-config.py" ]; then
+    echo "[validate] checking homeassistant config and recovery mode"
+    python3 "$(dirname "$0")/validate-ha-config.py" || return 1
+  fi
+
   wait_for_http "portainer" "http://${HOST}:9000/"
   wait_for_metrics "node-exporter" "http://${HOST}:9100/metrics" '^node_'
   wait_for_metrics "pihole-exporter" "http://${HOST}:9617/metrics" '^pihole_'
