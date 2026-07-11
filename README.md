@@ -114,7 +114,7 @@ Runtime on Pi mirrors this under `/docker/`.
 |-------|---------|
 | `home/plex_recordings/events/scheduled` | Ephemeral push when a new DVR booking is created |
 | `home/plex_recordings/events/completed` | Ephemeral push when a recording lands in the library |
-| `home/plex_recordings/status` | Retained sync summary (queue, errors, ran_at) |
+| `home/plex_recordings/status` | Retained sync summary (queue, recent_recordings, errors, ran_at) |
 
 HA config: `homeassistant/config/command_line.yaml`, `dashboards/recordings.yaml`, `scripts/plex-mqtt-bridge.sh`, and notify automations in `automations.yaml`.
 

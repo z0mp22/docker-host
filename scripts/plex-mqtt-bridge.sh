@@ -63,6 +63,8 @@ data = {
     "skipped_existing": status_json.get("skipped_existing") or [],
     "plex_queue": status_json.get("plex_queue") or [],
     "errors": status_json.get("errors") or [],
+    "recent_recordings": status_json.get("recent_recordings") or [],
+    "completed_recent": status_json.get("completed_recent") or [],
 }
 
 out = Path(os.environ["OUT"])

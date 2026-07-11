@@ -38,3 +38,5 @@
       - status
       - last_scheduled
       - last_completed
+      - recent_recordings
+      - completed_recent

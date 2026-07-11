@@ -24,6 +24,24 @@ views:
             content: "{{ state_attr('sensor.plex_recordings_sync_meta', 'ran_at') | default('never') }}"
 
       - type: custom:mushroom-title-card
+        title: Recently landed
+        subtitle: In your Recordings library (and on disk if Plex has not indexed yet)
+
+      - type: markdown
+        content: >
+          {% set recent = state_attr('sensor.plex_recordings_sync_meta', 'recent_recordings') | default([], true) %}
+          {% if recent is string or recent | length == 0 %}
+          No recordings found under `/home/media/recordings` yet.
+          {% else %}
+          {% for item in recent %}
+          **{% if item.show %}{{ item.show }} — {% endif %}{{ item.title }}**{% if item.in_plex is defined and not item.in_plex %} · on disk, awaiting Plex index{% endif %}
+
+          {% if item.recorded_at %}Landed {{ as_timestamp(item.recorded_at) | timestamp_custom('%a %b %d, %I:%M %p') }}{% endif %}
+
+          {% endfor %}
+          {% endif %}
+
+      - type: custom:mushroom-title-card
         title: In Plex DVR
         subtitle: Queued recordings and when they land in your library
 
