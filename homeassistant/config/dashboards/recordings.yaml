@@ -22,6 +22,19 @@ views:
           - type: template
             icon: mdi:sync
             content: "{{ state_attr('sensor.plex_recordings_sync_meta', 'ran_at') | default('never') }}"
+          - type: template
+            icon: >
+              {% set awaiting = state_attr('sensor.plex_recordings_sync_meta', 'awaiting_index_count') | int(0) %}
+              {% set healthy = state_attr('sensor.plex_recordings_sync_meta', 'library_healthy') %}
+              {% if healthy in [false, 'false', False] or awaiting > 0 %}mdi:alert-circle{% else %}mdi:check-circle{% endif %}
+            content: >
+              {% set awaiting = state_attr('sensor.plex_recordings_sync_meta', 'awaiting_index_count') | int(0) %}
+              {% set healthy = state_attr('sensor.plex_recordings_sync_meta', 'library_healthy') %}
+              {% if healthy in [false, 'false', False] or awaiting > 0 %}
+              UNHEALTHY{% if awaiting %} · {{ awaiting }} awaiting{% endif %}
+              {% else %}
+              Library OK
+              {% endif %}
 
       - type: custom:mushroom-title-card
         title: Recently landed

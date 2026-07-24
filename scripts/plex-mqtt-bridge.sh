@@ -53,6 +53,16 @@ def parse_json(raw: str) -> dict:
 
 
 status_json = parse_json(os.environ.get("STATUS_JSON", ""))
+health = status_json.get("health") or {}
+if not isinstance(health, dict):
+    health = {}
+awaiting = status_json.get("awaiting_index_count")
+if awaiting is None:
+    awaiting = len(health.get("awaiting_index") or [])
+library_healthy = status_json.get("library_healthy")
+if library_healthy is None:
+    library_healthy = bool(health.get("ok", True)) if health else True
+
 data = {
     "status": clean_text(os.environ.get("STATUS")) or clean_text(status_json.get("status")) or "unknown",
     "last_scheduled": clean_text(os.environ.get("LAST_SCHEDULED")) or "None queued",
@@ -65,6 +75,9 @@ data = {
     "errors": status_json.get("errors") or [],
     "recent_recordings": status_json.get("recent_recordings") or [],
     "completed_recent": status_json.get("completed_recent") or [],
+    "health": health,
+    "awaiting_index_count": int(awaiting or 0),
+    "library_healthy": bool(library_healthy),
 }
 
 out = Path(os.environ["OUT"])

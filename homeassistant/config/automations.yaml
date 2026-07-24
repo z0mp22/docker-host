@@ -163,3 +163,58 @@
            ) }}
   mode: queued
   max: 5
+- id: '1753398000001'
+  alias: Plex recordings library unhealthy
+  description: >
+    Alert when plex_recordings sync reports a bad library type or files on disk
+    that are not visible in Plex (the old movie-library / awaiting-index failure).
+  triggers:
+  - trigger: state
+    entity_id: sensor.plex_recordings_sync_meta
+  - trigger: homeassistant
+    event: start
+  conditions:
+  - condition: template
+    value_template: >
+      {% set awaiting = state_attr('sensor.plex_recordings_sync_meta', 'awaiting_index_count') | int(0) %}
+      {% set healthy = state_attr('sensor.plex_recordings_sync_meta', 'library_healthy') %}
+      {{ healthy in [false, 'false', False] or awaiting > 0 }}
+  actions:
+  - action: persistent_notification.create
+    data:
+      title: Plex recordings unhealthy
+      notification_id: plex_recordings_unhealthy
+      message: >
+        {% set awaiting = state_attr('sensor.plex_recordings_sync_meta', 'awaiting_index_count') | int(0) %}
+        {% set health = state_attr('sensor.plex_recordings_sync_meta', 'health') or {} %}
+        {% set issues = health.get('issues') if health is mapping else [] %}
+        Library healthy={{ state_attr('sensor.plex_recordings_sync_meta', 'library_healthy') }},
+        awaiting index={{ awaiting }}.
+        {% if issues %} {{ issues[0] }}{% endif %}
+        Check Recordings dashboard or run heal_recordings_library.sh on media-laptop.
+  - action: script.notify_mobile_recording
+    data:
+      title: Plex recordings unhealthy
+      message: >
+        {% set awaiting = state_attr('sensor.plex_recordings_sync_meta', 'awaiting_index_count') | int(0) %}
+        {% set health = state_attr('sensor.plex_recordings_sync_meta', 'health') or {} %}
+        {% set issues = health.get('issues') if health is mapping else [] %}
+        awaiting={{ awaiting }} · {{ issues[0] if issues else states('sensor.plex_recordings_status') }}
+  mode: single
+- id: '1753398000002'
+  alias: Clear Plex recordings unhealthy notification
+  description: Dismiss the persistent alert once sync reports a healthy library again.
+  triggers:
+  - trigger: state
+    entity_id: sensor.plex_recordings_sync_meta
+  conditions:
+  - condition: template
+    value_template: >
+      {% set awaiting = state_attr('sensor.plex_recordings_sync_meta', 'awaiting_index_count') | int(0) %}
+      {% set healthy = state_attr('sensor.plex_recordings_sync_meta', 'library_healthy') %}
+      {{ healthy not in [false, 'false', False] and awaiting == 0 }}
+  actions:
+  - action: persistent_notification.dismiss
+    data:
+      notification_id: plex_recordings_unhealthy
+  mode: single

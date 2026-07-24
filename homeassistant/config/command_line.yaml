@@ -40,3 +40,6 @@
       - last_completed
       - recent_recordings
       - completed_recent
+      - health
+      - awaiting_index_count
+      - library_healthy
