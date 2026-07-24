@@ -90,7 +90,9 @@ bash scripts/validate.sh
 ```
 docker-host/
 ├── .github/workflows/     # deploy.yml, runner.yml
-├── scripts/               # deploy.sh, validate.sh
+├── docs/decisions/        # ADRs (Plex HA observability, …)
+├── scripts/               # deploy.sh, validate.sh, plex-mqtt-bridge.sh
+├── cron/                  # host cron snippets (plex-mqtt-bridge)
 ├── runner/                # self-hosted runner helper
 ├── docker-compose.yml     # HA, mosquitto, npm, pihole, portainer
 ├── homeassistant/config/  # YAML config (replaces czampino/homeassistant)
@@ -106,17 +108,27 @@ docker-host/
 
 Runtime on Pi mirrors this under `/docker/`.
 
-## Plex recordings (MQTT)
+## Plex recordings (MQTT + HA)
 
-`media-laptop` (`10.0.0.22`) runs [czampino/plex_recordings](https://github.com/czampino/plex_recordings) and publishes to Mosquitto on this host:
+`media-laptop` (`10.0.0.22`) runs [czampino/plex_recordings](https://github.com/czampino/plex_recordings) and publishes to Mosquitto on this host.
+
+**Critical invariant (enforced on media-laptop):** the Plex Recordings library must be a **TV Show** library. A movie library hides DVR episodes and makes HA show “awaiting Plex index” even when files are playable. See [plex_recordings ADR 0001](https://github.com/czampino/plex_recordings/blob/main/docs/decisions/0001-recordings-must-be-show-library.md) and [docker-host ADR 0001](docs/decisions/0001-plex-recordings-observability.md).
 
 | Topic | Purpose |
 |-------|---------|
 | `home/plex_recordings/events/scheduled` | Ephemeral push when a new DVR booking is created |
 | `home/plex_recordings/events/completed` | Ephemeral push when a recording lands in the library |
-| `home/plex_recordings/status` | Retained sync summary (queue, recent_recordings, errors, ran_at) |
+| `home/plex_recordings/status` | Retained sync summary (queue, `recent_recordings`, `health`, errors, ran_at) |
+| `home/plex_recordings/state/*` | Plain-text status / last scheduled / last completed |
 
-HA config: `homeassistant/config/command_line.yaml`, `dashboards/recordings.yaml`, `scripts/plex-mqtt-bridge.sh`, and notify automations in `automations.yaml`.
+| Piece | Path |
+|-------|------|
+| MQTT → JSON bridge (minutely) | `scripts/plex-mqtt-bridge.sh`, `cron/plex-mqtt-bridge` |
+| HA sensors | `homeassistant/config/command_line.yaml` |
+| Dashboard | `homeassistant/config/dashboards/recordings.yaml` |
+| Notify + unhealthy alerts | `homeassistant/config/automations.yaml`, `scripts.yaml` (`notify_mobile_recording`) |
+
+Unhealthy = `library_healthy=false` or `awaiting_index_count > 0` → persistent notification + mobile push. Fix on media-laptop (`heal_recordings_library.sh`), not by force-scanning alone.
 
 ## Home Assistant note
 
