@@ -7,6 +7,7 @@ TOPICS=(
   "home/plex_recordings/state/status"
   "home/plex_recordings/state/last_scheduled"
   "home/plex_recordings/status"
+  "home/plex_recordings/disk"
 )
 
 log() { echo "[validate-mqtt] $*"; }

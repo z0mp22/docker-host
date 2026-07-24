@@ -16,10 +16,11 @@
    - `recent_recordings[]` with `in_plex` / `path`
    - `health` (`ok`, `library_type`, `issues`, `awaiting_index`)
    - `awaiting_index_count`, `library_healthy`
-2. **Bridge on this host:** `scripts/plex-mqtt-bridge.sh` (minutely cron) writes `/docker/homeassistant/plex_recordings_state.json`.
-3. **HA sensors:** `homeassistant/config/command_line.yaml` exposes status + sync meta (including health attrs).
-4. **Dashboard:** `homeassistant/config/dashboards/recordings.yaml` — recently landed, DVR queue, last sync, **Library OK / UNHEALTHY** chip.
-5. **Alerts:** automations for scheduled/completed (mobile) and for unhealthy library (persistent + `script.notify_mobile_recording`).
+   - `disk` (library GiB + filesystem used/free/%); also retained on `home/plex_recordings/disk` for hourly refresh without a full sync
+2. **Bridge on this host:** `scripts/plex-mqtt-bridge.sh` (minutely cron) writes `/docker/homeassistant/plex_recordings_state.json` (merges status + disk topics).
+3. **HA sensors:** `homeassistant/config/command_line.yaml` exposes status + sync meta (including health and `disk` attrs).
+4. **Dashboard:** `homeassistant/config/dashboards/recordings.yaml` — recently landed, DVR queue, last sync, **Library OK / UNHEALTHY** chip, **Storage** chip/card.
+5. **Alerts:** automations for scheduled/completed (mobile) and for unhealthy library (persistent + `script.notify_mobile_recording`); filesystem ≥90% full flips health via plex_recordings.
 
 ## Consequences
 
@@ -30,5 +31,6 @@
 ## Do not
 
 - Re-add a storage-mode-only Recordings UI without updating the YAML dashboard in git
-- Drop `health` / `awaiting_index_count` from the bridge or `json_attributes` when editing sensors
+- Drop `health` / `awaiting_index_count` / `disk` from the bridge or `json_attributes` when editing sensors
 - Silence “awaiting Plex index” in the UI without fixing library type on media-laptop
+- Add node_exporter on media-laptop solely for the Recordings disk chip (use MQTT; see plex_recordings ADR 0004)

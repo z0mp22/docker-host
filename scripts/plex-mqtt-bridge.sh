@@ -17,8 +17,9 @@ STATUS="$(read_topic home/plex_recordings/state/status)"
 LAST_SCHEDULED="$(read_topic home/plex_recordings/state/last_scheduled)"
 LAST_COMPLETED="$(read_topic home/plex_recordings/state/last_completed)"
 STATUS_JSON="$(read_topic home/plex_recordings/status)"
+DISK_JSON="$(read_topic home/plex_recordings/disk)"
 
-export STATUS LAST_SCHEDULED LAST_COMPLETED STATUS_JSON OUT
+export STATUS LAST_SCHEDULED LAST_COMPLETED STATUS_JSON DISK_JSON OUT
 python3 - <<'PY'
 import json
 import os
@@ -53,6 +54,10 @@ def parse_json(raw: str) -> dict:
 
 
 status_json = parse_json(os.environ.get("STATUS_JSON", ""))
+disk = parse_json(os.environ.get("DISK_JSON", ""))
+if not disk:
+    disk = status_json.get("disk") if isinstance(status_json.get("disk"), dict) else {}
+
 health = status_json.get("health") or {}
 if not isinstance(health, dict):
     health = {}
@@ -78,6 +83,7 @@ data = {
     "health": health,
     "awaiting_index_count": int(awaiting or 0),
     "library_healthy": bool(library_healthy),
+    "disk": disk,
 }
 
 out = Path(os.environ["OUT"])

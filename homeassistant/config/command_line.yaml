@@ -43,3 +43,37 @@
       - health
       - awaiting_index_count
       - library_healthy
+      - disk
+
+# Numeric disk entities for gauge / mushroom entity cards (from MQTT bridge JSON).
+- sensor:
+    name: Plex Recordings Disk Used
+    unique_id: plex_recordings_disk_used_percent
+    command: >-
+      python3 -c "import json; d=(json.load(open('/config/plex_recordings_state.json')).get('disk') or {}); v=d.get('filesystem_used_percent'); print(v if v is not None else 'unknown')"
+    scan_interval: 30
+    unit_of_measurement: "%"
+    state_class: measurement
+    icon: mdi:harddisk
+
+- sensor:
+    name: Plex Recordings Disk Free
+    unique_id: plex_recordings_disk_free_gb
+    command: >-
+      python3 -c "import json; d=(json.load(open('/config/plex_recordings_state.json')).get('disk') or {}); v=d.get('filesystem_avail_gb'); print(v if v is not None else 'unknown')"
+    scan_interval: 30
+    unit_of_measurement: GiB
+    state_class: measurement
+    device_class: data_size
+    icon: mdi:harddisk
+
+- sensor:
+    name: Plex Recordings Library Size
+    unique_id: plex_recordings_library_size_gb
+    command: >-
+      python3 -c "import json; d=(json.load(open('/config/plex_recordings_state.json')).get('disk') or {}); v=d.get('recordings_gb'); print(v if v is not None else 'unknown')"
+    scan_interval: 30
+    unit_of_measurement: GiB
+    state_class: measurement
+    device_class: data_size
+    icon: mdi:folder-play

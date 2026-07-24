@@ -118,7 +118,8 @@ Runtime on Pi mirrors this under `/docker/`.
 |-------|---------|
 | `home/plex_recordings/events/scheduled` | Ephemeral push when a new DVR booking is created |
 | `home/plex_recordings/events/completed` | Ephemeral push when a recording lands in the library |
-| `home/plex_recordings/status` | Retained sync summary (queue, `recent_recordings`, `health`, errors, ran_at) |
+| `home/plex_recordings/status` | Retained sync summary (queue, `recent_recordings`, `health`, `disk`, errors, ran_at) |
+| `home/plex_recordings/disk` | Retained media-laptop disk usage (hourly + after sync) |
 | `home/plex_recordings/state/*` | Plain-text status / last scheduled / last completed |
 
 | Piece | Path |

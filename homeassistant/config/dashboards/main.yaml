@@ -67,8 +67,19 @@ views:
 
               - type: custom:mushroom-template-card
                 primary: Plex Recordings
-                secondary: "{{ states('sensor.plex_recordings_status') | regex_replace('^[\\x00-\\x1f<>]+', '') | trim | default('No sync yet') }}"
+                secondary: >
+                  {% set status = states('sensor.plex_recordings_status') | regex_replace('^[\\x00-\\x1f<>]+', '') | trim | default('No sync yet') %}
+                  {% set used = states('sensor.plex_recordings_disk_used') %}
+                  {% set free = states('sensor.plex_recordings_disk_free') %}
+                  {% if used not in ['unknown', 'unavailable', 'none', ''] and free not in ['unknown', 'unavailable', 'none', ''] %}
+                  {{ status }} · {{ used }}% disk ({{ free }} GiB free)
+                  {% else %}
+                  {{ status }}
+                  {% endif %}
                 icon: mdi:television-classic
+                icon_color: >
+                  {% set used = states('sensor.plex_recordings_disk_used') | float(-1) %}
+                  {% if used >= 90 %}red{% elif used >= 80 %}orange{% else %}blue{% endif %}
                 entity: sensor.plex_recordings_status
                 tap_action:
                   action: navigate

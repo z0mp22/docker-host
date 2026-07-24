@@ -35,6 +35,50 @@ views:
               {% else %}
               Library OK
               {% endif %}
+          - type: template
+            icon: mdi:harddisk
+            content: >
+              {% set used = states('sensor.plex_recordings_disk_used') %}
+              {% set free = states('sensor.plex_recordings_disk_free') %}
+              {% if used not in ['unknown', 'unavailable', 'none', ''] and free not in ['unknown', 'unavailable', 'none', ''] %}
+              {{ used }}% · {{ free }} GiB free
+              {% else %}
+              Disk n/a
+              {% endif %}
+            entity: sensor.plex_recordings_disk_used
+            tap_action:
+              action: more-info
+
+      - type: custom:mushroom-title-card
+        title: Storage
+        subtitle: media-laptop volume · recordings library size
+
+      - type: grid
+        columns: 3
+        square: false
+        cards:
+          - type: gauge
+            entity: sensor.plex_recordings_disk_used
+            name: Disk used
+            min: 0
+            max: 100
+            needle: true
+            severity:
+              green: 0
+              yellow: 80
+              red: 90
+          - type: custom:mushroom-entity-card
+            entity: sensor.plex_recordings_disk_free
+            name: Free space
+            icon: mdi:harddisk
+            tap_action:
+              action: more-info
+          - type: custom:mushroom-entity-card
+            entity: sensor.plex_recordings_library_size
+            name: Library
+            icon: mdi:folder-play
+            tap_action:
+              action: more-info
 
       - type: custom:mushroom-title-card
         title: Recently landed
