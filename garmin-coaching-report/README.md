@@ -52,7 +52,7 @@ Check outputs in `/docker/garmin-coaching-report/reports/`:
 
 Cron installed by `deploy.sh` to `/etc/cron.d/garmin-coaching-report`:
 
-- **Monday 6:00 AM** local Pi time
+- **Monday 9:00 AM** local Pi time
 - Logs: `/docker/garmin-coaching-report/cron.log`
 
 ## Iteration workflow

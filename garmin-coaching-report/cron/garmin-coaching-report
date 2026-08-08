@@ -1,4 +1,5 @@
-# docker-host: garmin-coaching-report — Monday 6:00 AM local
+# docker-host: garmin-coaching-report — Monday 9:00 AM local
+# Later than wake time so Bluetooth sync can finish before the pull.
 SHELL=/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
-0 6 * * 1 root /docker/garmin-coaching-report/scripts/run-report.sh >> /docker/garmin-coaching-report/cron.log 2>&1
+0 9 * * 1 root /docker/garmin-coaching-report/scripts/run-report.sh >> /docker/garmin-coaching-report/cron.log 2>&1
