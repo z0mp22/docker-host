@@ -163,7 +163,7 @@ def validate_entities(items: list[dict]) -> int:
         "sensor.irrigation_next_run",
         "sensor.living_room_now_playing",
         "sensor.plex_recordings_status",
-        "automation.front_yard_lights_off_at_23_00",
+        "automation.front_yard_lights_off_at_21_00",
     ]
     by_id = {item["entity_id"]: item for item in items}
     missing = [entity_id for entity_id in required if entity_id not in by_id]

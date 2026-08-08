@@ -146,6 +146,6 @@ views:
           - type: entities
             entities:
               - automation.front_yard_lights_on_at_sunset
-              - automation.front_yard_lights_off_at_23_00
+              - automation.front_yard_lights_off_at_21_00
               - automation.front_yard_lights_on_at_04_45_if_dark
               - automation.front_yard_lights_off_at_sunrise
