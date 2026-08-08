@@ -1,0 +1,21 @@
+name: Dump Exercise Sets
+
+on:
+  workflow_dispatch:
+
+jobs:
+  dump:
+    runs-on: [self-hosted, docker-host]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Dump last strength session lifts
+        run: |
+          docker run --rm \
+            --env-file /docker/garmin-coaching-report/.env \
+            -v /docker/garmin-coaching-report/tokens:/root/.garminconnect \
+            -v "$PWD/garmin-coaching-report/scripts/dump-exercise-sets.py:/tmp/dump-exercise-sets.py:ro" \
+            --entrypoint python \
+            garmin-coaching-report:local \
+            /tmp/dump-exercise-sets.py
