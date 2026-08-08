@@ -1,0 +1,11 @@
+name: Run Coaching Report
+
+on:
+  workflow_dispatch:
+
+jobs:
+  run-report:
+    runs-on: [self-hosted, docker-host]
+    steps:
+      - name: Run weekly coaching report
+        run: bash /docker/garmin-coaching-report/scripts/run-report.sh
