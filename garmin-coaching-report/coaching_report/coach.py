@@ -59,6 +59,7 @@ def _prepare_user_content(
         "week_full": week_full,
         "history_summaries": history_out,
         "history_range": payload["history_range"],
+        "nutrition_history": payload.get("nutrition_history") or [],
         "history_compression_applied": history_level,
         "week_compression_applied": week_level,
     }
@@ -69,6 +70,7 @@ def _split_user_content(user_content: dict[str, Any]) -> tuple[dict[str, Any], d
     cached = {
         "history_summaries": user_content["history_summaries"],
         "history_range": user_content["history_range"],
+        "nutrition_history": user_content.get("nutrition_history") or [],
         "history_compression_applied": user_content["history_compression_applied"],
         "week_compression_applied": user_content["week_compression_applied"],
     }

@@ -149,6 +149,7 @@ def _compress_daily_health(
     if level == "compact":
         return {
             "date": entry.get("date"),
+            "nutrition": entry.get("nutrition"),
             "sleep": _extract_sleep_summary(entry.get("sleep"), tz_name),
             "hrv": _extract_hrv_summary(entry.get("hrv")),
             "resting_hr": _extract_resting_hr_summary(entry.get("resting_hr")),

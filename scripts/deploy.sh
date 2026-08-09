@@ -224,6 +224,7 @@ deploy_garmin_coaching_report() {
   sync_exporter_stack "garmin-coaching-report"
   preserve_env_file "garmin-coaching-report"
   mkdir -p "${DEPLOY_ROOT}/garmin-coaching-report/tokens" \
+           "${DEPLOY_ROOT}/garmin-coaching-report/fatsecret-tokens" \
            "${DEPLOY_ROOT}/garmin-coaching-report/reports"
   install_file "${REPO_ROOT}/garmin-coaching-report/scripts/run-report.sh" \
     "${DEPLOY_ROOT}/garmin-coaching-report/scripts/run-report.sh" 755

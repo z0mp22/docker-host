@@ -8,4 +8,5 @@ services:
       - .env
     volumes:
       - /docker/garmin-coaching-report/tokens:/root/.garminconnect
+      - /docker/garmin-coaching-report/fatsecret-tokens:/root/.fatsecret
       - /docker/garmin-coaching-report/reports:/reports

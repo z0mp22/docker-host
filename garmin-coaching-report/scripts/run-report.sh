@@ -5,5 +5,6 @@ set -euo pipefail
 docker run --rm \
   --env-file /docker/garmin-coaching-report/.env \
   -v /docker/garmin-coaching-report/tokens:/root/.garminconnect \
+  -v /docker/garmin-coaching-report/fatsecret-tokens:/root/.fatsecret \
   -v /docker/garmin-coaching-report/reports:/reports \
   garmin-coaching-report:local

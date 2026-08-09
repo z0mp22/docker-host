@@ -6,6 +6,7 @@ from typing import Any
 
 from garmin_connect_mcp.client import GarminClientWrapper
 
+from . import nutrition as nutrition_api
 from .config import AppConfig
 from .errors import DataCollectionError
 from .timezone_util import athlete_tz_name
@@ -143,6 +144,10 @@ def build_payload(
     )
     history = collect_history_summaries(client, history_start, history_end)
 
+    nutrition_history = _attach_nutrition(
+        config, week_full, week_start, history_start, history_end
+    )
+
     tz = athlete_tz_name(config.athlete_timezone)
     return {
         "report_date": _date_str(today),
@@ -152,6 +157,9 @@ def build_payload(
             "location": config.athlete_location,
             "time_format": "All *_mt fields are local wall-clock times in MT",
             "unit_system": config.unit_system,
+            "nutrition_source": (
+                "FatSecret food diary" if nutrition_history is not None else None
+            ),
         },
         "week_full": week_full,
         "history_summaries": history,
@@ -160,7 +168,35 @@ def build_payload(
             "end": _date_str(history_end),
             "weeks": config.history_weeks,
         },
+        "nutrition_history": nutrition_history or [],
     }
+
+
+def _attach_nutrition(
+    config: AppConfig,
+    week_full: dict[str, Any],
+    week_start: date,
+    history_start: date,
+    history_end: date,
+) -> list[dict[str, Any]] | None:
+    """Merge per-day nutrition into the week and return weekly history averages.
+
+    Returns None when FatSecret is not configured/authorized so the report runs
+    unchanged without fueling data.
+    """
+    client = nutrition_api.connect(config)
+    if client is None:
+        return None
+
+    week_days = [week_start + timedelta(days=i) for i in range(7)]
+    by_date = nutrition_api.collect_week_nutrition(client, week_days)
+    for entry in week_full.get("daily_health", []):
+        entry["nutrition"] = by_date.get(entry.get("date"))
+
+    try:
+        return nutrition_api.weekly_aggregates(client, history_start, history_end)
+    except Exception:
+        return []
 
 
 def payload_json(payload: dict[str, Any]) -> str:

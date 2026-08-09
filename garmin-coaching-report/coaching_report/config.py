@@ -28,6 +28,9 @@ class AppConfig:
     save_debug_input: bool
     athlete_timezone: str
     athlete_location: str
+    fatsecret_consumer_key: str
+    fatsecret_consumer_secret: str
+    fatsecret_token_path: str
 
 
 def load_app_config() -> AppConfig:
@@ -65,4 +68,11 @@ def load_app_config() -> AppConfig:
         in ("1", "true", "yes"),
         athlete_timezone=os.environ.get("ATHLETE_TIMEZONE", "America/Denver"),
         athlete_location=os.environ.get("ATHLETE_LOCATION", "Fort Collins, CO"),
+        fatsecret_consumer_key=os.environ.get("FATSECRET_CONSUMER_KEY", "").strip(),
+        fatsecret_consumer_secret=os.environ.get(
+            "FATSECRET_CONSUMER_SECRET", ""
+        ).strip(),
+        fatsecret_token_path=os.environ.get(
+            "FATSECRET_TOKEN_PATH", "/root/.fatsecret/token.json"
+        ),
     )
