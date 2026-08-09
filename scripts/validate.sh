@@ -58,6 +58,11 @@ main() {
 
   wait_for_http "homeassistant" "http://${HOST}:8123/"
 
+  if [ -f "$(dirname "$0")/ensure-bluetooth.sh" ]; then
+    echo "[validate] ensuring bluetooth adapter is up"
+    bash "$(dirname "$0")/ensure-bluetooth.sh" || return 1
+  fi
+
   if [ -f "$(dirname "$0")/validate-ha-config.py" ]; then
     echo "[validate] checking homeassistant config and recovery mode"
     python3 "$(dirname "$0")/validate-ha-config.py" || return 1

@@ -14,7 +14,14 @@ import requests
 
 HA_URL = os.environ.get("HA_URL", "http://127.0.0.1:8123")
 SECRETS = Path("/docker/homeassistant/secrets.yaml")
+RECORDER_DB = Path("/docker/homeassistant/home-assistant_v2.db")
 MAX_WAIT_S = 180
+# ThermoPro BLE thermometers advertise intermittently; allow a generous freshness window.
+BT_TEMP_MAX_AGE_S = int(os.environ.get("BT_TEMP_MAX_AGE_S", "1800"))
+REQUIRED_BT_TEMP_SENSORS = (
+    "sensor.tp358s_f429_temperature",  # Basement Thermometer
+    "sensor.tp358s_1c99_temperature",  # Master Bedroom Thermometer
+)
 
 
 def log(message: str) -> None:
@@ -164,6 +171,7 @@ def validate_entities(items: list[dict]) -> int:
         "sensor.living_room_now_playing",
         "sensor.plex_recordings_status",
         "automation.front_yard_lights_off_at_21_00",
+        *REQUIRED_BT_TEMP_SENSORS,
     ]
     by_id = {item["entity_id"]: item for item in items}
     missing = [entity_id for entity_id in required if entity_id not in by_id]
@@ -179,6 +187,55 @@ def validate_entities(items: list[dict]) -> int:
         log(f"FAIL degraded entities: {', '.join(bad)}")
         return 1
     log("OK required dashboard entities present")
+    return validate_bluetooth_temp_sensors()
+
+
+def latest_recorder_state(entity_id: str) -> tuple[str, float] | None:
+    """Return (state, last_updated_ts) from the HA recorder DB, if present."""
+    if not RECORDER_DB.exists():
+        return None
+    import sqlite3
+
+    con = sqlite3.connect(f"file:{RECORDER_DB}?mode=ro", uri=True)
+    try:
+        row = con.execute(
+            "SELECT states.state, states.last_updated_ts "
+            "FROM states "
+            "JOIN states_meta ON states.metadata_id = states_meta.metadata_id "
+            "WHERE states_meta.entity_id = ? "
+            "ORDER BY states.last_updated_ts DESC LIMIT 1",
+            (entity_id,),
+        ).fetchone()
+    finally:
+        con.close()
+    if not row:
+        return None
+    state, ts = row
+    return str(state), float(ts or 0)
+
+
+def validate_bluetooth_temp_sensors() -> int:
+    """Hard gate: ThermoPro BLE temperature sensors must be present and fresh."""
+    now = time.time()
+    failures: list[str] = []
+    for entity_id in REQUIRED_BT_TEMP_SENSORS:
+        latest = latest_recorder_state(entity_id)
+        if latest is None:
+            failures.append(f"{entity_id} (no recorder history)")
+            continue
+        state, ts = latest
+        age = now - ts if ts else float("inf")
+        if state in {"unavailable", "unknown", ""}:
+            failures.append(f"{entity_id} state={state}")
+            continue
+        if age > BT_TEMP_MAX_AGE_S:
+            failures.append(f"{entity_id} stale ({int(age)}s old, state={state})")
+            continue
+        log(f"OK bluetooth temp {entity_id}={state} ({int(age)}s old)")
+    if failures:
+        log("FAIL bluetooth temperature sensors: " + "; ".join(failures))
+        return 1
+    log("OK bluetooth temperature sensors reading")
     return 0
 
 
@@ -198,8 +255,9 @@ def validate_via_docker() -> int:
     if token:
         return validate_via_api({"Authorization": f"Bearer {token}"})
 
-    log("WARN skipping entity availability checks (no HA API credentials on host)")
-    return 0
+    log("WARN skipping API entity checks (no HA API credentials on host)")
+    # Still enforce bluetooth temp gate via recorder — credentials are optional for this.
+    return validate_bluetooth_temp_sensors()
 
 
 def main() -> int:
