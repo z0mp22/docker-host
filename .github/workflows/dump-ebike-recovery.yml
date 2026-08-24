@@ -1,0 +1,34 @@
+name: Dump E-bike Recovery
+
+on:
+  workflow_dispatch:
+
+jobs:
+  dump:
+    runs-on: [self-hosted, docker-host]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: List past coaching reports
+        run: |
+          echo "=== report files ==="
+          ls -lt /docker/garmin-coaching-report/reports/*.md 2>/dev/null | head -20 || true
+          echo "=== last 3 report bodies (truncated) ==="
+          for f in $(ls -t /docker/garmin-coaching-report/reports/mountain-sports-coaching-*.md 2>/dev/null | head -3); do
+            echo "----- $f -----"
+            # strip token footer noise; keep coaching content
+            sed '/^---$/,$d' "$f" | head -n 200
+            echo
+          done
+
+      - name: Dump e-bike + recovery from Garmin API
+        run: |
+          docker run --rm \
+            --env-file /docker/garmin-coaching-report/.env \
+            -v /docker/garmin-coaching-report/tokens:/root/.garminconnect \
+            -v /docker/garmin-coaching-report/fatsecret-tokens:/root/.fatsecret \
+            -v "$PWD/garmin-coaching-report/scripts/dump-ebike-recovery.py:/tmp/dump-ebike-recovery.py:ro" \
+            --entrypoint python \
+            garmin-coaching-report:local \
+            /tmp/dump-ebike-recovery.py
