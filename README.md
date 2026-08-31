@@ -18,7 +18,7 @@ Push to `main` → GitHub Actions deploys to `/docker` on the Pi via a self-host
 | npm-exporter | 9113 | `npm-exporter/` |
 | npm-metrics-exporter | 9114 | `npm-metrics-exporter/` |
 | unifi-poller | 9130 | `unifi-poller/` (optional) |
-| garmin-coaching-report | — (Mon 6:00 cron) | `garmin-coaching-report/` |
+| garmin-coaching-report | — (Mon 09:00 MT cron) | `garmin-coaching-report/` |
 
 Frigate NVR runs on **minipc** (`10.0.0.6`) — see [czampino/frigate](https://github.com/czampino/frigate).  
 Prometheus/Grafana scrape this host from **minipc** — see [z0mp22/minipc](https://github.com/z0mp22/minipc).
@@ -140,7 +140,8 @@ HA config previously lived in [czampino/homeassistant](https://github.com/czampi
 
 | Workflow | Triggers |
 |----------|----------|
-| `deploy.yml` | every push to `main` |
-| `runner.yml` | `runner/**` changes |
-
-Both validate service health before completing.
+| `deploy.yml` | every push to `main` (+ manual) — deploys the stack, validates service health |
+| `runner.yml` | `runner/**` changes (+ manual) |
+| `run-coaching-report.yml` | manual — runs the weekly Garmin coaching report now (also cron: **Mon 09:00 America/Denver** via `/etc/cron.d/garmin-coaching-report`) |
+| `backfill-moveiq.yml` | manual — backfill Garmin Move IQ events as activities (`summary` or `fit` method) |
+| `dump-ebike-recovery.yml` / `dump-exercise-sets.yml` | manual — one-off Garmin data dumps for iteration |
