@@ -1,0 +1,64 @@
+name: Backfill Move IQ
+
+# Turn Garmin Move IQ auto-detected events (grey in the app, never real activities)
+# into manual activities, enriched with every stat recoverable from the all-day
+# streams (HR + time-in-zone, walking distance/cadence, elevation, respiration,
+# calories, and Garmin-computed Training Effect / load).
+#
+# Default run is a DRY RUN. Set commit=true to actually create activities.
+
+on:
+  workflow_dispatch:
+    inputs:
+      date:
+        description: "Day to scan: today | yesterday | YYYY-MM-DD"
+        required: true
+        default: "yesterday"
+      commit:
+        description: "Actually create the activities (otherwise dry-run)"
+        type: boolean
+        required: true
+        default: false
+      bike_type:
+        description: "Garmin type for cycling Move IQ events"
+        type: choice
+        default: e_bike_fitness
+        options:
+          - e_bike_fitness
+          - e_bike_mountain
+          - cycling
+          - gravel_cycling
+          - road_biking
+      min_minutes:
+        description: "Ignore events shorter than this"
+        required: true
+        default: "15"
+      replace_ids:
+        description: "Comma-separated manual activityIds to delete first (re-enrich)"
+        required: false
+        default: ""
+
+jobs:
+  backfill:
+    runs-on: [self-hosted, docker-host]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Backfill Move IQ events
+        run: |
+          args=(--date "${{ inputs.date }}" --min-minutes "${{ inputs.min_minutes }}" --bike-type "${{ inputs.bike_type }}")
+          if [ "${{ inputs.commit }}" = "true" ]; then args+=(--commit); fi
+          IFS=',' read -ra ids <<< "${{ inputs.replace_ids }}"
+          for id in "${ids[@]}"; do
+            id="$(echo "$id" | tr -d '[:space:]')"
+            [ -n "$id" ] && args+=(--replace-id "$id")
+          done
+          echo "enrich-moveiq.py ${args[*]}"
+          docker run --rm \
+            --env-file /docker/garmin-coaching-report/.env \
+            -v /docker/garmin-coaching-report/tokens:/root/.garminconnect \
+            -v "$PWD/garmin-coaching-report/scripts/enrich-moveiq.py:/tmp/enrich-moveiq.py:ro" \
+            --entrypoint python \
+            garmin-coaching-report:local \
+            /tmp/enrich-moveiq.py "${args[@]}"

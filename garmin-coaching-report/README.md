@@ -62,6 +62,31 @@ Cron installed by `deploy.sh` to `/etc/cron.d/garmin-coaching-report`:
 3. Run `bash /docker/garmin-coaching-report/scripts/run-report.sh` manually
 4. Compare `.meta.json` files across runs (token usage, compression level)
 
+## Move IQ backfill
+
+Garmin **Move IQ** events (auto-detected walks/rides, grey in the app) never become real
+activities, so they're invisible to the coaching report. `scripts/` has two backfillers:
+
+| Script | Purpose |
+|--------|---------|
+| `backfill-moveiq.py` | Minimal — Move IQ event → plain manual activity (time + type only). |
+| `enrich-moveiq.py` | Pulls the all-day streams for the event window and populates every field the API accepts: avg/max/min HR, HR time-in-zone, walking distance/cadence (from steps × stride), elevation, respiration, calibrated calories. Non-storable stats (time-in-zone, steps, intensity minutes) go in the activity **description**. Garmin then computes Training Effect / load itself. |
+
+Both default to a dry run; pass `--commit` to write. `enrich-moveiq.py` also takes
+`--date`, `--bike-type e_bike_fitness`, `--min-minutes`, and `--replace-id <id>` (delete +
+recreate an existing manual activity). Run via the **Backfill Move IQ** GitHub Action
+(`workflow_dispatch`) or manually:
+
+```bash
+docker run --rm --env-file /docker/garmin-coaching-report/.env \
+  -v /docker/garmin-coaching-report/tokens:/root/.garminconnect \
+  -v "$PWD/garmin-coaching-report/scripts/enrich-moveiq.py:/tmp/x.py:ro" \
+  --entrypoint python garmin-coaching-report:local /tmp/x.py --date yesterday --commit
+```
+
+Not recoverable after the fact: GPS track, per-second traces, cycling distance/speed.
+For those, build + `upload_activity()` a synthetic FIT instead (not implemented).
+
 ## Foundation
 
 Vendors [eddmann/garmin-connect-mcp](https://github.com/eddmann/garmin-connect-mcp) as a git submodule at `vendor/garmin-connect-mcp/`.
