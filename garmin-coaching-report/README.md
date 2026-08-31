@@ -62,6 +62,30 @@ Cron installed by `deploy.sh` to `/etc/cron.d/garmin-coaching-report`:
 3. Run `bash /docker/garmin-coaching-report/scripts/run-report.sh` manually
 4. Compare `.meta.json` files across runs (token usage, compression level)
 
+## Move IQ backfill
+
+Garmin **Move IQ** events (auto-detected walks/rides, grey in the app) never become real
+activities, so they're invisible to the coaching report. `scripts/` has two backfillers:
+
+| Script | Purpose |
+|--------|---------|
+| `backfill-moveiq.py` | Minimal — Move IQ event → plain manual activity (time + type only). |
+| `enrich-moveiq.py` | Manual activity with summary fields set directly: avg/max/min HR, walking distance/cadence (steps × stride), elevation, respiration, calibrated calories. Garmin computes Training Effect / load. Stats it won't store on a manual activity (time-in-zone, steps, intensity minutes) go in the **description**. |
+| `backfill-moveiq-fit.py` | Synthesises a FIT from the all-day HR stream (2-min samples → 10 s records) + step-derived distance for walks, and `upload_activity()`s it. Garmin ingests it as a recording and computes HR zones, **time-in-zone** (`get_activity_hr_in_timezones`) and intensity minutes from the stream. Needs `fit-tool` (bundled in the image). |
+
+All default to a dry run; pass `--commit` to write. Shared flags: `--date today|yesterday|YYYY-MM-DD`,
+`--bike-type e_bike_fitness`, `--min-minutes`, `--replace-id <id>` (delete + re-do). Run via the
+**Backfill Move IQ** GitHub Action (`workflow_dispatch`, `method` = `summary` or `fit`) or manually:
+
+```bash
+docker run --rm --env-file /docker/garmin-coaching-report/.env \
+  -v /docker/garmin-coaching-report/tokens:/root/.garminconnect \
+  -v "$PWD/garmin-coaching-report/scripts/enrich-moveiq.py:/tmp/x.py:ro" \
+  --entrypoint python garmin-coaching-report:local /tmp/x.py --date yesterday --commit
+```
+
+Never recoverable after the fact: GPS track, real per-second HR, cycling distance/speed/power.
+
 ## Foundation
 
 Vendors [eddmann/garmin-connect-mcp](https://github.com/eddmann/garmin-connect-mcp) as a git submodule at `vendor/garmin-connect-mcp/`.
