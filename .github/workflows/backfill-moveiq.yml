@@ -1,11 +1,17 @@
 name: Backfill Move IQ
 
 # Turn Garmin Move IQ auto-detected events (grey in the app, never real activities)
-# into manual activities, enriched with every stat recoverable from the all-day
-# streams (HR + time-in-zone, walking distance/cadence, elevation, respiration,
-# calories, and Garmin-computed Training Effect / load).
+# into activities.
 #
-# Default run is a DRY RUN. Set commit=true to actually create activities.
+#   method=summary  -> enrich-moveiq.py: one manual activity, summary fields set
+#                      directly (HR, walking distance, calibrated calories); Garmin
+#                      computes Training Effect. Time-in-zone / steps / intensity
+#                      minutes go in the description only.
+#   method=fit      -> backfill-moveiq-fit.py: synthesise + upload a FIT of the HR
+#                      stream (+ step-derived distance for walks). Garmin computes
+#                      HR zones, time-in-zone and intensity minutes from the stream.
+#
+# Default run is a DRY RUN. Set commit=true to write.
 
 on:
   workflow_dispatch:
@@ -14,8 +20,13 @@ on:
         description: "Day to scan: today | yesterday | YYYY-MM-DD"
         required: true
         default: "yesterday"
+      method:
+        description: "summary (manual activity) or fit (uploaded HR-stream FIT)"
+        type: choice
+        default: summary
+        options: [summary, fit]
       commit:
-        description: "Actually create the activities (otherwise dry-run)"
+        description: "Actually create/upload (otherwise dry-run)"
         type: boolean
         required: true
         default: false
@@ -23,18 +34,13 @@ on:
         description: "Garmin type for cycling Move IQ events"
         type: choice
         default: e_bike_fitness
-        options:
-          - e_bike_fitness
-          - e_bike_mountain
-          - cycling
-          - gravel_cycling
-          - road_biking
+        options: [e_bike_fitness, e_bike_mountain, cycling, gravel_cycling, road_biking]
       min_minutes:
         description: "Ignore events shorter than this"
         required: true
         default: "15"
       replace_ids:
-        description: "Comma-separated manual activityIds to delete first (re-enrich)"
+        description: "Comma-separated activityIds to delete first (re-do)"
         required: false
         default: ""
 
@@ -47,6 +53,11 @@ jobs:
 
       - name: Backfill Move IQ events
         run: |
+          if [ "${{ inputs.method }}" = "fit" ]; then
+            script=backfill-moveiq-fit.py
+          else
+            script=enrich-moveiq.py
+          fi
           args=(--date "${{ inputs.date }}" --min-minutes "${{ inputs.min_minutes }}" --bike-type "${{ inputs.bike_type }}")
           if [ "${{ inputs.commit }}" = "true" ]; then args+=(--commit); fi
           IFS=',' read -ra ids <<< "${{ inputs.replace_ids }}"
@@ -54,11 +65,11 @@ jobs:
             id="$(echo "$id" | tr -d '[:space:]')"
             [ -n "$id" ] && args+=(--replace-id "$id")
           done
-          echo "enrich-moveiq.py ${args[*]}"
+          echo "$script ${args[*]}"
           docker run --rm \
             --env-file /docker/garmin-coaching-report/.env \
             -v /docker/garmin-coaching-report/tokens:/root/.garminconnect \
-            -v "$PWD/garmin-coaching-report/scripts/enrich-moveiq.py:/tmp/enrich-moveiq.py:ro" \
+            -v "$PWD/garmin-coaching-report/scripts/$script:/tmp/$script:ro" \
             --entrypoint python \
             garmin-coaching-report:local \
-            /tmp/enrich-moveiq.py "${args[@]}"
+            "/tmp/$script" "${args[@]}"

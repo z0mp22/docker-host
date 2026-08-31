@@ -70,12 +70,12 @@ activities, so they're invisible to the coaching report. `scripts/` has two back
 | Script | Purpose |
 |--------|---------|
 | `backfill-moveiq.py` | Minimal — Move IQ event → plain manual activity (time + type only). |
-| `enrich-moveiq.py` | Pulls the all-day streams for the event window and populates every field the API accepts: avg/max/min HR, HR time-in-zone, walking distance/cadence (from steps × stride), elevation, respiration, calibrated calories. Non-storable stats (time-in-zone, steps, intensity minutes) go in the activity **description**. Garmin then computes Training Effect / load itself. |
+| `enrich-moveiq.py` | Manual activity with summary fields set directly: avg/max/min HR, walking distance/cadence (steps × stride), elevation, respiration, calibrated calories. Garmin computes Training Effect / load. Stats it won't store on a manual activity (time-in-zone, steps, intensity minutes) go in the **description**. |
+| `backfill-moveiq-fit.py` | Synthesises a FIT from the all-day HR stream (2-min samples → 10 s records) + step-derived distance for walks, and `upload_activity()`s it. Garmin ingests it as a recording and computes HR zones, **time-in-zone** (`get_activity_hr_in_timezones`) and intensity minutes from the stream. Needs `fit-tool` (bundled in the image). |
 
-Both default to a dry run; pass `--commit` to write. `enrich-moveiq.py` also takes
-`--date`, `--bike-type e_bike_fitness`, `--min-minutes`, and `--replace-id <id>` (delete +
-recreate an existing manual activity). Run via the **Backfill Move IQ** GitHub Action
-(`workflow_dispatch`) or manually:
+All default to a dry run; pass `--commit` to write. Shared flags: `--date today|yesterday|YYYY-MM-DD`,
+`--bike-type e_bike_fitness`, `--min-minutes`, `--replace-id <id>` (delete + re-do). Run via the
+**Backfill Move IQ** GitHub Action (`workflow_dispatch`, `method` = `summary` or `fit`) or manually:
 
 ```bash
 docker run --rm --env-file /docker/garmin-coaching-report/.env \
@@ -84,8 +84,7 @@ docker run --rm --env-file /docker/garmin-coaching-report/.env \
   --entrypoint python garmin-coaching-report:local /tmp/x.py --date yesterday --commit
 ```
 
-Not recoverable after the fact: GPS track, per-second traces, cycling distance/speed.
-For those, build + `upload_activity()` a synthetic FIT instead (not implemented).
+Never recoverable after the fact: GPS track, real per-second HR, cycling distance/speed/power.
 
 ## Foundation
 
