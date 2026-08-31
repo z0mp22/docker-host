@@ -65,7 +65,7 @@ Cron installed by `deploy.sh` to `/etc/cron.d/garmin-coaching-report`:
 ## Move IQ backfill
 
 Garmin **Move IQ** events (auto-detected walks/rides, grey in the app) never become real
-activities, so they're invisible to the coaching report. `scripts/` has two backfillers:
+activities, so they're invisible to the coaching report. `scripts/` has three backfillers:
 
 | Script | Purpose |
 |--------|---------|
@@ -84,7 +84,9 @@ docker run --rm --env-file /docker/garmin-coaching-report/.env \
   --entrypoint python garmin-coaching-report:local /tmp/x.py --date yesterday --commit
 ```
 
-Never recoverable after the fact: GPS track, real per-second HR, cycling distance/speed/power.
+`summary` and `fit` are complementary: `summary` gets Garmin-computed Training Effect / load;
+`fit` gets time-in-zone + intensity minutes. Neither recovers GPS track, real per-second HR,
+or cycling distance/speed/power — those need a live recording.
 
 ## Foundation
 
