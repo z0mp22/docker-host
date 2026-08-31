@@ -49,7 +49,7 @@ def load_app_config() -> AppConfig:
     return AppConfig(
         garmin=garmin,
         anthropic_api_key=api_key,
-        anthropic_model=os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-6"),
+        anthropic_model=os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-5"),
         anthropic_fallback_model=os.environ.get(
             "ANTHROPIC_FALLBACK_MODEL", "claude-haiku-4-5-20251001"
         ),
