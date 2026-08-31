@@ -130,11 +130,17 @@ def _call_model(
     messages: list[dict[str, Any]],
     max_output_tokens: int,
 ) -> anthropic.types.Message:
+    # Claude Sonnet 5 runs adaptive thinking whenever `thinking` is omitted, and
+    # those tokens draw down the same max_tokens budget as the visible report —
+    # which silently truncated the report mid-section. This report is tuned for a
+    # non-thinking model, so keep thinking off and give the whole budget to the
+    # answer. (`disabled` is accepted on Sonnet 5, Sonnet 4.6, and Haiku 4.5.)
     return client.messages.create(
         model=model,
         max_tokens=max_output_tokens,
         system=system,
         messages=messages,
+        thinking={"type": "disabled"},
     )
 
 
@@ -199,6 +205,14 @@ def generate_coach_report(
         )
     except Exception as exc:
         raise CoachError(f"Anthropic API call failed: {exc}") from exc
+
+    if response.stop_reason == "max_tokens":
+        out = response.usage.output_tokens if response.usage else "?"
+        raise CoachError(
+            f"Report truncated: hit max_tokens ({max_output_tokens:,}) before the "
+            f"model finished. model={chosen_model} output_tokens={out}. "
+            "Raise MAX_OUTPUT_TOKENS or trim the payload; do not email a partial report."
+        )
 
     text_blocks = [b.text for b in response.content if b.type == "text"]
     report_body = "\n".join(text_blocks).strip()
