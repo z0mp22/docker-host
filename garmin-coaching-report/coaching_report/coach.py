@@ -130,17 +130,11 @@ def _call_model(
     messages: list[dict[str, Any]],
     max_output_tokens: int,
 ) -> anthropic.types.Message:
-    # Claude Sonnet 5 runs adaptive thinking whenever `thinking` is omitted, and
-    # those tokens draw down the same max_tokens budget as the visible report —
-    # which silently truncated the report mid-section. This report is tuned for a
-    # non-thinking model, so keep thinking off and give the whole budget to the
-    # answer. (`disabled` is accepted on Sonnet 5, Sonnet 4.6, and Haiku 4.5.)
     return client.messages.create(
         model=model,
         max_tokens=max_output_tokens,
         system=system,
         messages=messages,
-        thinking={"type": "disabled"},
     )
 
 
