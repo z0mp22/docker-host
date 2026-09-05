@@ -15,7 +15,13 @@ from .emailer import (
     send_alert_email,
     send_report_email,
 )
-from .errors import AuthExpiredError, CoachError, DataCollectionError, EmailError
+from .errors import (
+    AuthExpiredError,
+    CoachError,
+    DataCollectionError,
+    EmailError,
+    EmptyWindowError,
+)
 from .garmin_auth import connect_with_tokens
 
 
@@ -141,6 +147,10 @@ def main() -> int:
         print(f"[coaching-report] Report saved to {md_path}", file=sys.stderr)
         return 0
 
+    except EmptyWindowError as exc:
+        # Not a failure: SINCE=last with no new days since the last report.
+        print(f"[coaching-report] {exc}", file=sys.stderr)
+        return 0
     except (DataCollectionError, CoachError, EmailError) as exc:
         print(f"[coaching-report] {exc}", file=sys.stderr)
         if not dry_run:

@@ -8,7 +8,7 @@ from garmin_connect_mcp.client import GarminClientWrapper
 
 from . import nutrition as nutrition_api
 from .config import AppConfig
-from .errors import DataCollectionError
+from .errors import DataCollectionError, EmptyWindowError
 from .timezone_util import athlete_tz_name
 
 
@@ -147,9 +147,10 @@ def build_payload(
     week_start = since or (week_end - timedelta(days=6))
 
     if week_end < week_start:
-        raise DataCollectionError(
-            f"Empty/inverted report window: "
-            f"{_date_str(week_start)}..{_date_str(week_end)}"
+        raise EmptyWindowError(
+            f"Nothing to report: window {_date_str(week_start)}.."
+            f"{_date_str(week_end)} contains no days "
+            f"(the last report already covered through {_date_str(week_end)})"
         )
     window_days = (week_end - week_start).days + 1
     if window_days > config.max_window_days:
