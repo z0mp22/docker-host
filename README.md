@@ -40,8 +40,8 @@ Set `PULL_IMAGES=1` to pull latest images (optional; off by default to avoid mic
 | `/docker/.env` | Pi-hole `WEBPASSWORD` in main compose |
 | `/docker/pihole-exporter/.env` | Pi-hole API password for exporter |
 | `/docker/unifi-poller/up.conf` | UniFi controller credentials |
-| `/docker/homeassistant/secrets.yaml` | HA integrations |
-| `/docker/garmin-coaching-report/.env` | Garmin, Anthropic, Gmail credentials |
+| `/docker/homeassistant/secrets.yaml` | HA integrations; `github_coaching_report_token` (fine-grained PAT, "Bearer github_pat_…") for the coaching-report dashboard buttons |
+| `/docker/garmin-coaching-report/.env` | Garmin, Anthropic, Gmail credentials; `ANTHROPIC_MODEL` (keep `claude-sonnet-4-6`), `MAX_WINDOW_DAYS` |
 | `/docker/garmin-coaching-report/tokens/` | Garmin OAuth token cache |
 | `/docker/garmin-coaching-report/reports/` | Coaching reports + debug JSON |
 | `/docker/npm/data/` | NPM proxy hosts + SSL (managed in NPM UI) |
@@ -142,6 +142,6 @@ HA config previously lived in [czampino/homeassistant](https://github.com/czampi
 |----------|----------|
 | `deploy.yml` | every push to `main` (+ manual) — deploys the stack, validates service health |
 | `runner.yml` | `runner/**` changes (+ manual) |
-| `run-coaching-report.yml` | manual — runs the weekly Garmin coaching report now (also cron: **Mon 09:00 America/Denver** via `/etc/cron.d/garmin-coaching-report`) |
+| `run-coaching-report.yml` | manual — runs the Garmin coaching report now. Inputs: `since` (`last` = days since the last report, `7d` = fixed week), `dry_run` (validate the window only, no Claude/email). Also cron: **Mon 09:00 America/Denver** via `/etc/cron.d/garmin-coaching-report` (legacy 7-day window), and on-demand from the HA Home dashboard "Coaching report" card. |
 | `backfill-moveiq.yml` | manual — backfill Garmin Move IQ events as activities (`summary` or `fit` method) |
 | `dump-ebike-recovery.yml` / `dump-exercise-sets.yml` | manual — one-off Garmin data dumps for iteration |
