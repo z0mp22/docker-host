@@ -3,7 +3,7 @@
 import json
 import smtplib
 import sys
-from datetime import date
+from datetime import date, datetime
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from pathlib import Path
@@ -14,6 +14,30 @@ import markdown
 from .coach import CoachResult
 from .config import AppConfig
 from .errors import EmailError
+
+
+def last_report_window_end(reports_dir: Path) -> date | None:
+    """Latest window_end across {reports_dir}/mountain-sports-coaching-*.meta.json.
+
+    Falls back to the report_date field for meta files written before window
+    tracking existed. Returns None if the directory or any usable meta is absent.
+    """
+    if not reports_dir.is_dir():
+        return None
+    best: date | None = None
+    for meta_file in reports_dir.glob("mountain-sports-coaching-*.meta.json"):
+        try:
+            data = json.loads(meta_file.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        stamp = data.get("window_end") or data.get("report_date")
+        try:
+            parsed = datetime.strptime(stamp, "%Y-%m-%d").date()
+        except (TypeError, ValueError):
+            continue
+        if best is None or parsed > best:
+            best = parsed
+    return best
 
 
 def _metadata_footer(result: CoachResult) -> str:
@@ -73,8 +97,12 @@ def save_outputs(
     md_path = base.with_suffix(".md")
     md_path.write_text(full_markdown, encoding="utf-8")
 
+    week_range = (payload or {}).get("week_full", {}).get("range", {})
     meta = {
         "report_date": stamp,
+        "window_start": week_range.get("start"),
+        "window_end": week_range.get("end"),
+        "window_days": week_range.get("days"),
         "model": result.model,
         "input_tokens": result.input_tokens,
         "output_tokens": result.output_tokens,

@@ -1,11 +1,34 @@
 name: Run Coaching Report
 
+# Manual trigger for the mountain-sports coaching report.
+#   since=last   -> resume from the end of the last report's window
+#   since=7d     -> force the legacy fixed 7-day window (ending yesterday)
+#   dry_run=true -> resolve + log the window only; no Claude call, no email
 on:
   workflow_dispatch:
+    inputs:
+      since:
+        description: "Lookback window start"
+        type: choice
+        default: last
+        options: [last, 7d]
+      dry_run:
+        description: "Validate the window only (no Claude call, no email)"
+        type: boolean
+        default: false
 
 jobs:
   run-report:
     runs-on: [self-hosted, docker-host]
+    concurrency:
+      group: coaching-report
+      cancel-in-progress: false
     steps:
-      - name: Run weekly coaching report
-        run: bash /docker/garmin-coaching-report/scripts/run-report.sh
+      - name: Run coaching report
+        run: |
+          if [ "${{ inputs.since }}" = "last" ]; then export SINCE=last; fi
+          # since=7d -> leave SINCE unset: run-report.sh and the Python fall back
+          # to the legacy window (report_date-7 .. report_date-1).
+          if [ "${{ inputs.dry_run }}" = "true" ]; then export DRY_RUN=true; fi
+          echo "coaching-report: SINCE=${SINCE:-<unset>} DRY_RUN=${DRY_RUN:-<unset>}"
+          bash /docker/garmin-coaching-report/scripts/run-report.sh

@@ -3,14 +3,66 @@
 import os
 import sys
 import traceback
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
+from pathlib import Path
 
 from .coach import generate_coach_report
 from .collector import build_payload
 from .config import load_app_config
-from .emailer import save_outputs, send_alert_email, send_report_email
+from .emailer import (
+    last_report_window_end,
+    save_outputs,
+    send_alert_email,
+    send_report_email,
+)
 from .errors import AuthExpiredError, CoachError, DataCollectionError, EmailError
 from .garmin_auth import connect_with_tokens
+
+
+def _parse_since(raw: str, report_date: date, reports_dir: Path) -> date | None:
+    """SINCE: '' -> None (legacy 7-day); 'last' -> resume after the last report's
+    window; 'Nd' -> report_date - N days; 'YYYY-MM-DD' -> explicit date."""
+    raw = raw.strip().lower()
+    if not raw:
+        return None
+    if raw == "last":
+        last_end = last_report_window_end(reports_dir)
+        if last_end is None:
+            print(
+                "[coaching-report] SINCE=last but no prior report found; "
+                "using legacy 7-day window",
+                file=sys.stderr,
+            )
+            return None
+        return last_end + timedelta(days=1)
+    if raw.endswith("d") and raw[:-1].isdigit():
+        return report_date - timedelta(days=int(raw[:-1]))
+    try:
+        return datetime.strptime(raw, "%Y-%m-%d").date()
+    except ValueError:
+        print(
+            f"[coaching-report] Invalid SINCE '{raw}', using legacy 7-day window",
+            file=sys.stderr,
+        )
+        return None
+
+
+def _parse_through(raw: str, report_date: date) -> date | None:
+    """THROUGH: '' | 'yesterday' -> None (report_date - 1); 'today' -> report_date;
+    'YYYY-MM-DD' -> explicit date."""
+    raw = raw.strip().lower()
+    if not raw or raw == "yesterday":
+        return None
+    if raw == "today":
+        return report_date
+    try:
+        return datetime.strptime(raw, "%Y-%m-%d").date()
+    except ValueError:
+        print(
+            f"[coaching-report] Invalid THROUGH '{raw}', using yesterday",
+            file=sys.stderr,
+        )
+        return None
 
 
 def main() -> int:
@@ -32,6 +84,11 @@ def main() -> int:
         )
         report_date = date.today()
 
+    reports_dir = config.report_output_dir
+    since = _parse_since(os.environ.get("SINCE", ""), report_date, reports_dir)
+    through = _parse_through(os.environ.get("THROUGH", ""), report_date)
+    dry_run = os.environ.get("DRY_RUN", "").strip().lower() in ("1", "true", "yes")
+
     try:
         client = connect_with_tokens(config.garmin)
     except AuthExpiredError as exc:
@@ -47,7 +104,28 @@ def main() -> int:
         return 1
 
     try:
-        payload = build_payload(client, config, report_date)
+        payload = build_payload(
+            client, config, report_date, since=since, through=through
+        )
+
+        wr = payload["week_full"]["range"]
+        n_acts = len(payload["week_full"].get("activity_details", []))
+        n_days = len(payload["week_full"].get("daily_health", []))
+        n_hist = len(payload.get("history_summaries", []))
+        print(
+            f"[coaching-report] window {wr['start']}..{wr['end']} "
+            f"({wr.get('days', n_days)} days) — {n_acts} activities, "
+            f"{n_days} daily-health days, {n_hist} history entries",
+            file=sys.stderr,
+        )
+
+        if dry_run:
+            print(
+                "[coaching-report] DRY_RUN: window validated; skipping Claude + email",
+                file=sys.stderr,
+            )
+            return 0
+
         result, user_content = generate_coach_report(
             payload,
             api_key=config.anthropic_api_key,
@@ -65,12 +143,14 @@ def main() -> int:
 
     except (DataCollectionError, CoachError, EmailError) as exc:
         print(f"[coaching-report] {exc}", file=sys.stderr)
-        _try_alert(config, f"Coaching report failed: {exc}")
+        if not dry_run:
+            _try_alert(config, f"Coaching report failed: {exc}")
         return 1
     except Exception as exc:
         print(f"[coaching-report] Unexpected error: {exc}", file=sys.stderr)
         traceback.print_exc(file=sys.stderr)
-        _try_alert(config, f"Coaching report failed unexpectedly:\n\n{exc}")
+        if not dry_run:
+            _try_alert(config, f"Coaching report failed unexpectedly:\n\n{exc}")
         return 1
 
 

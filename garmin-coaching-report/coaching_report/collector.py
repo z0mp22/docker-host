@@ -74,14 +74,19 @@ def _collect_activity(
 
 def collect_week_full(
     client: GarminClientWrapper,
-    week_end: date,
+    start: date,
+    end: date,
     maxchart: int,
     maxpoly: int,
 ) -> dict[str, Any]:
-    """Last 7 calendar days ending on week_end (inclusive)."""
-    week_start = week_end - timedelta(days=6)
-    start_s = _date_str(week_start)
-    end_s = _date_str(week_end)
+    """All calendar days in [start, end] inclusive."""
+    if end < start:
+        raise DataCollectionError(
+            f"Inverted collection window: {_date_str(start)}..{_date_str(end)}"
+        )
+    day_count = (end - start).days + 1
+    start_s = _date_str(start)
+    end_s = _date_str(end)
 
     try:
         activities = client.safe_call("get_activities_by_date", start_s, end_s, "") or []
@@ -89,8 +94,8 @@ def collect_week_full(
         raise DataCollectionError(f"Failed to fetch week activities: {exc}") from exc
 
     daily_health = [
-        _collect_day_health(client, week_start + timedelta(days=i), compact=True)
-        for i in range(7)
+        _collect_day_health(client, start + timedelta(days=i), compact=True)
+        for i in range(day_count)
     ]
 
     activity_details = []
@@ -102,7 +107,7 @@ def collect_week_full(
             )
 
     return {
-        "range": {"start": start_s, "end": end_s},
+        "range": {"start": start_s, "end": end_s, "days": day_count},
         "activity_details": activity_details,
         "daily_health": daily_health,
     }
@@ -128,16 +133,38 @@ def build_payload(
     client: GarminClientWrapper,
     config: AppConfig,
     report_date: date | None = None,
+    since: date | None = None,
+    through: date | None = None,
 ) -> dict[str, Any]:
-    """Build coaching input payload."""
+    """Build coaching input payload.
+
+    Default (since=through=None): the 7 calendar days ending the day before
+    report_date -- identical to the historical behavior. ``since`` / ``through``
+    override the lookback window start / end for on-demand runs.
+    """
     today = report_date or date.today()
-    week_end = today - timedelta(days=1)
-    week_start = week_end - timedelta(days=6)
+    week_end = through or (today - timedelta(days=1))
+    week_start = since or (week_end - timedelta(days=6))
+
+    if week_end < week_start:
+        raise DataCollectionError(
+            f"Empty/inverted report window: "
+            f"{_date_str(week_start)}..{_date_str(week_end)}"
+        )
+    window_days = (week_end - week_start).days + 1
+    if window_days > config.max_window_days:
+        raise DataCollectionError(
+            f"Report window {_date_str(week_start)}..{_date_str(week_end)} spans "
+            f"{window_days} days (max {config.max_window_days}); raise "
+            f"MAX_WINDOW_DAYS to override."
+        )
+
     history_end = week_start - timedelta(days=1)
     history_start = week_start - timedelta(weeks=config.history_weeks)
 
     week_full = collect_week_full(
         client,
+        week_start,
         week_end,
         maxchart=config.garmin_maxchart,
         maxpoly=config.garmin_maxpoly,
@@ -145,7 +172,7 @@ def build_payload(
     history = collect_history_summaries(client, history_start, history_end)
 
     nutrition_history = _attach_nutrition(
-        config, week_full, week_start, history_start, history_end
+        config, week_full, week_start, week_end, history_start, history_end
     )
 
     tz = athlete_tz_name(config.athlete_timezone)
@@ -176,6 +203,7 @@ def _attach_nutrition(
     config: AppConfig,
     week_full: dict[str, Any],
     week_start: date,
+    week_end: date,
     history_start: date,
     history_end: date,
 ) -> list[dict[str, Any]] | None:
@@ -188,7 +216,8 @@ def _attach_nutrition(
     if client is None:
         return None
 
-    week_days = [week_start + timedelta(days=i) for i in range(7)]
+    day_count = (week_end - week_start).days + 1
+    week_days = [week_start + timedelta(days=i) for i in range(day_count)]
     by_date = nutrition_api.collect_week_nutrition(client, week_days)
     for entry in week_full.get("daily_health", []):
         entry["nutrition"] = by_date.get(entry.get("date"))
