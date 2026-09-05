@@ -22,6 +22,7 @@ class AppConfig:
     max_input_tokens: int
     max_output_tokens: int
     history_weeks: int
+    max_window_days: int
     garmin_maxchart: int
     garmin_maxpoly: int
     enable_prompt_cache: bool
@@ -60,6 +61,7 @@ def load_app_config() -> AppConfig:
         max_input_tokens=int(os.environ.get("MAX_INPUT_TOKENS", "180000")),
         max_output_tokens=int(os.environ.get("MAX_OUTPUT_TOKENS", "4096")),
         history_weeks=int(os.environ.get("HISTORY_WEEKS", "8")),
+        max_window_days=int(os.environ.get("MAX_WINDOW_DAYS", "31")),
         garmin_maxchart=int(os.environ.get("GARMIN_MAXCHART", "500")),
         garmin_maxpoly=int(os.environ.get("GARMIN_MAXPOLY", "0")),
         enable_prompt_cache=os.environ.get("ENABLE_PROMPT_CACHE", "true").lower()
