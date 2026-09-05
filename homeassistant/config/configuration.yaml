@@ -82,6 +82,32 @@ logger:
   logs:
     homeassistant.components.unifi: error
 
+# Trigger the mountain coaching report workflow (z0mp22/docker-host).
+# Auth: secrets.yaml -> github_coaching_report_token: "Bearer github_pat_..."
+rest_command:
+  coaching_report_dispatch_last:
+    url: "https://api.github.com/repos/z0mp22/docker-host/actions/workflows/run-coaching-report.yml/dispatches"
+    method: post
+    headers:
+      Authorization: !secret github_coaching_report_token
+      Accept: "application/vnd.github+json"
+      X-GitHub-Api-Version: "2022-11-28"
+      User-Agent: "home-assistant-coaching-report"
+    content_type: "application/json"
+    payload: '{"ref":"main","inputs":{"since":"last","dry_run":"false"}}'
+    timeout: 30
+  coaching_report_dispatch_7d:
+    url: "https://api.github.com/repos/z0mp22/docker-host/actions/workflows/run-coaching-report.yml/dispatches"
+    method: post
+    headers:
+      Authorization: !secret github_coaching_report_token
+      Accept: "application/vnd.github+json"
+      X-GitHub-Api-Version: "2022-11-28"
+      User-Agent: "home-assistant-coaching-report"
+    content_type: "application/json"
+    payload: '{"ref":"main","inputs":{"since":"7d","dry_run":"false"}}'
+    timeout: 30
+
 automation: !include automations.yaml
 script: !include scripts.yaml
 scene: !include scenes.yaml

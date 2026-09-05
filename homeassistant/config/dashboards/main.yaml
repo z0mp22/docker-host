@@ -140,6 +140,44 @@ views:
       - type: vertical-stack
         cards:
           - type: custom:mushroom-title-card
+            title: Coaching report
+            subtitle: Trigger a Garmin coaching report run
+
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-template-card
+                primary: Since Last Report
+                secondary: Resume from the last run
+                icon: mdi:chart-line
+                icon_color: blue
+                layout: vertical
+                tap_action:
+                  action: perform-action
+                  perform_action: script.coaching_report_run_since_last
+                hold_action:
+                  action: none
+                double_tap_action:
+                  action: none
+
+              - type: custom:mushroom-template-card
+                primary: Full 7-Day
+                secondary: Force the legacy weekly window
+                icon: mdi:calendar-week
+                icon_color: teal
+                layout: vertical
+                tap_action:
+                  action: perform-action
+                  perform_action: script.coaching_report_run_full_7d
+                hold_action:
+                  action: none
+                double_tap_action:
+                  action: none
+
+      - type: vertical-stack
+        cards:
+          - type: custom:mushroom-title-card
             title: Yard lighting
             subtitle: Sunset and sunrise automations
 

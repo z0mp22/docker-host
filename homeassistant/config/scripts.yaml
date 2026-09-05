@@ -52,3 +52,55 @@ notify_mobile_recording:
               data:
                 title: "{{ title }}"
                 message: "{{ message }} (no mobile app registered)"
+
+coaching_report_run_since_last:
+  alias: "Coaching report: run (since last report)"
+  icon: mdi:chart-line
+  mode: single
+  sequence:
+    - action: rest_command.coaching_report_dispatch_last
+      response_variable: dispatch
+      continue_on_error: true
+    - action: persistent_notification.create
+      data:
+        notification_id: coaching_report_dispatch
+        title: >-
+          {{ 'Coaching report queued'
+             if (dispatch is defined and dispatch.status == 204)
+             else 'Coaching report dispatch FAILED' }}
+        message: >-
+          {% if dispatch is not defined %}
+            Could not reach the GitHub API (network error). Nothing was dispatched.
+          {% elif dispatch.status == 204 %}
+            GitHub Actions accepted the run (since last report). The report email
+            should arrive in a few minutes.
+          {% else %}
+            GitHub rejected the request — HTTP {{ dispatch.status }}.
+            {{ dispatch.content if dispatch.content else 'No response body.' }}
+          {% endif %}
+
+coaching_report_run_full_7d:
+  alias: "Coaching report: run (full 7-day window)"
+  icon: mdi:calendar-week
+  mode: single
+  sequence:
+    - action: rest_command.coaching_report_dispatch_7d
+      response_variable: dispatch
+      continue_on_error: true
+    - action: persistent_notification.create
+      data:
+        notification_id: coaching_report_dispatch
+        title: >-
+          {{ 'Coaching report queued'
+             if (dispatch is defined and dispatch.status == 204)
+             else 'Coaching report dispatch FAILED' }}
+        message: >-
+          {% if dispatch is not defined %}
+            Could not reach the GitHub API (network error). Nothing was dispatched.
+          {% elif dispatch.status == 204 %}
+            GitHub Actions accepted the run (full 7-day window). The report email
+            should arrive in a few minutes.
+          {% else %}
+            GitHub rejected the request — HTTP {{ dispatch.status }}.
+            {{ dispatch.content if dispatch.content else 'No response body.' }}
+          {% endif %}
