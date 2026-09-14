@@ -131,6 +131,29 @@ Runtime on Pi mirrors this under `/docker/`.
 
 Unhealthy = `library_healthy=false` or `awaiting_index_count > 0` → persistent notification + mobile push. Fix on media-laptop (`heal_recordings_library.sh`), not by force-scanning alone.
 
+## HDHomeRun signal trend (MQTT + HA)
+
+`media-laptop` also opportunistically samples HDHomeRun tuner signal strength
+(only while a tuner is actively in use — see
+[plex_recordings ADR 0007](https://github.com/czampino/plex_recordings/blob/main/docs/decisions/0007-hdhomerun-signal-weather-logging.md))
+and publishes each reading, weather-tagged, to Mosquitto on this host. See
+[ADR 0002](docs/decisions/0002-hdhomerun-signal-mqtt-bridge.md).
+
+| Topic | Purpose |
+|-------|---------|
+| `home/hdhomerun_signal/status` | Retained latest reading(s): channel, signal/quality/symbol percentages, weather snapshot |
+
+| Piece | Path |
+|-------|------|
+| MQTT → JSON bridge (minutely) | `scripts/hdhomerun-mqtt-bridge.sh`, `cron/hdhomerun-mqtt-bridge` |
+| HA sensors | `homeassistant/config/command_line.yaml` |
+| Dashboard | `homeassistant/config/dashboards/tuner_signal.yaml` |
+
+The dashboard is a live/recent view (current reading + a long-term
+`statistics-graph`). The actual signal-vs-weather correlation (mean/median
+signal per channel per weather condition) is generated on demand on
+media-laptop: `./scripts/analyze_signal_weather.py` in `plex_recordings`.
+
 ## Home Assistant note
 
 HA config previously lived in [czampino/homeassistant](https://github.com/czampino/homeassistant).  

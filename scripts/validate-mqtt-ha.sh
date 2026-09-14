@@ -8,6 +8,7 @@ TOPICS=(
   "home/plex_recordings/state/last_scheduled"
   "home/plex_recordings/status"
   "home/plex_recordings/disk"
+  "home/hdhomerun_signal/status"
 )
 
 log() { echo "[validate-mqtt] $*"; }
@@ -37,6 +38,12 @@ main() {
     log "OK state file: $(head -c 120 /docker/homeassistant/plex_recordings_state.json)"
   else
     log "WARN missing /docker/homeassistant/plex_recordings_state.json"
+  fi
+
+  if [ -f /docker/homeassistant/hdhomerun_signal_state.json ]; then
+    log "OK state file: $(head -c 120 /docker/homeassistant/hdhomerun_signal_state.json)"
+  else
+    log "WARN missing /docker/homeassistant/hdhomerun_signal_state.json"
   fi
 
   if [ -f /docker/homeassistant/.storage/core.entity_registry ]; then

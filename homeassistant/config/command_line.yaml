@@ -77,3 +77,53 @@
     state_class: measurement
     device_class: data_size
     icon: mdi:folder-play
+
+# HDHomeRun tuner signal (opportunistic -- only updates while a tuner is
+# actively in use for a recording or live TV; see plex_recordings
+# scripts/publish_hdhomerun_signal.py and docs/decisions/0002-*.md here).
+- sensor:
+    name: HDHomeRun Signal Strength
+    unique_id: hdhomerun_signal_strength_percent
+    command: >-
+      python3 -c "import json; d=json.load(open('/config/hdhomerun_signal_state.json')); v=d.get('signal_strength_percent'); print(v if v is not None else 'unknown')"
+    scan_interval: 30
+    unit_of_measurement: "%"
+    state_class: measurement
+    icon: mdi:signal
+
+- sensor:
+    name: HDHomeRun Signal Quality
+    unique_id: hdhomerun_signal_quality_percent
+    command: >-
+      python3 -c "import json; d=json.load(open('/config/hdhomerun_signal_state.json')); v=d.get('signal_quality_percent'); print(v if v is not None else 'unknown')"
+    scan_interval: 30
+    unit_of_measurement: "%"
+    state_class: measurement
+    icon: mdi:signal-cellular-3
+
+- sensor:
+    name: HDHomeRun Symbol Quality
+    unique_id: hdhomerun_symbol_quality_percent
+    command: >-
+      python3 -c "import json; d=json.load(open('/config/hdhomerun_signal_state.json')); v=d.get('symbol_quality_percent'); print(v if v is not None else 'unknown')"
+    scan_interval: 30
+    unit_of_measurement: "%"
+    state_class: measurement
+    icon: mdi:waveform
+
+- sensor:
+    name: HDHomeRun Signal Meta
+    unique_id: hdhomerun_signal_meta_file
+    command: cat /config/hdhomerun_signal_state.json
+    scan_interval: 30
+    value_template: "{{ value_json.channel_name | default(value_json.channel, true) | default('idle', true) }}"
+    json_attributes:
+      - updated_at
+      - channel
+      - channel_name
+      - signal_strength_percent
+      - signal_quality_percent
+      - symbol_quality_percent
+      - weather_condition
+      - weather_temperature
+      - readings

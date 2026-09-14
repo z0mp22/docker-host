@@ -1,0 +1,100 @@
+title: Tuner Signal
+theme: RedditMushroom
+views:
+  - title: Tuner Signal
+    path: tuner-signal
+    icon: mdi:antenna
+    theme: RedditMushroom
+    cards:
+      - type: custom:mushroom-title-card
+        title: HDHomeRun
+        subtitle: Signal strength — opportunistic, only while a tuner is in use
+
+      - type: custom:mushroom-chips-card
+        alignment: center
+        chips:
+          - type: template
+            icon: mdi:television-classic
+            content: >
+              {{ state_attr('sensor.hdhomerun_signal_meta', 'channel_name')
+                 or state_attr('sensor.hdhomerun_signal_meta', 'channel')
+                 or 'idle' }}
+          - type: template
+            icon: mdi:weather-partly-cloudy
+            content: >
+              {% set cond = state_attr('sensor.hdhomerun_signal_meta', 'weather_condition') %}
+              {% set temp = state_attr('sensor.hdhomerun_signal_meta', 'weather_temperature') %}
+              {% if cond %}{{ temp }}° {{ cond | replace('_', ' ') | title }}{% else %}n/a{% endif %}
+          - type: template
+            icon: mdi:clock-outline
+            content: >
+              {{ state_attr('sensor.hdhomerun_signal_meta', 'updated_at') | default('never', true) }}
+
+      - type: grid
+        columns: 3
+        square: false
+        cards:
+          - type: gauge
+            entity: sensor.hdhomerun_signal_strength
+            name: Signal strength
+            min: 0
+            max: 100
+            needle: true
+            severity:
+              red: 0
+              yellow: 75
+              green: 90
+          - type: gauge
+            entity: sensor.hdhomerun_signal_quality
+            name: Signal quality
+            min: 0
+            max: 100
+            needle: true
+            severity:
+              red: 0
+              yellow: 75
+              green: 90
+          - type: gauge
+            entity: sensor.hdhomerun_symbol_quality
+            name: Symbol quality
+            min: 0
+            max: 100
+            needle: true
+            severity:
+              red: 0
+              yellow: 75
+              green: 90
+
+      - type: custom:mushroom-title-card
+        title: Trend
+        subtitle: Long-term statistics (survives HA's short history retention)
+
+      - type: statistics-graph
+        title: Signal over time
+        entities:
+          - sensor.hdhomerun_signal_strength
+          - sensor.hdhomerun_signal_quality
+          - sensor.hdhomerun_symbol_quality
+        stat_types:
+          - mean
+          - min
+        period: day
+        days_to_show: 90
+
+      - type: custom:mushroom-title-card
+        title: Weather now
+        subtitle: For eyeballing conditions against the trend above
+
+      - type: weather-forecast
+        entity: weather.home
+        show_forecast: false
+
+      - type: markdown
+        content: >
+          This dashboard is a live/recent view. For the actual
+          signal-vs-weather correlation (mean/median/min signal per channel
+          per weather condition), run `./scripts/analyze_signal_weather.py`
+          on media-laptop — it reads the full weather-tagged sample log at
+          `logs/hdhomerun_signal.jsonl` in `plex_recordings`, which keeps
+          more detail (exact channel + condition per sample) than this
+          dashboard's numeric-only trend graph.

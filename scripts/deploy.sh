@@ -291,6 +291,15 @@ install_plex_mqtt_bridge() {
   bash /usr/local/bin/plex-mqtt-bridge.sh || log "WARN: plex mqtt bridge initial run failed"
 }
 
+install_hdhomerun_signal_bridge() {
+  log "installing hdhomerun signal mqtt bridge"
+  install_file "${REPO_ROOT}/scripts/hdhomerun-mqtt-bridge.sh" \
+    "/usr/local/bin/hdhomerun-mqtt-bridge.sh" 755
+  install_file "${REPO_ROOT}/cron/hdhomerun-mqtt-bridge" \
+    "/etc/cron.d/hdhomerun-mqtt-bridge" 644
+  bash /usr/local/bin/hdhomerun-mqtt-bridge.sh || log "WARN: hdhomerun signal bridge initial run failed"
+}
+
 main() {
   require_docker
   ensure_networks
@@ -310,6 +319,7 @@ main() {
   deploy_exporters
   repair_homeassistant_config_entries
   install_plex_mqtt_bridge
+  install_hdhomerun_signal_bridge
   restart_homeassistant_if_running
   add_roku_integrations
   log "deploy complete"
