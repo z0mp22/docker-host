@@ -34,6 +34,8 @@ CATALOG = [
     {"id": 5, "name": "Floor Press", "category": "Chest"},
     {"id": 6, "name": "Barbell Row", "category": "Back"},
     {"id": 7, "name": "Landmine Press", "category": "Shoulders"},
+    {"id": 8, "name": "Handstand Pushup", "category": "Shoulders"},
+    {"id": 9, "name": "Push-Up", "category": "Chest"},
 ]
 CATALOG_BY_ID = {ex["id"]: ex for ex in CATALOG}
 
@@ -115,3 +117,22 @@ def test_unrelated_press_exercises_not_swept_in():
     assert not _name_is_banned("Leg Press")
     assert not _name_is_banned("Landmine Press")
     assert not _name_is_banned("Cable Chest Press")
+
+
+def test_handstand_pushup_banned_but_regular_pushup_is_not():
+    """Found during the live-catalog review (Stage 2): "push-up" tokenizes to
+    {"push", "up"}, never "press", so the qualifier rule alone can't catch
+    "Handstand Pushup" -- a compressive, fully-overhead bodyweight press.
+    Regular push-ups (horizontal, self-limited) must stay unbanned."""
+    banned = resolve_banned_exercise_ids(CATALOG)
+    assert 8 in banned  # Handstand Pushup
+    assert 9 not in banned  # Push-Up
+
+
+def test_pike_push_ups_banned_via_hand_curated_override_on_the_real_catalog():
+    """Locks in the second live-catalog finding: "Pike Push Ups" (id 454 on
+    the actual self-hosted instance, synced 2026-09) is close enough to an
+    overhead press to exclude, but "pike" isn't made a generic word rule
+    (it would over-catch unrelated ab/core "pike" exercises if the catalog
+    gains more of them) -- it's a specific, hand-curated override instead."""
+    assert 454 in lift_safety.EXTRA_BANNED_EXERCISE_IDS
