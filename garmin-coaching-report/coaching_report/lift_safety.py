@@ -28,7 +28,14 @@ if TYPE_CHECKING:
 # Press" (an equipment word sits between "incline" and "press"), and the same
 # flaw would miss "Overhead Dumbbell Press" too. Match on whether qualifying
 # words are present anywhere in the name instead of requiring them adjacent.
-_STANDALONE_BANNED_WORDS = {"dip", "dips"}
+_STANDALONE_BANNED_WORDS = {"dip", "dips", "handstand"}
+# "handstand" added after the live-catalog review below found "Handstand
+# Pushup" / "Box Handstand Push-up" -- push-ups tokenize to {"push", "up"},
+# never "press", so the qualifier rule below can't catch them; a handstand
+# push-up is a compressive, fully-overhead bodyweight press, arguably worse
+# for this shoulder than a barbell overhead press. Banning "handstand"
+# outright (including static holds, not just push-up variants) is the
+# deliberately conservative call for a safety list.
 _PRESS_QUALIFIER_WORDS = {
     "overhead",
     "military",
@@ -65,13 +72,22 @@ assert _name_is_banned("Incline Dumbbell Press"), (
 )
 assert not _name_is_banned("Leg Press"), "unrelated 'press' exercises must not be swept in"
 assert not _name_is_banned("Landmine Press"), "landmine press is a judgment call, not a hard ban"
+assert _name_is_banned("Handstand Pushup"), "a compressive overhead bodyweight press must be caught"
+assert not _name_is_banned("Push-Up"), "a regular horizontal push-up is not the concerning pattern"
 
-# Hand-curated overrides, filled in after reviewing the real catalog (Stage 2
-# of the verification plan). IDs here are force-banned/force-allowed
-# regardless of what the keyword match above decides -- e.g. a name the
-# keywords miss, or a false positive like "Pike Press" that keyword-matches
-# "press" but isn't actually load-bearing on the shoulder the same way.
-EXTRA_BANNED_EXERCISE_IDS: set[int] = set()
+# Hand-curated overrides, filled in after reviewing the real catalog against
+# the live self-hosted wger instance (Stage 2 of the verification plan). IDs
+# here are force-banned/force-allowed regardless of what the word rule above
+# decides.
+EXTRA_BANNED_EXERCISE_IDS: set[int] = {
+    # Pike Push Ups (id 454 on this instance's synced catalog, 2026-09):
+    # a shoulder-dominant angled overhead press pattern -- doesn't tokenize
+    # to a word the qualifier rule catches ("pike" isn't a press qualifier,
+    # and correctly shouldn't be one generically -- it'd over-catch unrelated
+    # ab/core "pike" exercises if the catalog gains more of them later), but
+    # this specific exercise is close enough to overhead pressing to exclude.
+    454,
+}
 EXTRA_ALLOWED_EXERCISE_IDS: set[int] = set()
 
 
