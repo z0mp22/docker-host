@@ -69,3 +69,29 @@ def test_empty_exercise_list_is_schema_valid():
     layer guards against. Documented here so it isn't assumed to be covered."""
     schema = SessionPlanSchema.model_validate({**VALID, "exercises": []})
     assert schema.exercises == []
+
+
+def test_rir_target_above_wgers_max_rejected():
+    """Reproduces a live failure: Claude proposed rir_target=5.0 for a
+    generous-RIR light/PT session, and wger's rir-config endpoint 400'd
+    ("5.0 is not a valid RiR option") only after the plan was already
+    approved and partially written. This must be caught at schema-parse
+    time instead, before any wger write is attempted."""
+    bad = {**VALID, "exercises": [{**VALID["exercises"][0], "rir_target": 5.0}]}
+    with pytest.raises(ValidationError):
+        SessionPlanSchema.model_validate(bad)
+
+
+def test_rir_target_off_step_rejected():
+    """wger's steps are 0.5 apart -- 2.25 isn't one of them."""
+    bad = {**VALID, "exercises": [{**VALID["exercises"][0], "rir_target": 2.25}]}
+    with pytest.raises(ValidationError):
+        SessionPlanSchema.model_validate(bad)
+
+
+def test_rir_target_null_still_allowed():
+    """None is a valid wger RiR value (no target set) -- the new validator
+    must not reject it."""
+    ok = {**VALID, "exercises": [{**VALID["exercises"][0], "rir_target": None}]}
+    schema = SessionPlanSchema.model_validate(ok)
+    assert schema.exercises[0].rir_target is None

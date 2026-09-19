@@ -16,10 +16,19 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import anthropic
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from .errors import LiftPlanError
 from .prompts import lift_prompt_version, load_lift_prompt
+
+# wger's rir-config endpoint (POST /api/v2/rir-config/) only accepts these
+# exact half-step values -- confirmed from a live 400 response: "5.0 is not
+# a valid RiR option: [None, 0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5]". Claude
+# has no code-level ceiling on rir_target today, and the prompt's "generous
+# RIR" guidance for light/PT sessions is exactly the case that produced 5.0
+# in practice -- same "prompt instruction backed by a hard code check"
+# posture as lift_safety.py's banned-exercise check.
+VALID_RIR_TARGETS = {None, 0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5}
 
 
 class ExercisePrescriptionSchema(BaseModel):
@@ -33,6 +42,16 @@ class ExercisePrescriptionSchema(BaseModel):
     rir_target: float | None = None
     rest_seconds: int | None = None
     notes: str | None = None
+
+    @field_validator("rir_target")
+    @classmethod
+    def _rir_target_must_be_wger_valid(cls, v: float | None) -> float | None:
+        if v not in VALID_RIR_TARGETS:
+            raise ValueError(
+                f"rir_target={v!r} is not a value wger's rir-config endpoint accepts "
+                f"(valid: {sorted(t for t in VALID_RIR_TARGETS if t is not None)}, or null)"
+            )
+        return v
 
 
 class SessionPlanSchema(BaseModel):
