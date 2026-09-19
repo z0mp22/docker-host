@@ -40,7 +40,12 @@ def build_lift_payload(
         "timezone_label": "Mountain Time (MT)",
         "location": config.athlete_location,
         "time_format": "All *_mt timestamp fields are local wall-clock times in MT",
-        "unit_system": config.unit_system,
+        # Deliberately not config.unit_system -- that toggle drives the mountain
+        # report's weather formatting (C/km/h vs F/mph) and defaults to metric.
+        # This athlete thinks in pounds regardless (see lift_system.md's athlete
+        # profile), so the lift prompt always gets "imperial" for its own,
+        # unrelated use: converting kg figures to lb in rationale/summary_text.
+        "unit_system": "imperial",
     }
 
     # Same "compact" summarization the mountain report always applies to its
