@@ -1,0 +1,153 @@
+title: Coaching
+theme: RedditMushroom
+views:
+  - title: Coaching
+    path: coaching
+    icon: mdi:dumbbell
+    theme: RedditMushroom
+    cards:
+      - type: vertical-stack
+        cards:
+          - type: custom:mushroom-title-card
+            title: Coaching report
+            subtitle: Trigger a Garmin coaching report run
+
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-template-card
+                primary: Since Last Report
+                secondary: Resume from the last run
+                icon: mdi:chart-line
+                icon_color: blue
+                layout: vertical
+                tap_action:
+                  action: perform-action
+                  perform_action: script.coaching_report_run_since_last
+                hold_action:
+                  action: none
+                double_tap_action:
+                  action: none
+
+              - type: custom:mushroom-template-card
+                primary: Full 7-Day
+                secondary: Force the legacy weekly window
+                icon: mdi:calendar-week
+                icon_color: teal
+                layout: vertical
+                tap_action:
+                  action: perform-action
+                  perform_action: script.coaching_report_run_full_7d
+                hold_action:
+                  action: none
+                double_tap_action:
+                  action: none
+
+      - type: vertical-stack
+        cards:
+          - type: custom:mushroom-title-card
+            title: Lift session
+            subtitle: >-
+              {% set d = state_attr('sensor.lift_session_latest', 'session_date') %}
+              {% if d %}
+                Last generated: {{ d }} · {{ state_attr('sensor.lift_session_latest', 'exercise_count') | default(0) }} exercises
+              {% else %}
+                No session generated yet
+              {% endif %}
+
+          - type: custom:mushroom-template-card
+            primary: >-
+              {{ state_attr('sensor.lift_session_latest', 'session_date') or 'No session yet' }}
+            secondary: >-
+              {{ (state_attr('sensor.lift_session_latest', 'rationale') or 'Tap a session type below to generate one.') | truncate(160) }}
+            icon: mdi:weight-lifter
+            icon_color: >-
+              {% set flags = state_attr('sensor.lift_session_latest', 'flags_considered') or [] %}
+              {% if 'shoulder_flag_active' in flags %}orange{% else %}indigo{% endif %}
+            tap_action:
+              action: more-info
+
+          - type: custom:mushroom-entity-card
+            entity: input_boolean.lift_shoulder_flag
+            name: Shoulder Flag Active
+            icon: mdi:alert
+            layout: horizontal
+            tap_action:
+              action: toggle
+
+          - type: grid
+            columns: 3
+            square: false
+            cards:
+              - type: custom:mushroom-template-card
+                primary: 1h Heavy
+                secondary: Full session
+                icon: mdi:weight-lifter
+                icon_color: red
+                layout: vertical
+                tap_action:
+                  action: perform-action
+                  perform_action: script.lift_session_run_heavy
+                hold_action:
+                  action: none
+                double_tap_action:
+                  action: none
+
+              - type: custom:mushroom-template-card
+                primary: 30m Light
+                secondary: Short & easy
+                icon: mdi:weight-lifter
+                icon_color: green
+                layout: vertical
+                tap_action:
+                  action: perform-action
+                  perform_action: script.lift_session_run_light
+                hold_action:
+                  action: none
+                double_tap_action:
+                  action: none
+
+              - type: custom:mushroom-template-card
+                primary: PT Day
+                secondary: Shoulder rehab
+                icon: mdi:arm-flex-outline
+                icon_color: blue
+                layout: vertical
+                tap_action:
+                  action: perform-action
+                  perform_action: script.lift_session_run_pt
+                hold_action:
+                  action: none
+                double_tap_action:
+                  action: none
+
+          - type: custom:mushroom-title-card
+            title: Coach feedback
+            subtitle: Likes, dislikes, flags, how a session felt — remembered for future sessions
+
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: input_text.lift_feedback
+                name: Type feedback
+                icon: mdi:comment-text-outline
+                layout: vertical
+                tap_action:
+                  action: more-info
+
+              - type: custom:mushroom-template-card
+                primary: Submit Feedback
+                secondary: Log it for the coach
+                icon: mdi:comment-check-outline
+                icon_color: purple
+                layout: vertical
+                tap_action:
+                  action: perform-action
+                  perform_action: script.lift_feedback_submit
+                hold_action:
+                  action: none
+                double_tap_action:
+                  action: none

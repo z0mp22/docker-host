@@ -3,19 +3,31 @@ name: Run Lift Session
 # On-demand trigger for one autoregulated lifting session, written to the
 # self-hosted wger instance. Session-by-session, not a weekly batch -- no
 # cron here, fired at variable timing from Home Assistant (or manually).
+#   session_type=heavy_1h|light_30m|shoulder_pt -> which of the three the
+#     athlete asked for (see prompts/lift_system.md)
 #   shoulder_flag=true -> the athlete has flagged the shoulder/soreness this session
-#   note="..."         -> free-text context for this generation
-#   dry_run=true       -> resolve the payload + print the safety-guard's
-#                          banned-exercise list only; no Claude call, no wger write
+#   feedback_only=true + feedback_text="..." -> append to the persistent
+#     feedback log only; no Garmin/wger/Claude call at all
+#   dry_run=true -> resolve the payload + print the safety-guard's
+#     banned-exercise list only; no Claude call, no wger write
 on:
   workflow_dispatch:
     inputs:
+      session_type:
+        description: "Session type"
+        type: choice
+        default: heavy_1h
+        options: [heavy_1h, light_30m, shoulder_pt]
       shoulder_flag:
         description: "Shoulder/soreness flag active"
         type: boolean
         default: false
-      note:
-        description: "Ad-hoc note for this session"
+      feedback_only:
+        description: "Log feedback_text only -- no session generated"
+        type: boolean
+        default: false
+      feedback_text:
+        description: "Feedback to log (used when feedback_only=true)"
         type: string
         default: ""
       dry_run:
@@ -32,8 +44,10 @@ jobs:
     steps:
       - name: Run lift session generator
         run: |
+          export LIFT_SESSION_TYPE="${{ inputs.session_type }}"
           if [ "${{ inputs.shoulder_flag }}" = "true" ]; then export LIFT_SHOULDER_FLAG=true; fi
-          if [ -n "${{ inputs.note }}" ]; then export LIFT_NOTE="${{ inputs.note }}"; fi
+          if [ "${{ inputs.feedback_only }}" = "true" ]; then export LIFT_FEEDBACK_ONLY=true; fi
+          if [ -n "${{ inputs.feedback_text }}" ]; then export LIFT_FEEDBACK_TEXT="${{ inputs.feedback_text }}"; fi
           if [ "${{ inputs.dry_run }}" = "true" ]; then export DRY_RUN=true; fi
-          echo "lift-session: LIFT_SHOULDER_FLAG=${LIFT_SHOULDER_FLAG:-<unset>} LIFT_NOTE=${LIFT_NOTE:-<unset>} DRY_RUN=${DRY_RUN:-<unset>}"
+          echo "lift-session: TYPE=${LIFT_SESSION_TYPE} SHOULDER_FLAG=${LIFT_SHOULDER_FLAG:-<unset>} FEEDBACK_ONLY=${LIFT_FEEDBACK_ONLY:-<unset>} DRY_RUN=${DRY_RUN:-<unset>}"
           bash /docker/garmin-coaching-report/scripts/run-lift-session.sh

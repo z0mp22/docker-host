@@ -79,31 +79,131 @@ coaching_report_run_since_last:
             {{ dispatch.content if dispatch.content else 'No response body.' }}
           {% endif %}
 
-lift_session_run:
-  alias: "Lift session: generate now"
+lift_session_run_heavy:
+  alias: "Lift session: 1h heavy"
   icon: mdi:weight-lifter
   mode: single
   sequence:
-    - action: rest_command.lift_session_dispatch
+    - action: rest_command.lift_session_dispatch_heavy
       response_variable: dispatch
       continue_on_error: true
     - action: persistent_notification.create
       data:
         notification_id: lift_session_dispatch
         title: >-
-          {{ 'Lift session queued'
+          {{ '1h heavy session queued'
              if (dispatch is defined and dispatch.status == 204)
              else 'Lift session dispatch FAILED' }}
         message: >-
           {% if dispatch is not defined %}
             Could not reach the GitHub API (network error). Nothing was dispatched.
           {% elif dispatch.status == 204 %}
-            GitHub Actions accepted the run. The wger routine + summary should
-            land in a few minutes.
+            GitHub Actions accepted the run. The wger routine should land in a
+            few minutes -- you'll get a push once it's ready.
           {% else %}
             GitHub rejected the request — HTTP {{ dispatch.status }}.
             {{ dispatch.content if dispatch.content else 'No response body.' }}
           {% endif %}
+
+lift_session_run_light:
+  alias: "Lift session: 30m light"
+  icon: mdi:weight-lifter
+  mode: single
+  sequence:
+    - action: rest_command.lift_session_dispatch_light
+      response_variable: dispatch
+      continue_on_error: true
+    - action: persistent_notification.create
+      data:
+        notification_id: lift_session_dispatch
+        title: >-
+          {{ '30m light session queued'
+             if (dispatch is defined and dispatch.status == 204)
+             else 'Lift session dispatch FAILED' }}
+        message: >-
+          {% if dispatch is not defined %}
+            Could not reach the GitHub API (network error). Nothing was dispatched.
+          {% elif dispatch.status == 204 %}
+            GitHub Actions accepted the run. The wger routine should land in a
+            few minutes -- you'll get a push once it's ready.
+          {% else %}
+            GitHub rejected the request — HTTP {{ dispatch.status }}.
+            {{ dispatch.content if dispatch.content else 'No response body.' }}
+          {% endif %}
+
+lift_session_run_pt:
+  alias: "Lift session: PT day (shoulder)"
+  icon: mdi:arm-flex-outline
+  mode: single
+  sequence:
+    - action: rest_command.lift_session_dispatch_pt
+      response_variable: dispatch
+      continue_on_error: true
+    - action: persistent_notification.create
+      data:
+        notification_id: lift_session_dispatch
+        title: >-
+          {{ 'PT session queued'
+             if (dispatch is defined and dispatch.status == 204)
+             else 'Lift session dispatch FAILED' }}
+        message: >-
+          {% if dispatch is not defined %}
+            Could not reach the GitHub API (network error). Nothing was dispatched.
+          {% elif dispatch.status == 204 %}
+            GitHub Actions accepted the run. The wger routine should land in a
+            few minutes -- you'll get a push once it's ready.
+          {% else %}
+            GitHub rejected the request — HTTP {{ dispatch.status }}.
+            {{ dispatch.content if dispatch.content else 'No response body.' }}
+          {% endif %}
+
+lift_feedback_submit:
+  alias: "Lift: submit coach feedback"
+  icon: mdi:comment-check-outline
+  mode: single
+  sequence:
+    - variables:
+        submitted_text: "{{ states('input_text.lift_feedback') | trim }}"
+    - choose:
+        - conditions:
+            - condition: template
+              value_template: "{{ submitted_text | length == 0 }}"
+          sequence:
+            - action: persistent_notification.create
+              data:
+                notification_id: lift_feedback_dispatch
+                title: "Nothing to submit"
+                message: "Type something in Coach Feedback first."
+      default:
+        - action: rest_command.lift_feedback_dispatch
+          response_variable: dispatch
+          continue_on_error: true
+        # Clear the field immediately (the text is already captured in the
+        # dispatch payload above) -- optimistic, doesn't wait on the remote
+        # run, since workflow_dispatch has no way to call back into HA when
+        # it's actually done.
+        - action: input_text.set_value
+          target:
+            entity_id: input_text.lift_feedback
+          data:
+            value: ""
+        - action: persistent_notification.create
+          data:
+            notification_id: lift_feedback_dispatch
+            title: >-
+              {{ 'Feedback logged'
+                 if (dispatch is defined and dispatch.status == 204)
+                 else 'Feedback submission FAILED' }}
+            message: >-
+              {% if dispatch is not defined %}
+                Could not reach the GitHub API (network error). Nothing was logged.
+              {% elif dispatch.status == 204 %}
+                Logged: "{{ submitted_text }}" — the coach will factor this into
+                future sessions.
+              {% else %}
+                GitHub rejected the request — HTTP {{ dispatch.status }}.
+                {{ dispatch.content if dispatch.content else 'No response body.' }}
+              {% endif %}
 
 coaching_report_run_full_7d:
   alias: "Coaching report: run (full 7-day window)"
