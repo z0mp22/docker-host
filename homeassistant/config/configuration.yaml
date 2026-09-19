@@ -75,6 +75,12 @@ lovelace:
       icon: mdi:antenna
       show_in_sidebar: true
       filename: dashboards/tuner_signal.yaml
+    lovelace-coaching:
+      mode: yaml
+      title: Coaching
+      icon: mdi:dumbbell
+      show_in_sidebar: true
+      filename: dashboards/coaching.yaml
 
 http:
   use_x_forwarded_for: true
@@ -113,7 +119,11 @@ rest_command:
     content_type: "application/json"
     payload: '{"ref":"main","inputs":{"since":"7d","dry_run":"false"}}'
     timeout: 30
-  lift_session_dispatch:
+  # One rest_command per session type -- session_type is baked into each
+  # payload rather than templated from a shared entity, matching the
+  # coaching_report_dispatch_last/_7d pattern above (simpler to read/debug
+  # than one parameterized command that takes session_type as call data).
+  lift_session_dispatch_heavy:
     url: "https://api.github.com/repos/z0mp22/docker-host/actions/workflows/run-lift-session.yml/dispatches"
     method: post
     headers:
@@ -125,22 +135,63 @@ rest_command:
     # workflow_dispatch wants JSON *strings* for every input regardless of the
     # declared YAML type -- proven necessary by the since/dry_run wiring above.
     payload: >-
-      {"ref":"main","inputs":{"shoulder_flag":"{{ 'true' if is_state('input_boolean.lift_shoulder_flag','on') else 'false' }}","note":{{ states('input_text.lift_note') | tojson }},"dry_run":"false"}}
+      {"ref":"main","inputs":{"session_type":"heavy_1h","shoulder_flag":"{{ 'true' if is_state('input_boolean.lift_shoulder_flag','on') else 'false' }}","dry_run":"false"}}
+    timeout: 30
+  lift_session_dispatch_light:
+    url: "https://api.github.com/repos/z0mp22/docker-host/actions/workflows/run-lift-session.yml/dispatches"
+    method: post
+    headers:
+      Authorization: !secret github_coaching_report_token
+      Accept: "application/vnd.github+json"
+      X-GitHub-Api-Version: "2022-11-28"
+      User-Agent: "home-assistant-coaching-report"
+    content_type: "application/json"
+    payload: >-
+      {"ref":"main","inputs":{"session_type":"light_30m","shoulder_flag":"{{ 'true' if is_state('input_boolean.lift_shoulder_flag','on') else 'false' }}","dry_run":"false"}}
+    timeout: 30
+  lift_session_dispatch_pt:
+    url: "https://api.github.com/repos/z0mp22/docker-host/actions/workflows/run-lift-session.yml/dispatches"
+    method: post
+    headers:
+      Authorization: !secret github_coaching_report_token
+      Accept: "application/vnd.github+json"
+      X-GitHub-Api-Version: "2022-11-28"
+      User-Agent: "home-assistant-coaching-report"
+    content_type: "application/json"
+    payload: >-
+      {"ref":"main","inputs":{"session_type":"shoulder_pt","shoulder_flag":"{{ 'true' if is_state('input_boolean.lift_shoulder_flag','on') else 'false' }}","dry_run":"false"}}
+    timeout: 30
+  # Feedback-only dispatch: appends to the persistent coaching-feedback log
+  # (see coaching_report/lift_feedback.py) -- no Claude call, no wger write.
+  lift_feedback_dispatch:
+    url: "https://api.github.com/repos/z0mp22/docker-host/actions/workflows/run-lift-session.yml/dispatches"
+    method: post
+    headers:
+      Authorization: !secret github_coaching_report_token
+      Accept: "application/vnd.github+json"
+      X-GitHub-Api-Version: "2022-11-28"
+      User-Agent: "home-assistant-coaching-report"
+    content_type: "application/json"
+    payload: >-
+      {"ref":"main","inputs":{"feedback_only":"true","feedback_text":{{ states('input_text.lift_feedback') | tojson }},"dry_run":"false"}}
     timeout: 30
 
-# Lift-session inputs, read by rest_command.lift_session_dispatch at the
-# moment the dashboard button is pressed -- see scripts.yaml's
-# lift_session_run and dashboards/main.yaml's "Lift session" card. Not
-# auto-cleared after a run: "shoulder's bad this week" is a multi-day state
-# the athlete turns off manually, not a one-shot signal.
+# Lift-session inputs. lift_shoulder_flag: read by all three
+# lift_session_dispatch_* commands at button-press time -- not auto-cleared
+# after a run, since "shoulder's bad this week" is a multi-day state the
+# athlete turns off manually, not a one-shot signal. lift_feedback: typed
+# into before tapping "Submit Feedback" (scripts.yaml); that script reads it,
+# dispatches, then clears it back to empty -- see scripts.yaml for why
+# clearing happens client-side rather than waiting on the remote run.
 input_boolean:
   lift_shoulder_flag:
     name: "Lift: shoulder flag active"
     icon: mdi:alert
 
 input_text:
-  lift_note:
-    name: "Lift session note"
+  lift_feedback:
+    name: "Coach feedback"
+    icon: mdi:comment-text-outline
     max: 255
 
 automation: !include automations.yaml

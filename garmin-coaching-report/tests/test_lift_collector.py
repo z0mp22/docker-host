@@ -9,6 +9,7 @@ other Garmin payload in this codebase.
 
 import json
 from datetime import date
+from pathlib import Path
 from unittest.mock import MagicMock
 
 from coaching_report.lift_collector import build_lift_payload
@@ -42,23 +43,24 @@ def _fake_wger_client():
     return wger
 
 
-def _fake_config():
+def _fake_config(tmp_path: Path):
     config = MagicMock()
     config.athlete_timezone = "America/Denver"
     config.athlete_location = "Fort Collins, CO"
     config.unit_system = "metric"
     config.wger_history_sessions = 6
+    config.report_output_dir = tmp_path
     return config
 
 
-def test_recent_recovery_is_compressed_not_raw():
+def test_recent_recovery_is_compressed_not_raw(tmp_path):
     payload = build_lift_payload(
         _fake_garmin_client(),
         _fake_wger_client(),
-        _fake_config(),
+        _fake_config(tmp_path),
         catalog=[],
+        session_type="heavy_1h",
         shoulder_flag=False,
-        note="",
         session_date=date(2026, 9, 19),
     )
 
@@ -77,3 +79,40 @@ def test_recent_recovery_is_compressed_not_raw():
     # magnitude, without being a brittle exact-byte-count assertion.
     size = len(json.dumps(recent_recovery, default=str))
     assert size < 5_000, f"recent_recovery is {size} bytes -- looks uncompressed again"
+
+
+def test_session_type_passed_through(tmp_path):
+    payload = build_lift_payload(
+        _fake_garmin_client(),
+        _fake_wger_client(),
+        _fake_config(tmp_path),
+        catalog=[],
+        session_type="shoulder_pt",
+        shoulder_flag=True,
+        session_date=date(2026, 9, 19),
+    )
+    assert payload["session_type"] == "shoulder_pt"
+    assert payload["flags"] == {"shoulder_flag_active": True}
+
+
+def test_recent_feedback_included_from_the_persistent_log(tmp_path):
+    from coaching_report.lift_feedback import append_feedback
+
+    append_feedback(tmp_path, "Loved the pull day, felt strong.")
+    append_feedback(tmp_path, "Left shoulder was cranky after Tuesday's session.")
+
+    payload = build_lift_payload(
+        _fake_garmin_client(),
+        _fake_wger_client(),
+        _fake_config(tmp_path),
+        catalog=[],
+        session_type="heavy_1h",
+        shoulder_flag=False,
+        session_date=date(2026, 9, 19),
+    )
+
+    notes = [e["note"] for e in payload["recent_feedback"]]
+    assert notes == [
+        "Loved the pull day, felt strong.",
+        "Left shoulder was cranky after Tuesday's session.",
+    ]

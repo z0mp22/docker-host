@@ -1,9 +1,11 @@
 """Assemble the payload for one lift-session generation.
 
-Pulls from three sources: recent Garmin recovery + this week's already-logged
+Pulls from four sources: recent Garmin recovery + this week's already-logged
 mountain-sports activity (reusing collector.py's existing, unmodified
-functions), recent wger lifting history + body-weight trend, and the
-HA-set shoulder flag/note passed in from lift_main.py.
+functions), recent wger lifting history + body-weight trend, the persistent
+athlete-feedback log (lift_feedback.py -- standing likes/dislikes/health
+flags/notes over time, not just this call), and the session type + HA
+shoulder flag passed in from lift_main.py.
 """
 
 from __future__ import annotations
@@ -16,6 +18,7 @@ from garmin_connect_mcp.client import GarminClientWrapper
 from .collector import collect_history_summaries, collect_recent_health
 from .compression import compress_week, strip_large_fields
 from .config import AppConfig
+from .lift_feedback import load_recent_feedback
 from .timezone_util import athlete_tz_name
 from .wger_client import WgerClient
 
@@ -25,8 +28,8 @@ def build_lift_payload(
     wger_client: WgerClient,
     config: AppConfig,
     catalog: list[dict[str, Any]],
+    session_type: str,
     shoulder_flag: bool,
-    note: str,
     session_date: date | None = None,
 ) -> dict[str, Any]:
     session_date = session_date or date.today()
@@ -61,17 +64,19 @@ def build_lift_payload(
 
     wger_sessions = wger_client.get_recent_sessions(config.wger_history_sessions)
     bodyweight_history = wger_client.get_bodyweight_history(since=session_date - timedelta(weeks=8))
+    recent_feedback = load_recent_feedback(config.report_output_dir)
 
     return {
         "session_date": session_date.isoformat(),
+        "session_type": session_type,
         "athlete_context": athlete_context,
         "recent_recovery": recent_recovery,
         "recent_mountain_activity": recent_mountain_activity,
         "wger_recent_sessions": wger_sessions,
         "wger_bodyweight_history": bodyweight_history,
+        "recent_feedback": recent_feedback,
         "exercise_catalog": catalog,
         "flags": {
             "shoulder_flag_active": shoulder_flag,
-            "note": note or None,
         },
     }

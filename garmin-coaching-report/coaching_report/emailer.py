@@ -208,29 +208,6 @@ def save_lift_outputs(
     return md_path
 
 
-def send_lift_summary_email(
-    config: AppConfig, session_date: date, plan: "SessionPlanResponse"
-) -> None:
-    subject = f"Lift Session — {session_date.isoformat()}"
-    html_body = _html_wrapper(markdown.markdown(plan.summary_text, extensions=["tables"]))
-
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = subject
-    msg["From"] = config.gmail_user
-    msg["To"] = config.gmail_user
-    msg.attach(MIMEText(plan.summary_text, "plain", "utf-8"))
-    msg.attach(MIMEText(html_body, "html", "utf-8"))
-
-    try:
-        with smtplib.SMTP("smtp.gmail.com", 587, timeout=60) as smtp:
-            smtp.ehlo()
-            smtp.starttls()
-            smtp.login(config.gmail_user, config.gmail_app_password)
-            smtp.sendmail(config.gmail_user, [config.gmail_user], msg.as_string())
-    except Exception as exc:
-        raise EmailError(f"Failed to send lift session email: {exc}") from exc
-
-
 def send_alert_email(config: AppConfig, subject: str, body: str) -> None:
     """Send plain-text alert (auth failure, etc.)."""
     msg = MIMEText(body, "plain", "utf-8")

@@ -15,8 +15,10 @@ if ! flock -n 9; then
 fi
 
 args=(run --rm --env-file /docker/garmin-coaching-report/.env --network docker_default --entrypoint python)
+if [ -n "${LIFT_SESSION_TYPE:-}" ];  then args+=(-e "LIFT_SESSION_TYPE=${LIFT_SESSION_TYPE}"); fi
 if [ -n "${LIFT_SHOULDER_FLAG:-}" ]; then args+=(-e "LIFT_SHOULDER_FLAG=${LIFT_SHOULDER_FLAG}"); fi
-if [ -n "${LIFT_NOTE:-}" ];          then args+=(-e "LIFT_NOTE=${LIFT_NOTE}"); fi
+if [ -n "${LIFT_FEEDBACK_ONLY:-}" ]; then args+=(-e "LIFT_FEEDBACK_ONLY=${LIFT_FEEDBACK_ONLY}"); fi
+if [ -n "${LIFT_FEEDBACK_TEXT:-}" ]; then args+=(-e "LIFT_FEEDBACK_TEXT=${LIFT_FEEDBACK_TEXT}"); fi
 if [ -n "${DRY_RUN:-}" ];            then args+=(-e "DRY_RUN=${DRY_RUN}"); fi
 args+=(
   -v /docker/garmin-coaching-report/tokens:/root/.garminconnect
@@ -33,8 +35,9 @@ set -e
 # Publish the latest session summary for Home Assistant's command_line
 # sensor -- same pattern as the existing Plex/HDHomeRun MQTT bridges' state-
 # file publish, just triggered here instead of on a cron. Skipped on a dry
-# run (nothing new generated) or on failure (nothing to publish).
-if [ "${status}" -eq 0 ] && [ -z "${DRY_RUN:-}" ] \
+# run or a feedback-only run (neither generates a new session) or on
+# failure (nothing to publish).
+if [ "${status}" -eq 0 ] && [ -z "${DRY_RUN:-}" ] && [ -z "${LIFT_FEEDBACK_ONLY:-}" ] \
    && [ -f /docker/garmin-coaching-report/reports/lift_session_latest.json ]; then
   cp /docker/garmin-coaching-report/reports/lift_session_latest.json \
      /docker/homeassistant/lift_session_state.json
