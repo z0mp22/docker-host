@@ -218,3 +218,27 @@
     data:
       notification_id: plex_recordings_unhealthy
   mode: single
+- id: '1789900000001'
+  alias: Lift session generated
+  description: >
+    Push to mobile once a lift session has actually been generated (not just
+    dispatched -- the dispatch confirmation is a separate, immediate
+    persistent_notification from scripts.yaml's lift_session_run). Fires only
+    when generated_at genuinely changes, not on every 30s sensor poll.
+  triggers:
+  - trigger: state
+    entity_id: sensor.lift_session_latest
+    attribute: generated_at
+  conditions:
+  - condition: template
+    value_template: >-
+      {{ trigger.to_state is not none
+         and trigger.to_state.attributes.get('generated_at') not in [None, ''] }}
+  actions:
+  - action: script.notify_mobile_recording
+    data:
+      title: Lift session ready
+      message: >-
+        {{ state_attr('sensor.lift_session_latest', 'rationale')
+           or 'New lift session generated.' }}
+  mode: single

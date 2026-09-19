@@ -5,7 +5,8 @@ description = "Weekly mountain sports coaching report from Garmin Connect via Cl
 requires-python = ">=3.12"
 dependencies = [
     "garmin-connect-mcp",
-    "anthropic>=0.40.0",
+    "anthropic>=1.2.0",
+    "pydantic>=2.0",
     "markdown>=3.7",
     "python-dotenv>=1.0.1",
     "requests>=2.31",
@@ -13,8 +14,12 @@ dependencies = [
     "fit-tool>=0.9.16",
 ]
 
+[dependency-groups]
+dev = ["pytest>=8.0"]
+
 [project.scripts]
 garmin-coaching-report = "coaching_report.main:main"
+garmin-lift-session = "coaching_report.lift_main:main"
 
 [build-system]
 requires = ["hatchling"]

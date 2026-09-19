@@ -1,0 +1,70 @@
+version: '3.3'
+
+# Lean self-hosted wger: SQLite (no Postgres), locmem cache (no Redis), no
+# Celery worker -- none of those exist for anything beyond ingredient/exercise
+# catalog background sync, which this single-user lifting-only deployment
+# doesn't need. See docs/decisions or the implementation plan for the
+# reasoning; do not "helpfully" restore the full 5-service stack.
+
+services:
+  web:
+    image: docker.io/wger/server:2.7   # rolling PATCH tag, not :latest (which
+                                        # resolves to a dev prerelease) and not
+                                        # an exact patch (so Watchtower can pick
+                                        # up 2.7.x fixes automatically). Moving
+                                        # to 2.8 is a deliberate edit here, not
+                                        # something that happens silently.
+    container_name: wger-web
+    restart: unless-stopped
+    env_file: [.env]
+    volumes:
+      - /docker/wger/data:/home/wger/data
+      - /docker/wger/static:/home/wger/static
+      - /docker/wger/media:/home/wger/media
+    networks:
+      - docker_default
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+    mem_limit: 512m   # best-effort only -- the Pi's memory cgroup controller
+                       # is disabled, so this is not kernel-enforced. Documents
+                       # intent; verify real usage via `ps` on the host, not
+                       # `docker stats`.
+
+  nginx:
+    image: docker.io/nginx:stable
+    container_name: wger-nginx
+    restart: unless-stopped
+    depends_on:
+      - web
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - /docker/wger/static:/wger/static:ro
+      - /docker/wger/media:/wger/media:ro
+    ports:
+      - "8010:80"
+    networks:
+      - docker_default
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+    mem_limit: 64m
+
+  watchtower:
+    image: docker.io/containrrr/watchtower:latest
+    container_name: wger-watchtower
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      # Only touches containers explicitly labeled above (web, nginx) --
+      # never garmin-coaching-report, homeassistant, or anything else on
+      # this host, even though it needs the full docker socket to find them.
+      WATCHTOWER_LABEL_ENABLE: "true"
+      WATCHTOWER_CLEANUP: "true"
+      WATCHTOWER_SCHEDULE: "0 0 6 * * 0"   # Sunday 06:00 local
+      WATCHTOWER_INCLUDE_RESTARTING: "true"
+    mem_limit: 32m
+
+networks:
+  docker_default:
+    external: true
+    name: docker_default

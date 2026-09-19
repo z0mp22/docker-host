@@ -127,3 +127,24 @@
       - weather_condition
       - weather_temperature
       - readings
+
+# Lift session (garmin-coaching-report/coaching_report/lift_main.py writes
+# lift_session_latest.json to REPORT_OUTPUT_DIR; run-lift-session.sh copies
+# it here after each successful, non-dry-run generation -- same shape as the
+# Plex/HDHomeRun bridges above, just triggered at the end of that script
+# instead of on a cron).
+- sensor:
+    name: Lift Session Latest
+    unique_id: lift_session_latest_file
+    command: cat /config/lift_session_state.json
+    scan_interval: 30
+    value_template: "{{ value_json.session_date | default('none yet', true) }}"
+    json_attributes:
+      - session_date
+      - generated_at
+      - rationale
+      - summary_text
+      - exercise_count
+      - flags_considered
+      - wger_routine_id
+      - model

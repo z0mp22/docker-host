@@ -7,13 +7,16 @@ from datetime import date, datetime
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import markdown
 
 from .coach import CoachResult
 from .config import AppConfig
 from .errors import EmailError
+
+if TYPE_CHECKING:
+    from .lift_coach import SessionPlanResponse
 
 
 def last_report_window_end(reports_dir: Path) -> date | None:
@@ -159,6 +162,73 @@ def send_report_email(config: AppConfig, report_date: date, markdown_content: st
             smtp.sendmail(config.gmail_user, [config.gmail_user], msg.as_string())
     except Exception as exc:
         raise EmailError(f"Failed to send report email: {exc}") from exc
+
+
+def save_lift_outputs(
+    config: AppConfig,
+    session_date: date,
+    plan: "SessionPlanResponse",
+    model_meta: dict[str, Any],
+    wger_routine_id: int | None,
+) -> Path:
+    """Write the lift-session markdown summary + metadata JSON, and refresh the
+    fixed-name lift_session_latest.json that run-lift-session.sh copies to the
+    Home Assistant config dir for the command_line sensor to read."""
+    config.report_output_dir.mkdir(parents=True, exist_ok=True)
+    stamp = session_date.isoformat()
+    base = config.report_output_dir / f"lift-session-{stamp}"
+
+    md_path = base.with_suffix(".md")
+    md_path.write_text(plan.summary_text, encoding="utf-8")
+
+    meta = {
+        "session_date": stamp,
+        "generated_at": datetime.now().astimezone().isoformat(),
+        "rationale": plan.rationale,
+        "summary_text": plan.summary_text,
+        "exercise_count": len(plan.exercises),
+        "flags_considered": plan.flags_considered,
+        "wger_routine_id": wger_routine_id,
+        **model_meta,
+    }
+    meta_path = base.with_suffix(".meta.json")
+    meta_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
+
+    # Fixed filename (not date-stamped) so the HA sensor always reads the most
+    # recent session without needing to know today's date.
+    latest_path = config.report_output_dir / "lift_session_latest.json"
+    latest_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
+
+    log_line = (
+        f"[lift-session] {stamp} model={model_meta.get('model')} "
+        f"exercises={len(plan.exercises)} routine_id={wger_routine_id}"
+    )
+    print(log_line, file=sys.stderr)
+
+    return md_path
+
+
+def send_lift_summary_email(
+    config: AppConfig, session_date: date, plan: "SessionPlanResponse"
+) -> None:
+    subject = f"Lift Session — {session_date.isoformat()}"
+    html_body = _html_wrapper(markdown.markdown(plan.summary_text, extensions=["tables"]))
+
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = subject
+    msg["From"] = config.gmail_user
+    msg["To"] = config.gmail_user
+    msg.attach(MIMEText(plan.summary_text, "plain", "utf-8"))
+    msg.attach(MIMEText(html_body, "html", "utf-8"))
+
+    try:
+        with smtplib.SMTP("smtp.gmail.com", 587, timeout=60) as smtp:
+            smtp.ehlo()
+            smtp.starttls()
+            smtp.login(config.gmail_user, config.gmail_app_password)
+            smtp.sendmail(config.gmail_user, [config.gmail_user], msg.as_string())
+    except Exception as exc:
+        raise EmailError(f"Failed to send lift session email: {exc}") from exc
 
 
 def send_alert_email(config: AppConfig, subject: str, body: str) -> None:
