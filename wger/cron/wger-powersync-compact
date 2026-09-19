@@ -1,0 +1,8 @@
+# docker-host: wger PowerSync bucket compaction — daily 03:00 local
+# Without this the PowerSync operation log grows unbounded (see
+# wger.readthedocs.io/en/latest/administration/powersync.html). Daily is
+# the documented default; only needed hourly for very high write volume,
+# which a single-user deployment isn't.
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+0 3 * * * root cd /docker/wger && docker compose run --rm -T powersync compact >> /docker/wger/compact.log 2>&1

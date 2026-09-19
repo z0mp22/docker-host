@@ -247,6 +247,11 @@ deploy_wger() {
   # accordingly or migrations/writes fail on first boot.
   sudo mkdir -p "${DEPLOY_ROOT}/wger/data" "${DEPLOY_ROOT}/wger/static" "${DEPLOY_ROOT}/wger/media"
   sudo chown -R 1000:1000 "${DEPLOY_ROOT}/wger/data" "${DEPLOY_ROOT}/wger/static" "${DEPLOY_ROOT}/wger/media"
+  # Postgres's own entrypoint chowns an empty PGDATA dir to its runtime user
+  # on first start (runs as root, then drops privilege) -- just needs to exist.
+  sudo mkdir -p "${DEPLOY_ROOT}/wger/postgres-data"
+  install_file "${REPO_ROOT}/wger/cron/wger-powersync-compact" \
+    "/etc/cron.d/wger-powersync-compact" 644
   (
     cd "${DEPLOY_ROOT}/wger"
     [ "${PULL_IMAGES:-0}" = "1" ] && docker compose pull
