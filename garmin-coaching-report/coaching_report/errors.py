@@ -25,3 +25,23 @@ class CoachError(CoachingReportError):
 
 class EmailError(CoachingReportError):
     """Failed to send email notification."""
+
+
+class WgerError(CoachingReportError):
+    """Failed to read from or write to the self-hosted wger instance."""
+
+
+class UnknownExerciseError(WgerError):
+    """Claude proposed an exercise_id that isn't in the fetched wger catalog."""
+
+
+class UnsafeExerciseError(WgerError):
+    """Claude proposed an exercise matching the hard safety exclude-list.
+
+    Raised instead of silently dropping/substituting the exercise -- the whole
+    session generation is discarded and an alert is sent. See lift_safety.py.
+    """
+
+
+class LiftPlanError(CoachingReportError):
+    """Claude's structured lift-session response failed schema validation."""

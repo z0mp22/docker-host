@@ -50,6 +50,20 @@ def _collect_day_health(client: GarminClientWrapper, day: date, compact: bool = 
     return entry
 
 
+def collect_recent_health(client: GarminClientWrapper, days: int = 2) -> list[dict[str, Any]]:
+    """Last `days` calendar days of Garmin recovery data, most recent last.
+
+    Public wrapper around the same per-day extraction build_payload() uses,
+    for the lift-session pipeline's shorter, more recent-focused lookback --
+    it doesn't need a full week/history payload, just yesterday and today.
+    """
+    end = date.today()
+    return [
+        _collect_day_health(client, end - timedelta(days=i), compact=True)
+        for i in range(days - 1, -1, -1)
+    ]
+
+
 def _collect_activity(
     client: GarminClientWrapper,
     activity_id: int,

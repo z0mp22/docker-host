@@ -1,0 +1,39 @@
+name: Run Lift Session
+
+# On-demand trigger for one autoregulated lifting session, written to the
+# self-hosted wger instance. Session-by-session, not a weekly batch -- no
+# cron here, fired at variable timing from Home Assistant (or manually).
+#   shoulder_flag=true -> the athlete has flagged the shoulder/soreness this session
+#   note="..."         -> free-text context for this generation
+#   dry_run=true       -> resolve the payload + print the safety-guard's
+#                          banned-exercise list only; no Claude call, no wger write
+on:
+  workflow_dispatch:
+    inputs:
+      shoulder_flag:
+        description: "Shoulder/soreness flag active"
+        type: boolean
+        default: false
+      note:
+        description: "Ad-hoc note for this session"
+        type: string
+        default: ""
+      dry_run:
+        description: "Validate the payload + safety guard only (no Claude call, no wger write)"
+        type: boolean
+        default: false
+
+jobs:
+  run-lift-session:
+    runs-on: [self-hosted, docker-host]
+    concurrency:
+      group: lift-session
+      cancel-in-progress: false
+    steps:
+      - name: Run lift session generator
+        run: |
+          if [ "${{ inputs.shoulder_flag }}" = "true" ]; then export LIFT_SHOULDER_FLAG=true; fi
+          if [ -n "${{ inputs.note }}" ]; then export LIFT_NOTE="${{ inputs.note }}"; fi
+          if [ "${{ inputs.dry_run }}" = "true" ]; then export DRY_RUN=true; fi
+          echo "lift-session: LIFT_SHOULDER_FLAG=${LIFT_SHOULDER_FLAG:-<unset>} LIFT_NOTE=${LIFT_NOTE:-<unset>} DRY_RUN=${DRY_RUN:-<unset>}"
+          bash /docker/garmin-coaching-report/scripts/run-lift-session.sh
