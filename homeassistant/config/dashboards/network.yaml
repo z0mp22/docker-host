@@ -193,18 +193,31 @@ views:
       - type: entities
         entities:
           - entity: switch.unifi_network_block_kasa
+            name: Kasa
           - entity: switch.unifi_network_block_kasa_2
+            name: Kasa 2
           - entity: switch.unifi_network_block_kasa_3
+            name: Kasa 3
           - entity: switch.unifi_network_no_internet_kasa_smart_plug
+            name: Smart plug
           - entity: switch.unifi_network_no_internet_kasa_smart_plug_2
+            name: Smart plug 2
           - entity: switch.unifi_network_no_internet_kasa_smart_plug_3
+            name: Smart plug 3
           - entity: switch.unifi_network_shelly_no_internet
+            name: Shelly
           - entity: switch.unifi_network_shelly_no_internet_2
+            name: Shelly 2
           - entity: switch.unifi_network_shelly_no_internet_3
+            name: Shelly 3
           - entity: switch.unifi_network_block_ipcam
+            name: IP cam
           - entity: switch.unifi_network_block_ipcam_2
+            name: IP cam 2
           - entity: switch.unifi_network_block_ipcam_3
+            name: IP cam 3
           - entity: switch.unifi_network_block_tv
+            name: TV
 
       - type: custom:mushroom-title-card
         title: Internet exposure
@@ -277,16 +290,3 @@ views:
                 entity_id: button.middle_floor_restart
               confirmation:
                 text: Restart the middle floor AP?
-
-      - type: markdown
-        content: >
-          This dashboard reads from the UniFi Network integration, which had
-          gone stale (all entities `unavailable`) until it was reconnected
-          with a local API key on 2026-09-20 — see the `unifi-dream-machine-access`
-          memory note if it breaks again. Per-AP client-count sensors
-          (`sensor.garage_ap_clients`, `sensor.middle_floor_clients`,
-          `sensor.upstairs_ap_clients`) exist but are disabled by default —
-          enable them under Settings → Devices & Services → Entities for a
-          per-AP breakdown alongside the per-SSID one above. The "IoT lockdown"
-          and "Internet exposure" sections mirror findings from the 2026-09
-          security audit of this router.
