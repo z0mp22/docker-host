@@ -33,7 +33,7 @@ views:
               - type: template
                 icon: mdi:paw
                 content: >
-                  {% set animals = ['person', 'cat', 'dog', 'bear', 'raccoon'] %}
+                  {% set animals = ['person', 'cat', 'dog', 'bear'] %}
                   {% set ns = namespace(count=0) %}
                   {% for camera in ['basement', 'garage', 'driveway'] %}
                     {% for animal in animals %}
