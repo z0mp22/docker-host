@@ -1,0 +1,292 @@
+title: Network
+theme: RedditMushroom
+views:
+  - title: Network
+    path: network
+    icon: mdi:router-wireless
+    theme: RedditMushroom
+    cards:
+      - type: custom:mushroom-template-card
+        primary: >
+          {% set states_list = ['sensor.zsdm_state','sensor.garage_ap_state','sensor.middle_floor_state','sensor.upstairs_ap_state'] %}
+          {% set bad = states_list | select('is_state', 'unavailable') | list + states_list | select('is_state', 'unknown') | list %}
+          {% if bad | count > 0 %}
+          {{ bad | count }} device(s) unreachable
+          {% else %}
+          All network devices reachable
+          {% endif %}
+        secondary: ZsDM gateway · Upstairs AP · Garage AP · Middle floor AP
+        icon: >
+          {% set states_list = ['sensor.zsdm_state','sensor.garage_ap_state','sensor.middle_floor_state','sensor.upstairs_ap_state'] %}
+          {% set bad = states_list | select('is_state', 'unavailable') | list + states_list | select('is_state', 'unknown') | list %}
+          {% if bad | count > 0 %}
+          mdi:router-wireless-off
+          {% else %}
+          mdi:router-wireless
+          {% endif %}
+        icon_color: >
+          {% set states_list = ['sensor.zsdm_state','sensor.garage_ap_state','sensor.middle_floor_state','sensor.upstairs_ap_state'] %}
+          {% set bad = states_list | select('is_state', 'unavailable') | list + states_list | select('is_state', 'unknown') | list %}
+          {% if bad | count > 0 %}
+          red
+          {% else %}
+          green
+          {% endif %}
+        fill_container: true
+
+      - type: custom:mushroom-chips-card
+        alignment: center
+        chips:
+          - type: template
+            icon: mdi:account-group
+            content: "{{ states('sensor.zsdm_clients') }} clients"
+          - type: template
+            icon: mdi:cloud-outline
+            content: "Cloudflare {{ states('sensor.zsdm_cloudflare_wan_latency') }} ms"
+          - type: template
+            icon: mdi:google
+            content: "Google {{ states('sensor.zsdm_google_wan_latency') }} ms"
+          - type: template
+            icon: mdi:clock-outline
+            content: >
+              {% set u = states('sensor.zsdm_uptime') %}
+              {% if u not in ['unavailable','unknown'] %}
+              Up since {{ as_timestamp(u) | timestamp_custom('%b %-d') }}
+              {% else %}
+              Uptime n/a
+              {% endif %}
+
+      - type: custom:mushroom-title-card
+        title: Wi-Fi networks
+        subtitle: Connected clients per SSID
+
+      - type: grid
+        columns: 3
+        square: false
+        cards:
+          - type: custom:mushroom-entity-card
+            entity: sensor.starfleet_command
+            name: Main
+            icon: mdi:wifi
+          - type: custom:mushroom-entity-card
+            entity: sensor.starfleet_command_guest
+            name: Guest
+            icon: mdi:wifi-lock-open
+          - type: custom:mushroom-entity-card
+            entity: sensor.starfleet_command_kids
+            name: Kids
+            icon: mdi:human-child
+
+      - type: custom:mushroom-title-card
+        title: Trends
+        subtitle: Long-term statistics (survives HA's short history retention)
+
+      - type: statistics-graph
+        title: WAN latency
+        entities:
+          - sensor.zsdm_cloudflare_wan_latency
+          - sensor.zsdm_google_wan_latency
+        stat_types:
+          - mean
+          - max
+        period: day
+        days_to_show: 30
+
+      - type: statistics-graph
+        title: Connected clients
+        entities:
+          - sensor.zsdm_clients
+        stat_types:
+          - mean
+          - max
+        period: day
+        days_to_show: 30
+
+      - type: custom:mushroom-title-card
+        title: Device health
+        subtitle: CPU utilization
+
+      - type: grid
+        columns: 4
+        square: false
+        cards:
+          - type: gauge
+            entity: sensor.zsdm_cpu_utilization
+            name: ZsDM
+            min: 0
+            max: 100
+            severity:
+              green: 0
+              yellow: 70
+              red: 90
+          - type: gauge
+            entity: sensor.upstairs_ap_cpu_utilization
+            name: Upstairs
+            min: 0
+            max: 100
+            severity:
+              green: 0
+              yellow: 70
+              red: 90
+          - type: gauge
+            entity: sensor.garage_ap_cpu_utilization
+            name: Garage
+            min: 0
+            max: 100
+            severity:
+              green: 0
+              yellow: 70
+              red: 90
+          - type: gauge
+            entity: sensor.middle_floor_cpu_utilization
+            name: Middle floor
+            min: 0
+            max: 100
+            severity:
+              green: 0
+              yellow: 70
+              red: 90
+
+      - type: entities
+        title: Memory utilization
+        entities:
+          - entity: sensor.zsdm_memory_utilization
+            name: ZsDM
+          - entity: sensor.upstairs_ap_memory_utilization
+            name: Upstairs AP
+          - entity: sensor.garage_ap_memory_utilization
+            name: Garage AP
+          - entity: sensor.middle_floor_memory_utilization
+            name: Middle floor AP
+
+      - type: entities
+        title: Uptime
+        entities:
+          - entity: sensor.zsdm_uptime
+            name: ZsDM
+          - entity: sensor.upstairs_ap_uptime
+            name: Upstairs AP
+          - entity: sensor.garage_ap_uptime
+            name: Garage AP
+          - entity: sensor.middle_floor_uptime
+            name: Middle floor AP
+
+      - type: custom:mushroom-title-card
+        title: Firmware updates
+        subtitle: Green means current
+
+      - type: entities
+        entities:
+          - entity: update.zsdm
+            name: ZsDM
+          - entity: update.upstairs_ap
+            name: Upstairs AP
+          - entity: update.garage_ap
+            name: Garage AP
+          - entity: update.middle_floor
+            name: Middle floor AP
+
+      - type: custom:mushroom-title-card
+        title: IoT lockdown
+        subtitle: From the 2026-09 security audit — confirm these stayed on
+
+      - type: entities
+        entities:
+          - entity: switch.unifi_network_block_kasa
+          - entity: switch.unifi_network_block_kasa_2
+          - entity: switch.unifi_network_block_kasa_3
+          - entity: switch.unifi_network_no_internet_kasa_smart_plug
+          - entity: switch.unifi_network_no_internet_kasa_smart_plug_2
+          - entity: switch.unifi_network_no_internet_kasa_smart_plug_3
+          - entity: switch.unifi_network_shelly_no_internet
+          - entity: switch.unifi_network_shelly_no_internet_2
+          - entity: switch.unifi_network_shelly_no_internet_3
+          - entity: switch.unifi_network_block_ipcam
+          - entity: switch.unifi_network_block_ipcam_2
+          - entity: switch.unifi_network_block_ipcam_3
+          - entity: switch.unifi_network_block_tv
+
+      - type: custom:mushroom-title-card
+        title: Internet exposure
+        subtitle: WAN port-forwards to the docker-host Pi — should stay Cloudflare-restricted
+
+      - type: entities
+        entities:
+          - entity: switch.unifi_network_raspi5_cf
+            name: Port 80 (Cloudflare-restricted, active)
+          - entity: switch.unifi_network_raspi_https_cf
+            name: Port 443 (Cloudflare-restricted, active)
+          - entity: switch.unifi_network_raspi5
+            name: Port 80 (legacy, unrestricted — should stay off)
+          - entity: switch.unifi_network_raspi5_https
+            name: Port 443 (legacy, unrestricted — should stay off)
+
+      - type: custom:mushroom-title-card
+        title: Controls
+        subtitle: Restart a device
+
+      - type: grid
+        columns: 4
+        square: false
+        cards:
+          - type: custom:mushroom-entity-card
+            entity: button.zsdm_restart
+            name: ZsDM
+            icon: mdi:restart
+            layout: vertical
+            tap_action:
+              action: call-service
+              service: button.press
+              target:
+                entity_id: button.zsdm_restart
+              confirmation:
+                text: Restart the gateway?
+          - type: custom:mushroom-entity-card
+            entity: button.upstairs_ap_restart
+            name: Upstairs AP
+            icon: mdi:restart
+            layout: vertical
+            tap_action:
+              action: call-service
+              service: button.press
+              target:
+                entity_id: button.upstairs_ap_restart
+              confirmation:
+                text: Restart the upstairs AP?
+          - type: custom:mushroom-entity-card
+            entity: button.garage_ap_restart
+            name: Garage AP
+            icon: mdi:restart
+            layout: vertical
+            tap_action:
+              action: call-service
+              service: button.press
+              target:
+                entity_id: button.garage_ap_restart
+              confirmation:
+                text: Restart the garage AP?
+          - type: custom:mushroom-entity-card
+            entity: button.middle_floor_restart
+            name: Middle floor AP
+            icon: mdi:restart
+            layout: vertical
+            tap_action:
+              action: call-service
+              service: button.press
+              target:
+                entity_id: button.middle_floor_restart
+              confirmation:
+                text: Restart the middle floor AP?
+
+      - type: markdown
+        content: >
+          This dashboard reads from the UniFi Network integration, which had
+          gone stale (all entities `unavailable`) until it was reconnected
+          with a local API key on 2026-09-20 — see the `unifi-dream-machine-access`
+          memory note if it breaks again. Per-AP client-count sensors
+          (`sensor.garage_ap_clients`, `sensor.middle_floor_clients`,
+          `sensor.upstairs_ap_clients`) exist but are disabled by default —
+          enable them under Settings → Devices & Services → Entities for a
+          per-AP breakdown alongside the per-SSID one above. The "IoT lockdown"
+          and "Internet exposure" sections mirror findings from the 2026-09
+          security audit of this router.
