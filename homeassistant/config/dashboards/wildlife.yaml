@@ -8,7 +8,7 @@ views:
     cards:
       - type: custom:mushroom-template-card
         primary: >
-          {% set animals = ['person', 'cat', 'dog', 'bear', 'raccoon'] %}
+          {% set animals = ['person', 'cat', 'dog', 'deer', 'bear', 'fox', 'raccoon', 'skunk', 'rabbit', 'squirrel'] %}
           {% set ns = namespace(active=[]) %}
           {% for camera in ['basement', 'garage', 'driveway'] %}
             {% for animal in animals %}
@@ -19,7 +19,7 @@ views:
           {% endfor %}
           {% if ns.active | length > 0 %}Activity now{% else %}Yard is quiet{% endif %}
         secondary: >
-          {% set animals = ['person', 'cat', 'dog', 'bear', 'raccoon'] %}
+          {% set animals = ['person', 'cat', 'dog', 'deer', 'bear', 'fox', 'raccoon', 'skunk', 'rabbit', 'squirrel'] %}
           {% set ns = namespace(active=[]) %}
           {% for camera in ['basement', 'garage', 'driveway'] %}
             {% for animal in animals %}
@@ -28,12 +28,13 @@ views:
               {% endif %}
             {% endfor %}
           {% endfor %}
-          {{ ns.active | join(' · ') if ns.active | length > 0 else 'Person, cat, dog, bear, and raccoon (Frigate)' }}
+          {{ ns.active | join(' · ') if ns.active | length > 0 else 'Person, cat, dog, deer, bear, fox, raccoon, skunk, rabbit, and squirrel (Frigate)' }}
         icon: mdi:paw
         fill_container: true
 
       - type: custom:mushroom-chips-card
         alignment: center
+        # No dedicated MDI icons exist for deer/skunk/squirrel; paw-outline stands in.
         chips:
           - type: template
             icon: mdi:account
@@ -45,11 +46,26 @@ views:
             icon: mdi:dog
             content: Dog
           - type: template
-            icon: mdi:raccoon
-            content: Raccoon
+            icon: mdi:paw-outline
+            content: Deer
           - type: template
             icon: mdi:paw
             content: Bear
+          - type: template
+            icon: mdi:dog-side
+            content: Fox
+          - type: template
+            icon: mdi:raccoon
+            content: Raccoon
+          - type: template
+            icon: mdi:paw-outline
+            content: Skunk
+          - type: template
+            icon: mdi:rabbit
+            content: Rabbit
+          - type: template
+            icon: mdi:paw-outline
+            content: Squirrel
           - type: template
             icon: mdi:cctv
             content: Basement · Garage · Driveway
@@ -130,6 +146,48 @@ views:
             aspect_ratio: 16:9
 
       - type: custom:mushroom-title-card
+        title: Deer
+        subtitle: Tracked in Frigate — snapshots appear after a detection
+
+      - type: grid
+        columns: 3
+        square: false
+        cards:
+          - type: picture-entity
+            entity: image.basement_deer
+            name: Basement
+            aspect_ratio: 16:9
+          - type: picture-entity
+            entity: image.garage_deer
+            name: Garage
+            aspect_ratio: 16:9
+          - type: picture-entity
+            entity: image.driveway_deer
+            name: Driveway
+            aspect_ratio: 16:9
+
+      - type: custom:mushroom-title-card
+        title: Fox
+        subtitle: Tracked in Frigate — snapshots appear after a detection
+
+      - type: grid
+        columns: 3
+        square: false
+        cards:
+          - type: picture-entity
+            entity: image.basement_fox
+            name: Basement
+            aspect_ratio: 16:9
+          - type: picture-entity
+            entity: image.garage_fox
+            name: Garage
+            aspect_ratio: 16:9
+          - type: picture-entity
+            entity: image.driveway_fox
+            name: Driveway
+            aspect_ratio: 16:9
+
+      - type: custom:mushroom-title-card
         title: Raccoons
         subtitle: Tracked in Frigate — snapshots appear after a detection
 
@@ -147,5 +205,68 @@ views:
             aspect_ratio: 16:9
           - type: picture-entity
             entity: image.driveway_raccoon
+            name: Driveway
+            aspect_ratio: 16:9
+
+      - type: custom:mushroom-title-card
+        title: Skunk
+        subtitle: Tracked in Frigate — snapshots appear after a detection
+
+      - type: grid
+        columns: 3
+        square: false
+        cards:
+          - type: picture-entity
+            entity: image.basement_skunk
+            name: Basement
+            aspect_ratio: 16:9
+          - type: picture-entity
+            entity: image.garage_skunk
+            name: Garage
+            aspect_ratio: 16:9
+          - type: picture-entity
+            entity: image.driveway_skunk
+            name: Driveway
+            aspect_ratio: 16:9
+
+      - type: custom:mushroom-title-card
+        title: Rabbit
+        subtitle: Tracked in Frigate — snapshots appear after a detection
+
+      - type: grid
+        columns: 3
+        square: false
+        cards:
+          - type: picture-entity
+            entity: image.basement_rabbit
+            name: Basement
+            aspect_ratio: 16:9
+          - type: picture-entity
+            entity: image.garage_rabbit
+            name: Garage
+            aspect_ratio: 16:9
+          - type: picture-entity
+            entity: image.driveway_rabbit
+            name: Driveway
+            aspect_ratio: 16:9
+
+      - type: custom:mushroom-title-card
+        title: Squirrel
+        subtitle: Tracked in Frigate — snapshots appear after a detection
+
+      - type: grid
+        columns: 3
+        square: false
+        cards:
+          - type: picture-entity
+            entity: image.basement_squirrel
+            name: Basement
+            aspect_ratio: 16:9
+          - type: picture-entity
+            entity: image.garage_squirrel
+            name: Garage
+            aspect_ratio: 16:9
+          - type: picture-entity
+            entity: image.driveway_squirrel
             name: Driveway
             aspect_ratio: 16:9
