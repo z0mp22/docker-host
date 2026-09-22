@@ -14,7 +14,10 @@ fi
 
 # Build docker args. Forward window / dry-run controls ONLY when the caller set
 # them, so cron (which sets none) produces byte-identical args to before.
-args=(run --rm --env-file /docker/garmin-coaching-report/.env)
+# --network docker_default (same as run-lift-session.sh) so the container can
+# resolve wger-nginx for the strength_training_log payload section -- without
+# it, WGER_URL never resolves and that section silently comes back empty.
+args=(run --rm --network docker_default --env-file /docker/garmin-coaching-report/.env)
 if [ -n "${SINCE:-}" ];   then args+=(-e "SINCE=${SINCE}"); fi
 if [ -n "${THROUGH:-}" ]; then args+=(-e "THROUGH=${THROUGH}"); fi
 if [ -n "${DRY_RUN:-}" ]; then args+=(-e "DRY_RUN=${DRY_RUN}"); fi
