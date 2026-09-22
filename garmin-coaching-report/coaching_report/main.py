@@ -118,10 +118,12 @@ def main() -> int:
         n_acts = len(payload["week_full"].get("activity_details", []))
         n_days = len(payload["week_full"].get("daily_health", []))
         n_hist = len(payload.get("history_summaries", []))
+        n_strength = len(payload.get("strength_training_log", []))
         print(
             f"[coaching-report] window {wr['start']}..{wr['end']} "
             f"({wr.get('days', n_days)} days) — {n_acts} activities, "
-            f"{n_days} daily-health days, {n_hist} history entries",
+            f"{n_days} daily-health days, {n_hist} history entries, "
+            f"{n_strength} strength-training sessions",
             file=sys.stderr,
         )
 
