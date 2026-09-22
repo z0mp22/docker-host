@@ -1,6 +1,7 @@
 """Pull Garmin Connect data for coaching analysis."""
 
 import json
+import sys
 from datetime import date, timedelta
 from typing import Any
 
@@ -10,6 +11,7 @@ from . import nutrition as nutrition_api
 from .config import AppConfig
 from .errors import DataCollectionError, EmptyWindowError
 from .timezone_util import athlete_tz_name
+from .wger_client import WgerClient
 
 
 def _date_str(d: date) -> str:
@@ -189,6 +191,7 @@ def build_payload(
     nutrition_history = _attach_nutrition(
         config, week_full, week_start, week_end, history_start, history_end
     )
+    strength_training_log = _collect_lift_history(config, week_start, week_end)
 
     tz = athlete_tz_name(config.athlete_timezone)
     return {
@@ -202,6 +205,9 @@ def build_payload(
             "nutrition_source": (
                 "FatSecret food diary" if nutrition_history is not None else None
             ),
+            "strength_training_source": (
+                "wger (athlete-logged sets)" if strength_training_log is not None else None
+            ),
         },
         "week_full": week_full,
         "history_summaries": history,
@@ -211,6 +217,7 @@ def build_payload(
             "weeks": config.history_weeks,
         },
         "nutrition_history": nutrition_history or [],
+        "strength_training_log": strength_training_log or [],
     }
 
 
@@ -241,6 +248,62 @@ def _attach_nutrition(
         return nutrition_api.weekly_aggregates(client, history_start, history_end)
     except Exception:
         return []
+
+
+def _session_date(session: dict[str, Any]) -> date:
+    return date.fromisoformat(session["datetime_start"][:10])
+
+
+def _collect_lift_history(
+    config: AppConfig, week_start: date, week_end: date
+) -> list[dict[str, Any]] | None:
+    """Athlete-logged wger sets (real weight/reps/RIR) in [week_start, week_end].
+
+    Returns None when wger isn't configured or the instance can't be reached,
+    so the report runs unchanged without strength data -- same optional-source
+    pattern as _attach_nutrition() above. Never lets a wger problem fail the
+    mountain report; a WgerError outage here is caught, not propagated.
+    """
+    if not config.wger_url or not config.wger_api_token:
+        return None
+
+    try:
+        wger_client = WgerClient(config.wger_url, config.wger_api_token)
+        catalog_by_id = {ex["id"]: ex["name"] for ex in wger_client.get_exercise_catalog()}
+        weight_units, _rep_units = wger_client.get_unit_labels()
+        sessions = wger_client.get_workout_history(since=week_start)
+    except Exception as exc:
+        # Broad on purpose: WgerError covers bad responses, but a plain
+        # requests connection/timeout error (instance down) isn't a
+        # WgerError and must not fail the mountain report either -- this
+        # source is best-effort, exactly like FatSecret nutrition above.
+        print(f"[mountain-report] wger lift history unavailable: {exc}", file=sys.stderr)
+        return None
+
+    out = []
+    for sess in sessions:
+        sess_date = _session_date(sess)
+        if sess_date > week_end:
+            continue
+        logs = [
+            {
+                "exercise_name": catalog_by_id.get(log["exercise"], f"exercise #{log['exercise']}"),
+                "reps": float(log["repetitions"]) if log.get("repetitions") is not None else None,
+                "weight": float(log["weight"]) if log.get("weight") is not None else None,
+                "weight_unit": weight_units.get(log.get("weight_unit")),
+                "rir": float(log["rir"]) if log.get("rir") is not None else None,
+            }
+            for log in sess.get("logs", [])
+        ]
+        out.append(
+            {
+                "date": sess_date.isoformat(),
+                "notes": sess.get("notes") or None,
+                "impression": sess.get("impression"),
+                "logs": logs,
+            }
+        )
+    return out
 
 
 def payload_json(payload: dict[str, Any]) -> str:

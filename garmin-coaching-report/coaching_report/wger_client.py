@@ -116,6 +116,39 @@ class WgerClient:
             params={"date__gte": since.isoformat(), "ordering": "date"},
         )
 
+    def get_workout_history(self, since: date) -> list[dict[str, Any]]:
+        """Logged sessions with a `datetime_start` on/after `since`, each with
+        its WorkoutLog entries (actual weight/reps/rir), most recent last.
+
+        Deliberately does not reuse get_recent_sessions()'s `ordering: -date`
+        param -- /api/v2/workoutsession/ has no `date` field (only
+        `datetime_start`/`datetime_end`), confirmed live; that ordering is a
+        silent no-op there. Sorted client-side instead.
+        """
+        sessions = self._get_all("/api/v2/workoutsession/")
+        sessions.sort(key=lambda s: s.get("datetime_start") or "")
+        out = []
+        for sess in sessions:
+            start = sess.get("datetime_start")
+            if not start or date.fromisoformat(start[:10]) < since:
+                continue
+            logs = self._get_all("/api/v2/workoutlog/", params={"session": sess["id"]})
+            out.append({**sess, "logs": logs})
+        return out
+
+    def get_unit_labels(self) -> tuple[dict[int, str], dict[int, str]]:
+        """Live id->name maps for weight units (kg/lb/...) and repetition
+        units (reps/until failure/...) -- resolved live rather than
+        hardcoded, matching get_exercise_catalog()'s live language-id lookup.
+        """
+        weight_units = {
+            u["id"]: u["name"] for u in self._get_all("/api/v2/setting-weightunit/")
+        }
+        rep_units = {
+            u["id"]: u["name"] for u in self._get_all("/api/v2/setting-repetitionunit/")
+        }
+        return weight_units, rep_units
+
     def _write_config(self, path: str, slot_entry_id: int, value: Any) -> None:
         self._post(
             path,
