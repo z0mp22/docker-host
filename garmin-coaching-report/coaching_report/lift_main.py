@@ -6,7 +6,7 @@ coaching_report.lift_main`, triggered by run-lift-session.sh -- session-by-
 session, no fixed cadence, unlike main.py's weekly cron. Does not import or
 call anything from main.py/coach.py; the two pipelines are independent all
 the way down (separate lock files, separate GitHub Actions concurrency
-groups, separate alert-email subjects) so a wger outage or a lift-session bug
+groups, separate alert-email subjects) so a Hevy outage or a lift-session bug
 can never affect the mountain report and vice versa.
 """
 
@@ -29,7 +29,7 @@ from .lift_coach import generate_lift_session
 from .lift_collector import build_lift_payload
 from .lift_feedback import append_feedback
 from .lift_safety import assert_session_plan_safe, resolve_banned_exercise_ids
-from .wger_client import WgerClient
+from .hevy_client import HevyClient
 
 SESSION_TYPES = ("heavy_1h", "light_30m", "shoulder_pt")
 DEFAULT_SESSION_TYPE = "heavy_1h"
@@ -46,7 +46,7 @@ def main() -> int:
     feedback_text = os.environ.get("LIFT_FEEDBACK_TEXT", "").strip()
 
     if feedback_only:
-        # No Garmin/wger/Claude needed at all -- just append to the
+        # No Garmin/Hevy/Claude needed at all -- just append to the
         # persistent log so future generations see it as standing context.
         if not feedback_text:
             print("[lift-session] LIFT_FEEDBACK_ONLY set but LIFT_FEEDBACK_TEXT is empty", file=sys.stderr)
@@ -55,10 +55,10 @@ def main() -> int:
         print(f"[lift-session] feedback logged: {feedback_text!r}", file=sys.stderr)
         return 0
 
-    if not config.wger_url or not config.wger_api_token:
+    if not config.hevy_api_key:
         print(
-            "[lift-session] WGER_URL and WGER_API_TOKEN are required "
-            "(set them in garmin-coaching-report/.env)",
+            "[lift-session] HEVY_API_KEY is required "
+            "(set it in garmin-coaching-report/.env)",
             file=sys.stderr,
         )
         return 1
@@ -83,8 +83,8 @@ def main() -> int:
         return 1
 
     try:
-        wger_client = WgerClient(config.wger_url, config.wger_api_token)
-        catalog = wger_client.get_exercise_catalog()
+        hevy_client = HevyClient(config.hevy_api_key)
+        catalog = hevy_client.get_exercise_catalog()
         catalog_by_id = {ex["id"]: ex for ex in catalog}
         banned_ids = resolve_banned_exercise_ids(catalog)
 
@@ -97,11 +97,11 @@ def main() -> int:
             print(f"[lift-session]   banned: {name} (id={ex_id})", file=sys.stderr)
 
         payload = build_lift_payload(
-            garmin_client, wger_client, config, catalog, session_type, shoulder_flag, session_date
+            garmin_client, hevy_client, config, catalog, session_type, shoulder_flag, session_date
         )
         print(
             f"[lift-session] {session_date.isoformat()} type={session_type} — "
-            f"{len(payload['wger_recent_sessions'])} recent wger sessions, "
+            f"{len(payload['recent_lift_sessions'])} recent Hevy workouts, "
             f"{len(payload['recent_mountain_activity'])} mountain-sports activities this week, "
             f"{len(payload['recent_feedback'])} feedback log entries, "
             f"shoulder_flag={shoulder_flag}",
@@ -111,7 +111,7 @@ def main() -> int:
         if dry_run:
             print(
                 "[lift-session] DRY_RUN: payload + safety-guard catalog validated; "
-                "skipping Claude call and wger write",
+                "skipping Claude call and Hevy write",
                 file=sys.stderr,
             )
             return 0
@@ -124,19 +124,24 @@ def main() -> int:
         )
 
         # Defense-in-depth: re-check Claude's actual output against the live
-        # catalog and the denylist, strictly before any wger write. On a
+        # catalog and the denylist, strictly before any Hevy write. On a
         # violation this raises and nothing below runs -- no partial write,
         # no silent substitution.
         assert_session_plan_safe(plan.exercises, catalog_by_id, banned_ids)
 
-        routine_id = wger_client.create_session(plan)
+        routine_id = hevy_client.upsert_session_routine(
+            plan, config.hevy_routine_title, session_type
+        )
 
-        # No email for individual sessions (decision: HA + wger only --
+        # No email for individual sessions (decision: HA + Hevy only --
         # email stays reserved for the weekly mountain report). save_lift_outputs
         # still writes the local .md/.meta.json and lift_session_latest.json,
         # which is what feeds the HA sensor/notification.
-        save_lift_outputs(config, session_date, plan, model_meta, routine_id)
-        print(f"[lift-session] wrote wger routine id={routine_id}", file=sys.stderr)
+        save_lift_outputs(config, session_date, plan, model_meta, routine_id, session_type)
+        print(
+            f"[lift-session] wrote Hevy routine {config.hevy_routine_title!r} id={routine_id}",
+            file=sys.stderr,
+        )
         return 0
 
     except (UnsafeExerciseError, UnknownExerciseError) as exc:
@@ -144,7 +149,7 @@ def main() -> int:
         _try_alert(config, f"Lift Session — Unsafe Exercise Blocked\n\n{exc}")
         return 1
     except CoachingReportError as exc:
-        # Covers WgerError, LiftPlanError, and anything else in this
+        # Covers HevyError, LiftPlanError, and anything else in this
         # pipeline's typed-error hierarchy not already handled above.
         # Failures still alert by email -- HA only learns about successful
         # generations (see automations.yaml), so email is the only signal

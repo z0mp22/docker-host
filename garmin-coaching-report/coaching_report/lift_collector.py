@@ -2,7 +2,8 @@
 
 Pulls from four sources: recent Garmin recovery + this week's already-logged
 mountain-sports activity (reusing collector.py's existing, unmodified
-functions), recent wger lifting history + body-weight trend, the persistent
+functions), recent Hevy lifting history (joined back to what was prescribed)
++ body-weight trend, the persistent
 athlete-feedback log (lift_feedback.py -- standing likes/dislikes/health
 flags/notes over time, not just this call), and the session type + HA
 shoulder flag passed in from lift_main.py.
@@ -10,7 +11,9 @@ shoulder flag passed in from lift_main.py.
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+import json
+from datetime import date, datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 from garmin_connect_mcp.client import GarminClientWrapper
@@ -18,14 +21,15 @@ from garmin_connect_mcp.client import GarminClientWrapper
 from .collector import collect_history_summaries, collect_recent_health
 from .compression import compress_week, strip_large_fields
 from .config import AppConfig
+from .emailer import PRESCRIPTIONS_LOG
 from .lift_feedback import load_recent_feedback
 from .timezone_util import athlete_tz_name
-from .wger_client import WgerClient
+from .hevy_client import HevyClient, parse_ts, kg_to_lb, rpe_to_rir
 
 
 def build_lift_payload(
     garmin_client: GarminClientWrapper,
-    wger_client: WgerClient,
+    hevy_client: HevyClient,
     config: AppConfig,
     catalog: list[dict[str, Any]],
     session_type: str,
@@ -67,8 +71,12 @@ def build_lift_payload(
         strip_large_fields(a) for a in collect_history_summaries(garmin_client, week_start, week_end)
     ]
 
-    wger_sessions = wger_client.get_recent_sessions(config.wger_history_sessions)
-    bodyweight_history = wger_client.get_bodyweight_history(since=session_date - timedelta(weeks=8))
+    prescriptions = load_prescriptions(config.report_output_dir)
+    recent_lift_sessions = [
+        normalize_workout(w, prescriptions)
+        for w in hevy_client.get_recent_workouts(config.lift_history_sessions)
+    ]
+    bodyweight_history = hevy_client.get_bodyweight_history(since=session_date - timedelta(weeks=8))
     recent_feedback = load_recent_feedback(config.report_output_dir)
 
     return {
@@ -77,11 +85,90 @@ def build_lift_payload(
         "athlete_context": athlete_context,
         "recent_recovery": recent_recovery,
         "recent_mountain_activity": recent_mountain_activity,
-        "wger_recent_sessions": wger_sessions,
-        "wger_bodyweight_history": bodyweight_history,
+        "recent_lift_sessions": recent_lift_sessions,
+        "bodyweight_history": bodyweight_history,
         "recent_feedback": recent_feedback,
         "exercise_catalog": catalog,
         "flags": {
             "shoulder_flag_active": shoulder_flag,
         },
+    }
+
+
+def load_prescriptions(report_dir: Path) -> list[dict[str, Any]]:
+    """Every prescription save_lift_outputs() has appended, oldest first.
+    A missing file just means nothing has been generated yet; an unreadable
+    line is skipped rather than failing the whole generation."""
+    path = report_dir / PRESCRIPTIONS_LOG
+    if not path.exists():
+        return []
+    out = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        try:
+            out.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue
+    return out
+
+
+def _prescription_for(
+    workout: dict[str, Any], prescriptions: list[dict[str, Any]]
+) -> dict[str, Any] | None:
+    """The coach's prescription this workout was started from: the latest
+    one written to the same (reused) routine before the workout began."""
+    routine_id = workout.get("routine_id")
+    started = parse_ts(workout.get("start_time"))
+    if not routine_id or started is None:
+        return None
+    match = None
+    for p in prescriptions:
+        generated = datetime.fromisoformat(p["generated_at"])
+        if p.get("routine_id") == routine_id and generated <= started:
+            match = p
+    return match
+
+
+def normalize_workout(
+    workout: dict[str, Any], prescriptions: list[dict[str, Any]]
+) -> dict[str, Any]:
+    """One logged Hevy workout, in the athlete's units (lb, RIR), with each
+    exercise's prescribed target attached when it came from the coach."""
+    prescription = _prescription_for(workout, prescriptions)
+    targets = {
+        ex["exercise_id"]: ex for ex in (prescription or {}).get("exercises", [])
+    }
+    exercises = []
+    for ex in workout.get("exercises", []):
+        target = targets.get(ex.get("exercise_template_id"))
+        exercises.append(
+            {
+                "exercise_name": ex.get("title"),
+                "exercise_id": ex.get("exercise_template_id"),
+                "athlete_notes": ex.get("notes") or None,
+                "prescribed": None
+                if target is None
+                else {
+                    k: target.get(k)
+                    for k in ("sets", "reps", "duration_seconds", "weight_lb", "rir_target")
+                },
+                "sets": [
+                    {
+                        "set_type": st.get("type"),
+                        "weight_lb": kg_to_lb(st["weight_kg"]) if st.get("weight_kg") is not None else None,
+                        "reps": st.get("reps"),
+                        "duration_seconds": st.get("duration_seconds"),
+                        "rpe": st.get("rpe"),
+                        "rir": rpe_to_rir(st.get("rpe")),
+                    }
+                    for st in ex.get("sets", [])
+                ],
+            }
+        )
+    return {
+        "date": (workout.get("start_time") or "")[:10],
+        "title": workout.get("title"),
+        "from_coach_prescription": prescription is not None,
+        "prescribed_session_type": (prescription or {}).get("session_type"),
+        "athlete_notes": workout.get("description") or None,
+        "exercises": exercises,
     }

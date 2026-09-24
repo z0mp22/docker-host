@@ -1,5 +1,6 @@
 """Save reports and send email notifications."""
 
+import dataclasses
 import json
 import smtplib
 import sys
@@ -164,16 +165,26 @@ def send_report_email(config: AppConfig, report_date: date, markdown_content: st
         raise EmailError(f"Failed to send report email: {exc}") from exc
 
 
+PRESCRIPTIONS_LOG = "lift_prescriptions.jsonl"
+
+
 def save_lift_outputs(
     config: AppConfig,
     session_date: date,
     plan: "SessionPlanResponse",
     model_meta: dict[str, Any],
-    wger_routine_id: int | None,
+    routine_id: str | None,
+    session_type: str | None = None,
 ) -> Path:
-    """Write the lift-session markdown summary + metadata JSON, and refresh the
+    """Write the lift-session markdown summary + metadata JSON, refresh the
     fixed-name lift_session_latest.json that run-lift-session.sh copies to the
-    Home Assistant config dir for the command_line sensor to read."""
+    Home Assistant config dir for the command_line sensor to read, and append
+    the full structured prescription to lift_prescriptions.jsonl.
+
+    That append-only log is the only lasting record of what was prescribed:
+    Hevy's single reused routine is overwritten on every generation, so
+    lift_collector.py joins logged workouts back to these entries to give the
+    coach prescribed-vs-actual."""
     config.report_output_dir.mkdir(parents=True, exist_ok=True)
     stamp = session_date.isoformat()
     base = config.report_output_dir / f"lift-session-{stamp}"
@@ -188,7 +199,8 @@ def save_lift_outputs(
         "summary_text": plan.summary_text,
         "exercise_count": len(plan.exercises),
         "flags_considered": plan.flags_considered,
-        "wger_routine_id": wger_routine_id,
+        "session_type": session_type,
+        "routine_id": routine_id,
         **model_meta,
     }
     meta_path = base.with_suffix(".meta.json")
@@ -199,9 +211,19 @@ def save_lift_outputs(
     latest_path = config.report_output_dir / "lift_session_latest.json"
     latest_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
 
+    prescription = {
+        "generated_at": meta["generated_at"],
+        "session_date": stamp,
+        "session_type": session_type,
+        "routine_id": routine_id,
+        "exercises": [dataclasses.asdict(ex) for ex in plan.exercises],
+    }
+    with (config.report_output_dir / PRESCRIPTIONS_LOG).open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(prescription) + "\n")
+
     log_line = (
         f"[lift-session] {stamp} model={model_meta.get('model')} "
-        f"exercises={len(plan.exercises)} routine_id={wger_routine_id}"
+        f"exercises={len(plan.exercises)} routine_id={routine_id}"
     )
     print(log_line, file=sys.stderr)
 

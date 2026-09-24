@@ -27,15 +27,15 @@ class EmailError(CoachingReportError):
     """Failed to send email notification."""
 
 
-class WgerError(CoachingReportError):
-    """Failed to read from or write to the self-hosted wger instance."""
+class HevyError(CoachingReportError):
+    """Failed to read from or write to the Hevy API."""
 
 
-class UnknownExerciseError(WgerError):
-    """Claude proposed an exercise_id that isn't in the fetched wger catalog."""
+class UnknownExerciseError(HevyError):
+    """Claude proposed an exercise_id that isn't in the fetched Hevy catalog."""
 
 
-class UnsafeExerciseError(WgerError):
+class UnsafeExerciseError(HevyError):
     """Claude proposed an exercise matching the hard safety exclude-list.
 
     Raised instead of silently dropping/substituting the exercise -- the whole

@@ -1,15 +1,15 @@
 name: Run Lift Session
 
 # On-demand trigger for one autoregulated lifting session, written to the
-# self-hosted wger instance. Session-by-session, not a weekly batch -- no
+# "Next Lift Session" routine in Hevy. Session-by-session, not a weekly batch -- no
 # cron here, fired at variable timing from Home Assistant (or manually).
 #   session_type=heavy_1h|light_30m|shoulder_pt -> which of the three the
 #     athlete asked for (see prompts/lift_system.md)
 #   shoulder_flag=true -> the athlete has flagged the shoulder/soreness this session
 #   feedback_only=true + feedback_text="..." -> append to the persistent
-#     feedback log only; no Garmin/wger/Claude call at all
+#     feedback log only; no Garmin/Hevy/Claude call at all
 #   dry_run=true -> resolve the payload + print the safety-guard's
-#     banned-exercise list only; no Claude call, no wger write
+#     banned-exercise list only; no Claude call, no Hevy write
 on:
   workflow_dispatch:
     inputs:
@@ -31,7 +31,7 @@ on:
         type: string
         default: ""
       dry_run:
-        description: "Validate the payload + safety guard only (no Claude call, no wger write)"
+        description: "Validate the payload + safety guard only (no Claude call, no Hevy write)"
         type: boolean
         default: false
 

@@ -21,34 +21,33 @@ from pydantic import BaseModel, Field, field_validator
 from .errors import LiftPlanError
 from .prompts import lift_prompt_version, load_lift_prompt
 
-# wger's rir-config endpoint (POST /api/v2/rir-config/) only accepts these
-# exact half-step values -- confirmed from a live 400 response: "5.0 is not
-# a valid RiR option: [None, 0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5]". Claude
-# has no code-level ceiling on rir_target today, and the prompt's "generous
-# RIR" guidance for light/PT sessions is exactly the case that produced 5.0
-# in practice -- same "prompt instruction backed by a hard code check"
-# posture as lift_safety.py's banned-exercise check.
-VALID_RIR_TARGETS = {None, 0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5}
+# Only RIR targets the athlete can actually log back in Hevy -- Hevy records
+# effort as RPE on a fixed picker (6, 7, 7.5, 8, 8.5, 9, 9.5, 10), so RIR
+# 3.5 or 5 has no loggable equivalent and would make prescribed-vs-actual
+# impossible to compare. Mirrors hevy_client.RIR_TO_RPE. Same "prompt
+# instruction backed by a hard code check" posture as lift_safety.py.
+VALID_RIR_TARGETS = {None, 0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 4.0}
 
 
 class ExercisePrescriptionSchema(BaseModel):
-    exercise_id: int
+    exercise_id: str
     exercise_name: str
     slot_order: int
     superset_group: int | None = None
     sets: int
     reps: int | None = None
-    weight_kg: float | None = None
+    duration_seconds: int | None = None
+    weight_lb: float | None = None
     rir_target: float | None = None
     rest_seconds: int | None = None
     notes: str | None = None
 
     @field_validator("rir_target")
     @classmethod
-    def _rir_target_must_be_wger_valid(cls, v: float | None) -> float | None:
+    def _rir_target_must_be_loggable(cls, v: float | None) -> float | None:
         if v not in VALID_RIR_TARGETS:
             raise ValueError(
-                f"rir_target={v!r} is not a value wger's rir-config endpoint accepts "
+                f"rir_target={v!r} has no loggable Hevy RPE equivalent "
                 f"(valid: {sorted(t for t in VALID_RIR_TARGETS if t is not None)}, or null)"
             )
         return v
@@ -62,19 +61,20 @@ class SessionPlanSchema(BaseModel):
     summary_text: str
 
 
-# Plain dataclasses used everywhere downstream (wger_client.py, emailer.py,
+# Plain dataclasses used everywhere downstream (hevy_client.py, emailer.py,
 # lift_main.py, lift_safety.py) instead of the pydantic schema types above,
 # so the pydantic dependency stays scoped to this one module's job: validating
 # Claude's response. Field names deliberately mirror the schema 1:1.
 @dataclass
 class ExercisePrescription:
-    exercise_id: int
+    exercise_id: str
     exercise_name: str
     slot_order: int
     superset_group: int | None
     sets: int
     reps: int | None
-    weight_kg: float | None
+    duration_seconds: int | None
+    weight_lb: float | None
     rir_target: float | None
     rest_seconds: int | None
     notes: str | None

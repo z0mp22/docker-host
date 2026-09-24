@@ -146,5 +146,6 @@
       - summary_text
       - exercise_count
       - flags_considered
-      - wger_routine_id
+      - routine_id
+      - session_type
       - model

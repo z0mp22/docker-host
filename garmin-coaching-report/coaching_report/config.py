@@ -32,9 +32,9 @@ class AppConfig:
     fatsecret_consumer_key: str
     fatsecret_consumer_secret: str
     fatsecret_token_path: str
-    wger_url: str
-    wger_api_token: str
-    wger_history_sessions: int
+    hevy_api_key: str
+    hevy_routine_title: str
+    lift_history_sessions: int
 
 
 def load_app_config() -> AppConfig:
@@ -80,7 +80,8 @@ def load_app_config() -> AppConfig:
         fatsecret_token_path=os.environ.get(
             "FATSECRET_TOKEN_PATH", "/root/.fatsecret/token.json"
         ),
-        wger_url=os.environ.get("WGER_URL", "").strip().rstrip("/"),
-        wger_api_token=os.environ.get("WGER_API_TOKEN", "").strip(),
-        wger_history_sessions=int(os.environ.get("WGER_HISTORY_SESSIONS", "6")),
+        hevy_api_key=os.environ.get("HEVY_API_KEY", "").strip(),
+        hevy_routine_title=os.environ.get("HEVY_ROUTINE_TITLE", "").strip()
+        or "Next Lift Session",
+        lift_history_sessions=int(os.environ.get("LIFT_HISTORY_SESSIONS", "6")),
     )

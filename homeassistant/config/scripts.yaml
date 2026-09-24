@@ -98,7 +98,7 @@ lift_session_run_heavy:
           {% if dispatch is not defined %}
             Could not reach the GitHub API (network error). Nothing was dispatched.
           {% elif dispatch.status == 204 %}
-            GitHub Actions accepted the run. The wger routine should land in a
+            GitHub Actions accepted the run. "Next Lift Session" in Hevy updates in a
             few minutes -- you'll get a push once it's ready.
           {% else %}
             GitHub rejected the request — HTTP {{ dispatch.status }}.
@@ -124,7 +124,7 @@ lift_session_run_light:
           {% if dispatch is not defined %}
             Could not reach the GitHub API (network error). Nothing was dispatched.
           {% elif dispatch.status == 204 %}
-            GitHub Actions accepted the run. The wger routine should land in a
+            GitHub Actions accepted the run. "Next Lift Session" in Hevy updates in a
             few minutes -- you'll get a push once it's ready.
           {% else %}
             GitHub rejected the request — HTTP {{ dispatch.status }}.
@@ -150,7 +150,7 @@ lift_session_run_pt:
           {% if dispatch is not defined %}
             Could not reach the GitHub API (network error). Nothing was dispatched.
           {% elif dispatch.status == 204 %}
-            GitHub Actions accepted the run. The wger routine should land in a
+            GitHub Actions accepted the run. "Next Lift Session" in Hevy updates in a
             few minutes -- you'll get a push once it's ready.
           {% else %}
             GitHub rejected the request — HTTP {{ dispatch.status }}.

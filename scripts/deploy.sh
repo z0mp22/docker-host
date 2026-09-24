@@ -240,6 +240,18 @@ deploy_garmin_coaching_report() {
 }
 
 deploy_wger() {
+  # Parked 2026-09-24: the lift coach moved to Hevy (docs/decisions/0003).
+  # Containers are stopped, not removed -- data in ${DEPLOY_ROOT}/wger/ is
+  # kept for failback. Set WGER_ENABLED=1 (and revert the lift-coach code to
+  # tag lift-wger-final) to bring it back.
+  if [ "${WGER_ENABLED:-0}" != "1" ]; then
+    log "wger disabled (WGER_ENABLED!=1) -- stopping stack, keeping data"
+    sudo rm -f /etc/cron.d/wger-powersync-compact
+    if [ -f "${DEPLOY_ROOT}/wger/docker-compose.yml" ]; then
+      (cd "${DEPLOY_ROOT}/wger" && docker compose stop) || log "WARN: wger stop failed"
+    fi
+    return 0
+  fi
   log "deploying wger"
   sync_exporter_stack "wger"
   preserve_env_file "wger"

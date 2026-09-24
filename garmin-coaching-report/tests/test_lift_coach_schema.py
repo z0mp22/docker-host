@@ -2,7 +2,7 @@
 calls -- the live Anthropic call itself (client.messages.parse) is exercised
 against the real API in the staged verification plan, not here; this layer
 only tests that a malformed/incomplete response is rejected before it could
-ever reach the safety guard or a wger write.
+ever reach the safety guard or a Hevy write.
 """
 
 import pytest
@@ -14,15 +14,15 @@ VALID = {
     "session_date": "2026-09-19",
     "rationale": "Pulling volume progressed cleanly last session; shoulder flagged this week so no pressing.",
     "flags_considered": ["shoulder_flag_active"],
-    "summary_text": "# Pull day\n- Barbell Row 3x8 @ 60kg",
+    "summary_text": "# Pull day\n- Barbell Row 3x8 @ 135 lb",
     "exercises": [
         {
-            "exercise_id": 10,
-            "exercise_name": "Barbell Row",
+            "exercise_id": "55E6546F",
+            "exercise_name": "Bent Over Row (Barbell)",
             "slot_order": 1,
             "sets": 3,
             "reps": 8,
-            "weight_kg": 60.0,
+            "weight_lb": 135.0,
             "rir_target": 2.0,
             "rest_seconds": 90,
         }
@@ -36,7 +36,9 @@ def test_valid_plan_parses_into_dataclasses():
     assert plan.session_date == "2026-09-19"
     assert plan.flags_considered == ["shoulder_flag_active"]
     assert len(plan.exercises) == 1
-    assert plan.exercises[0].exercise_id == 10
+    assert plan.exercises[0].exercise_id == "55E6546F"
+    assert plan.exercises[0].weight_lb == 135.0
+    assert plan.exercises[0].duration_seconds is None
     assert plan.exercises[0].superset_group is None  # optional field defaults correctly
 
 
@@ -49,7 +51,7 @@ def test_missing_required_field_rejected():
 def test_wrong_type_rejected():
     bad = {
         **VALID,
-        "exercises": [{**VALID["exercises"][0], "exercise_id": "not-a-number"}],
+        "exercises": [{**VALID["exercises"][0], "exercise_id": ["not", "a", "string"]}],
     }
     with pytest.raises(ValidationError):
         SessionPlanSchema.model_validate(bad)
@@ -71,27 +73,55 @@ def test_empty_exercise_list_is_schema_valid():
     assert schema.exercises == []
 
 
-def test_rir_target_above_wgers_max_rejected():
-    """Reproduces a live failure: Claude proposed rir_target=5.0 for a
-    generous-RIR light/PT session, and wger's rir-config endpoint 400'd
-    ("5.0 is not a valid RiR option") only after the plan was already
-    approved and partially written. This must be caught at schema-parse
-    time instead, before any wger write is attempted."""
+def test_rir_target_above_loggable_max_rejected():
+    """Reproduces a live failure from the wger era: Claude proposed
+    rir_target=5.0 for a generous-RIR light/PT session. Hevy's lowest
+    loggable RPE is 6 (= RIR 4), so 5.0 must still be caught at schema-parse
+    time, before any Hevy write is attempted."""
     bad = {**VALID, "exercises": [{**VALID["exercises"][0], "rir_target": 5.0}]}
     with pytest.raises(ValidationError):
         SessionPlanSchema.model_validate(bad)
 
 
 def test_rir_target_off_step_rejected():
-    """wger's steps are 0.5 apart -- 2.25 isn't one of them."""
+    """2.25 maps to no RPE step Hevy can log."""
     bad = {**VALID, "exercises": [{**VALID["exercises"][0], "rir_target": 2.25}]}
     with pytest.raises(ValidationError):
         SessionPlanSchema.model_validate(bad)
 
 
 def test_rir_target_null_still_allowed():
-    """None is a valid wger RiR value (no target set) -- the new validator
-    must not reject it."""
+    """None (no target set) must not be rejected."""
     ok = {**VALID, "exercises": [{**VALID["exercises"][0], "rir_target": None}]}
     schema = SessionPlanSchema.model_validate(ok)
     assert schema.exercises[0].rir_target is None
+
+
+def test_rir_3_5_rejected_because_hevy_cannot_log_rpe_6_5():
+    """Hevy's RPE picker jumps 6 -> 7, so RIR 3.5 could never be compared
+    against what the athlete logs."""
+    bad = {**VALID, "exercises": [{**VALID["exercises"][0], "rir_target": 3.5}]}
+    with pytest.raises(ValidationError):
+        SessionPlanSchema.model_validate(bad)
+
+
+@pytest.mark.parametrize("rir", [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 4.0])
+def test_every_loggable_rir_accepted(rir):
+    from coaching_report.hevy_client import RIR_TO_RPE
+
+    ok = {**VALID, "exercises": [{**VALID["exercises"][0], "rir_target": rir}]}
+    SessionPlanSchema.model_validate(ok)
+    assert rir in RIR_TO_RPE  # schema and client mapping must agree
+
+
+def test_duration_hold_parses():
+    hold = {
+        **VALID["exercises"][0],
+        "exercise_id": "DEADHANG",
+        "exercise_name": "Dead Hang",
+        "reps": None,
+        "weight_lb": None,
+        "duration_seconds": 30,
+    }
+    plan = _to_response(SessionPlanSchema.model_validate({**VALID, "exercises": [hold]}))
+    assert plan.exercises[0].duration_seconds == 30
