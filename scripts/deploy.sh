@@ -213,7 +213,6 @@ deploy_exporters() {
   )
 
   deploy_garmin_coaching_report
-  deploy_wger
 }
 
 deploy_garmin_coaching_report() {
@@ -239,37 +238,6 @@ deploy_garmin_coaching_report() {
   )
 }
 
-deploy_wger() {
-  # Parked 2026-09-24: the lift coach moved to Hevy (docs/decisions/0003).
-  # Containers are stopped, not removed -- data in ${DEPLOY_ROOT}/wger/ is
-  # kept for failback. Set WGER_ENABLED=1 (and revert the lift-coach code to
-  # tag lift-wger-final) to bring it back.
-  if [ "${WGER_ENABLED:-0}" != "1" ]; then
-    log "wger disabled (WGER_ENABLED!=1) -- stopping stack, keeping data"
-    sudo rm -f /etc/cron.d/wger-powersync-compact
-    if [ -f "${DEPLOY_ROOT}/wger/docker-compose.yml" ]; then
-      (cd "${DEPLOY_ROOT}/wger" && docker compose stop) || log "WARN: wger stop failed"
-    fi
-    return 0
-  fi
-  log "deploying wger"
-  sync_exporter_stack "wger"
-  preserve_env_file "wger"
-  # wger's runtime user is uid/gid 1000 -- bind-mounted dirs must be owned
-  # accordingly or migrations/writes fail on first boot.
-  sudo mkdir -p "${DEPLOY_ROOT}/wger/data" "${DEPLOY_ROOT}/wger/static" "${DEPLOY_ROOT}/wger/media"
-  sudo chown -R 1000:1000 "${DEPLOY_ROOT}/wger/data" "${DEPLOY_ROOT}/wger/static" "${DEPLOY_ROOT}/wger/media"
-  # Postgres's own entrypoint chowns an empty PGDATA dir to its runtime user
-  # on first start (runs as root, then drops privilege) -- just needs to exist.
-  sudo mkdir -p "${DEPLOY_ROOT}/wger/postgres-data"
-  install_file "${REPO_ROOT}/wger/cron/wger-powersync-compact" \
-    "/etc/cron.d/wger-powersync-compact" 644
-  (
-    cd "${DEPLOY_ROOT}/wger"
-    [ "${PULL_IMAGES:-0}" = "1" ] && docker compose pull
-    docker compose up -d
-  )
-}
 
 restart_homeassistant_if_running() {
   if docker ps -a --format '{{.Names}}' | grep -qx 'homeassistant'; then
@@ -341,11 +309,10 @@ main() {
   sync_homeassistant
   sync_mosquitto
   sync_npm_custom
-  for svc in node-exporter pihole-exporter npm-exporter npm-metrics-exporter unifi-poller garmin-coaching-report wger; do
+  for svc in node-exporter pihole-exporter npm-exporter npm-metrics-exporter unifi-poller garmin-coaching-report; do
     sync_exporter_stack "${svc}"
   done
   preserve_env_file "pihole-exporter"
-  preserve_env_file "wger"
   preserve_up_conf
   cleanup_compose_artifacts
   migrate_legacy_main_stack

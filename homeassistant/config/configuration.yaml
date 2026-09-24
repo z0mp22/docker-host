@@ -168,7 +168,7 @@ rest_command:
       {"ref":"main","inputs":{"session_type":"shoulder_pt","shoulder_flag":"{{ 'true' if is_state('input_boolean.lift_shoulder_flag','on') else 'false' }}","dry_run":"false"}}
     timeout: 30
   # Feedback-only dispatch: appends to the persistent coaching-feedback log
-  # (see coaching_report/lift_feedback.py) -- no Claude call, no wger write.
+  # (see coaching_report/lift_feedback.py) -- no Claude call, no Hevy write.
   lift_feedback_dispatch:
     url: "https://api.github.com/repos/z0mp22/docker-host/actions/workflows/run-lift-session.yml/dispatches"
     method: post

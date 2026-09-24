@@ -1,6 +1,6 @@
 # ADR 0003: Lift coach moves from self-hosted wger to Hevy
 
-- **Status:** Accepted
+- **Status:** Accepted — wger fully removed 2026-09-24
 - **Date:** 2026-09-24
 - **Deciders:** Cody
 - **Tags:** garmin-coaching-report, lift-session, hevy, wger
@@ -37,19 +37,12 @@ polished app, with a public REST API for Hevy Pro accounts (annual plan
 5. **Mountain report:** `strength_training_log` is now sourced from Hevy.
    It stays best-effort: an outage or a lapsed Pro subscription drops the
    section instead of failing the report.
-6. **wger is parked, not removed.** `deploy.sh:deploy_wger` stops the stack
-   unless `WGER_ENABLED=1`, and the PowerSync compaction cron is removed.
-   Containers, `/docker/wger/*` data (Postgres ≈ 128 MB), `wger/` compose
-   config and the `WGER_*` lines in the host `.env` are all kept.
-
-## Failback to wger
-
-1. `git revert` the Hevy migration commit(s), or restore the lift-coach
-   files from tag `lift-wger-final`.
-2. Deploy with `WGER_ENABLED=1` (export it in the deploy workflow env, or
-   run `WGER_ENABLED=1 scripts/deploy.sh` on the host).
-   `cd /docker/wger && docker compose start` alone brings the old data back
-   up immediately.
+6. **wger is removed.** At first it was parked (stopped, data kept) for
+   failback. After the first real Hevy session the athlete confirmed there's
+   no going back, so the same day the stack was deleted: containers, images,
+   `/docker/wger` data, the `wger/` directory in this repo, `deploy.sh`
+   wiring, the `WGER_*` env vars and the `lift-wger-final` tag. The old code
+   is only in git history, before this ADR's commits.
 
 ## Consequences
 

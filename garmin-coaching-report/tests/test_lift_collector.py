@@ -230,4 +230,4 @@ def test_save_lift_outputs_snapshot_round_trips_into_the_join(tmp_path):
     assert entries[0]["exercises"][0]["weight_lb"] == 135.0
 
     latest = json.loads((tmp_path / "lift_session_latest.json").read_text())
-    assert latest["routine_id"] == "r-1" and "wger_routine_id" not in latest
+    assert latest["routine_id"] == "r-1"

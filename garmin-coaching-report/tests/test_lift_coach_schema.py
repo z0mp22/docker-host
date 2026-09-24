@@ -74,8 +74,8 @@ def test_empty_exercise_list_is_schema_valid():
 
 
 def test_rir_target_above_loggable_max_rejected():
-    """Reproduces a live failure from the wger era: Claude proposed
-    rir_target=5.0 for a generous-RIR light/PT session. Hevy's lowest
+    """Reproduces a real failure: Claude once proposed rir_target=5.0 for
+    a generous-RIR light/PT session. Hevy's lowest
     loggable RPE is 6 (= RIR 4), so 5.0 must still be caught at schema-parse
     time, before any Hevy write is attempted."""
     bad = {**VALID, "exercises": [{**VALID["exercises"][0], "rir_target": 5.0}]}

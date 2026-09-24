@@ -14,10 +14,9 @@ fi
 
 # Build docker args. Forward window / dry-run controls ONLY when the caller set
 # them, so cron (which sets none) produces byte-identical args to before.
-# --network docker_default (same as run-lift-session.sh): originally so the
-# container could reach self-hosted wger; strength data now comes from Hevy
-# over the internet, so it's no longer required, but kept so a wger failback
-# (see docs/decisions/0003) needs no change here.
+# --network docker_default: same network as run-lift-session.sh. Every data
+# source (Garmin, Hevy, FatSecret, Anthropic, Gmail) is reached over the
+# internet, so nothing here depends on another container.
 args=(run --rm --network docker_default --env-file /docker/garmin-coaching-report/.env)
 if [ -n "${SINCE:-}" ];   then args+=(-e "SINCE=${SINCE}"); fi
 if [ -n "${THROUGH:-}" ]; then args+=(-e "THROUGH=${THROUGH}"); fi
