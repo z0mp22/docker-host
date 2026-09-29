@@ -79,7 +79,7 @@ lovelace:
       mode: yaml
       title: Coaching
       icon: mdi:dumbbell
-      show_in_sidebar: true
+      show_in_sidebar: false
       filename: dashboards/coaching.yaml
     lovelace-network:
       mode: yaml
@@ -294,8 +294,14 @@ input_text:
     name: "Irrigation plan"
     icon: mdi:sprinkler-variant
     max: 255
+  # Coach panel's last lift/report request (JSON: type/window + epoch), so every
+  # device can show "Generating…" until sensor.lift_session_latest catches up.
+  coach_panel_state:
+    name: "Coach panel state"
+    icon: mdi:dumbbell
+    max: 255
 
-# Served from www/irrigation/ (synced by scripts/deploy.sh). Bump ?v= when the file
+# Served from www/<name>/ (synced by scripts/deploy.sh). Bump ?v= when a file
 # changes so the companion app doesn't keep a cached copy.
 panel_custom:
   - name: irrigation-panel
@@ -303,6 +309,11 @@ panel_custom:
     sidebar_title: Irrigation
     sidebar_icon: mdi:sprinkler-variant
     module_url: /local/irrigation/irrigation-panel.js?v=1
+  - name: coach-panel
+    url_path: coach
+    sidebar_title: Coaching
+    sidebar_icon: mdi:dumbbell
+    module_url: /local/coach/coach-panel.js?v=1
 
 automation: !include automations.yaml
 script: !include scripts.yaml
