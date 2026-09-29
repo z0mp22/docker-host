@@ -117,7 +117,7 @@ remove_legacy_container() {
 }
 
 migrate_legacy_main_stack() {
-  for name in homeassistant mosquitto npm pihole portainer; do
+  for name in homeassistant mosquitto npm pihole; do
     remove_legacy_container "${name}"
   done
 }
@@ -134,7 +134,7 @@ cleanup_compose_artifacts() {
     [ -z "${name}" ] && continue
     log "removing stale compose artifact ${name}"
     docker rm -f "${name}" || true
-  done < <(docker ps -a --format '{{.Names}}' | grep -E '_npm$|_mosquitto$|_portainer$|_pihole$' || true)
+  done < <(docker ps -a --format '{{.Names}}' | grep -E '_npm$|_mosquitto$|_pihole$' || true)
 }
 
 seed_host_env() {

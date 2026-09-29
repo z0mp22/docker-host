@@ -14,12 +14,11 @@ homeassistant/config/secrets.yaml
 **/*.db
 **/.cloud/
 
-# Pi-hole / NPM / Portainer runtime data
+# Pi-hole / NPM runtime data
 **/etc-pihole/
 **/etc-dnsmasq.d/
 npm/data/
 pihole/
-portainer/
 mosquitto/data/
 mosquitto/log/
 

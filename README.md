@@ -12,7 +12,6 @@ Push to `main` → GitHub Actions deploys to `/docker` on the Pi via a self-host
 | Mosquitto (MQTT) | 1883 | `mosquitto/config/` |
 | Nginx Proxy Manager | 80, 81, 443 | `docker-compose.yml` + `npm/nginx/custom/` |
 | Pi-hole | 53, 8053 | `docker-compose.yml` |
-| Portainer CE | 9000 | `docker-compose.yml` |
 | node-exporter | 9100 | `node-exporter/` |
 | pihole-exporter | 9617 | `pihole-exporter/` |
 | npm-exporter | 9113 | `npm-exporter/` |
@@ -46,7 +45,6 @@ Set `PULL_IMAGES=1` to pull latest images (optional; off by default to avoid mic
 | `/docker/garmin-coaching-report/reports/` | Coaching reports + debug JSON |
 | `/docker/npm/data/` | NPM proxy hosts + SSL (managed in NPM UI) |
 | `/docker/pihole/etc-pihole/` | Pi-hole gravity/lists |
-| `/docker/portainer/` | Portainer DB |
 
 Copy from `*.example` on first deploy if missing.
 
@@ -94,7 +92,7 @@ docker-host/
 ├── scripts/               # deploy.sh, validate.sh, plex-mqtt-bridge.sh
 ├── cron/                  # host cron snippets (plex-mqtt-bridge)
 ├── runner/                # self-hosted runner helper
-├── docker-compose.yml     # HA, mosquitto, npm, pihole, portainer
+├── docker-compose.yml     # HA, mosquitto, npm, pihole
 ├── homeassistant/config/  # YAML config (replaces czampino/homeassistant)
 ├── mosquitto/config/
 ├── npm/nginx/custom/

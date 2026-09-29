@@ -63,18 +63,6 @@ services:
     networks:
       - docker_default
 
-  portainer:
-    container_name: portainer
-    image: portainer/portainer-ce:latest
-    restart: unless-stopped
-    ports:
-      - "9000:9000"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - /docker/portainer:/data
-    networks:
-      - docker_default
-
 networks:
   mqtt_network:
     external: true
