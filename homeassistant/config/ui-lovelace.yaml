@@ -1,0 +1,107 @@
+title: Overview
+theme: RedditMushroom
+views:
+  - title: Overview
+    path: default_view
+    icon: mdi:view-dashboard
+    theme: RedditMushroom
+    cards:
+      - type: vertical-stack
+        cards:
+          - type: custom:mushroom-title-card
+            title: Bedroom
+
+          - type: custom:mushroom-entity-card
+            entity: switch.master_bed_lamp
+            name: Bedroom Light
+            icon: mdi:lightbulb
+            layout: horizontal
+            tap_action:
+              action: toggle
+
+          - type: custom:mushroom-chips-card
+            alignment: center
+            chips:
+              - type: template
+                icon: mdi:thermometer
+                content: "{{ states('sensor.tp358s_1c99_temperature') }}°F"
+              - type: template
+                icon: mdi:water-percent
+                content: "{{ states('sensor.tp358s_1c99_humidity') }}% humidity"
+
+      - type: vertical-stack
+        cards:
+          - type: custom:mushroom-title-card
+            title: Lights & switches
+            subtitle: Everything you can flip on or off
+
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-light-card
+                entity: light.basement
+                name: Basement Light
+                icon: mdi:lightbulb
+                layout: vertical
+
+              - type: custom:mushroom-entity-card
+                entity: switch.office_desk_light
+                name: Office Desk Light
+                icon: mdi:desk-lamp
+                layout: vertical
+                tap_action:
+                  action: toggle
+
+              - type: custom:mushroom-entity-card
+                entity: switch.front_door_light_shelly_1
+                name: Front Door Light
+                icon: mdi:door-sliding
+                layout: vertical
+                tap_action:
+                  action: toggle
+
+              - type: custom:mushroom-entity-card
+                entity: switch.front_lights_shelly_1_plus
+                name: Outdoor Garage Lights
+                icon: mdi:garage
+                layout: vertical
+                tap_action:
+                  action: toggle
+
+              - type: custom:mushroom-entity-card
+                entity: switch.whole_house_fan_switch_1
+                name: Whole House Fan
+                icon: mdi:fan
+                layout: vertical
+                tap_action:
+                  action: toggle
+
+      - type: vertical-stack
+        cards:
+          - type: custom:mushroom-title-card
+            title: Media & irrigation
+
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-template-card
+                primary: Now Playing
+                secondary: "{{ states('sensor.living_room_now_playing') }}"
+                icon: mdi:play-circle
+                entity: sensor.living_room_now_playing
+                tap_action:
+                  action: navigate
+                  navigation_path: /lovelace-roku/roku
+
+              - type: custom:mushroom-entity-card
+                entity: switch.opensprinkler_enabled
+                name: Irrigation System
+                icon: mdi:sprinkler
+                layout: vertical
+                tap_action:
+                  action: toggle
+                double_tap_action:
+                  action: navigate
+                  navigation_path: /lovelace-life/life
