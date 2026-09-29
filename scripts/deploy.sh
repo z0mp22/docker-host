@@ -48,6 +48,11 @@ sync_homeassistant() {
     --exclude 'www/' \
     "${REPO_ROOT}/homeassistant/config/" "${DEPLOY_ROOT}/homeassistant/"
 
+  # www/ is HACS-managed on the host, so only repo-owned subdirectories are synced.
+  mkdir -p "${DEPLOY_ROOT}/homeassistant/www/irrigation"
+  rsync -a --delete "${REPO_ROOT}/homeassistant/config/www/irrigation/" \
+    "${DEPLOY_ROOT}/homeassistant/www/irrigation/"
+
   if [ ! -f "${DEPLOY_ROOT}/homeassistant/secrets.yaml" ]; then
     if [ -f "${REPO_ROOT}/homeassistant/config/secrets.yaml.example" ]; then
       cp "${REPO_ROOT}/homeassistant/config/secrets.yaml.example" \

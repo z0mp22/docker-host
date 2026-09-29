@@ -43,7 +43,7 @@ lovelace:
       mode: yaml
       title: Yard
       icon: mdi:sprinkler
-      show_in_sidebar: true
+      show_in_sidebar: false
       filename: dashboards/life.yaml
     lovelace-security:
       mode: yaml
@@ -288,6 +288,21 @@ input_text:
     name: "Coach feedback"
     icon: mdi:comment-text-outline
     max: 255
+  # Manual-run plan for the Irrigation panel (per-zone minutes + selected zones, JSON),
+  # kept in HA so it's shared between the phone app and any other screen.
+  irrigation_plan:
+    name: "Irrigation plan"
+    icon: mdi:sprinkler-variant
+    max: 255
+
+# Served from www/irrigation/ (synced by scripts/deploy.sh). Bump ?v= when the file
+# changes so the companion app doesn't keep a cached copy.
+panel_custom:
+  - name: irrigation-panel
+    url_path: irrigation
+    sidebar_title: Irrigation
+    sidebar_icon: mdi:sprinkler-variant
+    module_url: /local/irrigation/irrigation-panel.js?v=1
 
 automation: !include automations.yaml
 script: !include scripts.yaml

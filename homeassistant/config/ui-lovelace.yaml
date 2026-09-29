@@ -118,4 +118,4 @@ views:
                 entity: sensor.irrigation_next_run
                 tap_action:
                   action: navigate
-                  navigation_path: /lovelace-life/life
+                  navigation_path: /irrigation
