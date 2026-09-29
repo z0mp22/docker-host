@@ -182,6 +182,95 @@ rest_command:
       {"ref":"main","inputs":{"feedback_only":"true","feedback_text":{{ states('input_text.lift_feedback') | tojson }},"dry_run":"false"}}
     timeout: 30
 
+  # Kill each camera's own video encoder entirely via its Dahua/Amcrest CGI
+  # (configManager.cgi) -- independent of Frigate's switch.<cam>_recordings/_detect,
+  # which only tell Frigate to ignore a stream that's still being sent by the camera.
+  # This disables VideoEnable on every encode profile (Main 0-3, Extra 0-2, Snap 0-2),
+  # not just the two subtypes Frigate uses -- so a third-party app/NVR pulling any
+  # other profile directly from the camera also loses video, not just Frigate's feed.
+  # _enable restores the camera's original baseline (Extra[1]/[2] were already off
+  # before this existed -- unused mobile-quality profiles -- so it leaves them off
+  # rather than turning on streams that weren't running before).
+  # Credentials match frigate/config.yml (same cameras, same repo owner's convention
+  # of keeping these in the GitOps config rather than HA's secrets.yaml).
+  # Bambu is a Foscam, not Dahua/Amcrest -- this CGI doesn't apply to it.
+  basement_stream_disable:
+    url: "http://10.0.0.10/cgi-bin/configManager.cgi?action=setConfig&Encode[0].MainFormat[0].VideoEnable=false&Encode[0].MainFormat[1].VideoEnable=false&Encode[0].MainFormat[2].VideoEnable=false&Encode[0].MainFormat[3].VideoEnable=false&Encode[0].ExtraFormat[0].VideoEnable=false&Encode[0].ExtraFormat[1].VideoEnable=false&Encode[0].ExtraFormat[2].VideoEnable=false&Encode[0].SnapFormat[0].VideoEnable=false&Encode[0].SnapFormat[1].VideoEnable=false&Encode[0].SnapFormat[2].VideoEnable=false"
+    method: get
+    authentication: digest
+    username: admin
+    password: !secret camera_admin_password
+    timeout: 10
+  basement_stream_enable:
+    url: "http://10.0.0.10/cgi-bin/configManager.cgi?action=setConfig&Encode[0].MainFormat[0].VideoEnable=true&Encode[0].MainFormat[1].VideoEnable=true&Encode[0].MainFormat[2].VideoEnable=true&Encode[0].MainFormat[3].VideoEnable=true&Encode[0].ExtraFormat[0].VideoEnable=true&Encode[0].ExtraFormat[1].VideoEnable=false&Encode[0].ExtraFormat[2].VideoEnable=false&Encode[0].SnapFormat[0].VideoEnable=true&Encode[0].SnapFormat[1].VideoEnable=true&Encode[0].SnapFormat[2].VideoEnable=true"
+    method: get
+    authentication: digest
+    username: admin
+    password: !secret camera_admin_password
+    timeout: 10
+  garage_stream_disable:
+    url: "http://10.0.0.162/cgi-bin/configManager.cgi?action=setConfig&Encode[0].MainFormat[0].VideoEnable=false&Encode[0].MainFormat[1].VideoEnable=false&Encode[0].MainFormat[2].VideoEnable=false&Encode[0].MainFormat[3].VideoEnable=false&Encode[0].ExtraFormat[0].VideoEnable=false&Encode[0].ExtraFormat[1].VideoEnable=false&Encode[0].ExtraFormat[2].VideoEnable=false&Encode[0].SnapFormat[0].VideoEnable=false&Encode[0].SnapFormat[1].VideoEnable=false&Encode[0].SnapFormat[2].VideoEnable=false"
+    method: get
+    authentication: digest
+    username: admin
+    password: !secret camera_admin_password
+    timeout: 10
+  garage_stream_enable:
+    url: "http://10.0.0.162/cgi-bin/configManager.cgi?action=setConfig&Encode[0].MainFormat[0].VideoEnable=true&Encode[0].MainFormat[1].VideoEnable=true&Encode[0].MainFormat[2].VideoEnable=true&Encode[0].MainFormat[3].VideoEnable=true&Encode[0].ExtraFormat[0].VideoEnable=true&Encode[0].ExtraFormat[1].VideoEnable=false&Encode[0].ExtraFormat[2].VideoEnable=false&Encode[0].SnapFormat[0].VideoEnable=true&Encode[0].SnapFormat[1].VideoEnable=true&Encode[0].SnapFormat[2].VideoEnable=true"
+    method: get
+    authentication: digest
+    username: admin
+    password: !secret camera_admin_password
+    timeout: 10
+  driveway_stream_disable:
+    url: "http://10.0.0.155/cgi-bin/configManager.cgi?action=setConfig&Encode[0].MainFormat[0].VideoEnable=false&Encode[0].MainFormat[1].VideoEnable=false&Encode[0].MainFormat[2].VideoEnable=false&Encode[0].MainFormat[3].VideoEnable=false&Encode[0].ExtraFormat[0].VideoEnable=false&Encode[0].ExtraFormat[1].VideoEnable=false&Encode[0].ExtraFormat[2].VideoEnable=false&Encode[0].SnapFormat[0].VideoEnable=false&Encode[0].SnapFormat[1].VideoEnable=false&Encode[0].SnapFormat[2].VideoEnable=false"
+    method: get
+    authentication: digest
+    username: admin
+    password: !secret camera_admin_password
+    timeout: 10
+  driveway_stream_enable:
+    url: "http://10.0.0.155/cgi-bin/configManager.cgi?action=setConfig&Encode[0].MainFormat[0].VideoEnable=true&Encode[0].MainFormat[1].VideoEnable=true&Encode[0].MainFormat[2].VideoEnable=true&Encode[0].MainFormat[3].VideoEnable=true&Encode[0].ExtraFormat[0].VideoEnable=true&Encode[0].ExtraFormat[1].VideoEnable=false&Encode[0].ExtraFormat[2].VideoEnable=false&Encode[0].SnapFormat[0].VideoEnable=true&Encode[0].SnapFormat[1].VideoEnable=true&Encode[0].SnapFormat[2].VideoEnable=true"
+    method: get
+    authentication: digest
+    username: admin
+    password: !secret camera_admin_password
+    timeout: 10
+
+# Polls each camera's own Encode config to report whether its stream is actually
+# on (used by the template switches in templates.yaml, not shown directly).
+rest:
+  - resource: "http://10.0.0.10/cgi-bin/configManager.cgi?action=getConfig&name=Encode"
+    method: GET
+    authentication: digest
+    username: admin
+    password: !secret camera_admin_password
+    scan_interval: 60
+    binary_sensor:
+      - name: Basement Stream Active
+        unique_id: basement_stream_active
+        value_template: "{{ 'Encode[0].MainFormat[0].VideoEnable=true' in value }}"
+  - resource: "http://10.0.0.162/cgi-bin/configManager.cgi?action=getConfig&name=Encode"
+    method: GET
+    authentication: digest
+    username: admin
+    password: !secret camera_admin_password
+    scan_interval: 60
+    binary_sensor:
+      - name: Garage Stream Active
+        unique_id: garage_stream_active
+        value_template: "{{ 'Encode[0].MainFormat[0].VideoEnable=true' in value }}"
+  - resource: "http://10.0.0.155/cgi-bin/configManager.cgi?action=getConfig&name=Encode"
+    method: GET
+    authentication: digest
+    username: admin
+    password: !secret camera_admin_password
+    scan_interval: 60
+    binary_sensor:
+      - name: Driveway Stream Active
+        unique_id: driveway_stream_active
+        value_template: "{{ 'Encode[0].MainFormat[0].VideoEnable=true' in value }}"
+
 # Lift-session inputs. lift_shoulder_flag: read by all three
 # lift_session_dispatch_* commands at button-press time -- not auto-cleared
 # after a run, since "shoulder's bad this week" is a multi-day state the
