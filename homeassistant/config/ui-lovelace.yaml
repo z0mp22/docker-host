@@ -77,6 +77,16 @@ views:
                 tap_action:
                   action: toggle
 
+          - type: custom:mushroom-chips-card
+            alignment: center
+            chips:
+              - type: template
+                icon: mdi:thermometer
+                content: "Basement {{ states('sensor.tp358s_f429_temperature') }}°F"
+              - type: template
+                icon: mdi:water-percent
+                content: "{{ states('sensor.tp358s_f429_humidity') }}% humidity"
+
       - type: vertical-stack
         cards:
           - type: custom:mushroom-title-card
@@ -95,13 +105,17 @@ views:
                   action: navigate
                   navigation_path: /lovelace-roku/roku
 
-              - type: custom:mushroom-entity-card
-                entity: switch.opensprinkler_enabled
-                name: Irrigation System
-                icon: mdi:sprinkler
-                layout: vertical
+              - type: custom:mushroom-template-card
+                primary: "{{ 'Watering now' if is_state('binary_sensor.front_main_grass_station_running', 'on') or is_state('binary_sensor.front_north_side_grass_station_running', 'on') or is_state('binary_sensor.front_south_side_grass_station_running', 'on') or is_state('binary_sensor.back_mid_grass_station_running', 'on') or is_state('binary_sensor.back_north_grass_station_running', 'on') or is_state('binary_sensor.back_south_grass_station_running', 'on') or is_state('binary_sensor.back_step_wildflower_station_running', 'on') or is_state('binary_sensor.drip_station_running', 'on') else 'Irrigation idle' }}"
+                secondary: "{{ states('sensor.irrigation_next_run') }}"
+                icon: mdi:sprinkler-variant
+                icon_color: >
+                  {% if is_state('binary_sensor.front_main_grass_station_running', 'on') or is_state('binary_sensor.front_north_side_grass_station_running', 'on') or is_state('binary_sensor.front_south_side_grass_station_running', 'on') or is_state('binary_sensor.back_mid_grass_station_running', 'on') or is_state('binary_sensor.back_north_grass_station_running', 'on') or is_state('binary_sensor.back_south_grass_station_running', 'on') or is_state('binary_sensor.back_step_wildflower_station_running', 'on') or is_state('binary_sensor.drip_station_running', 'on') %}
+                  blue
+                  {% else %}
+                  grey
+                  {% endif %}
+                entity: sensor.irrigation_next_run
                 tap_action:
-                  action: toggle
-                double_tap_action:
                   action: navigate
                   navigation_path: /lovelace-life/life
