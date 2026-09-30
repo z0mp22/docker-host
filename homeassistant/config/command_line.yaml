@@ -149,3 +149,31 @@
       - routine_id
       - session_type
       - model
+
+# Internet latency for the Network panel, measured from the Pi itself so it works
+# even when UniFi data doesn't. Prints {"avg": <ms or null>, "loss": <percent>};
+# the sensor goes unavailable (not 0 ms) when nothing answers.
+- sensor:
+    name: Internet latency Cloudflare
+    unique_id: net_latency_cloudflare
+    command: |-
+      ping -c 3 -W 2 -q 1.1.1.1 2>/dev/null | awk '/packet loss/ {for (i = 1; i <= NF; i++) if ($i ~ /%$/) loss = $i} /min\/avg\/max/ {split($0, p, "="); split(p[2], r, "/"); avg = r[2] + 0} END {sub("%", "", loss); printf "{\"avg\": %s, \"loss\": %s}\n", (avg == "" ? "null" : avg), (loss == "" ? 100 : loss)}'
+    scan_interval: 60
+    unit_of_measurement: ms
+    state_class: measurement
+    availability: "{{ value_json is defined and value_json.avg is not none }}"
+    value_template: "{{ value_json.avg }}"
+    json_attributes:
+      - loss
+- sensor:
+    name: Internet latency Google
+    unique_id: net_latency_google
+    command: |-
+      ping -c 3 -W 2 -q 8.8.8.8 2>/dev/null | awk '/packet loss/ {for (i = 1; i <= NF; i++) if ($i ~ /%$/) loss = $i} /min\/avg\/max/ {split($0, p, "="); split(p[2], r, "/"); avg = r[2] + 0} END {sub("%", "", loss); printf "{\"avg\": %s, \"loss\": %s}\n", (avg == "" ? "null" : avg), (loss == "" ? 100 : loss)}'
+    scan_interval: 60
+    unit_of_measurement: ms
+    state_class: measurement
+    availability: "{{ value_json is defined and value_json.avg is not none }}"
+    value_template: "{{ value_json.avg }}"
+    json_attributes:
+      - loss

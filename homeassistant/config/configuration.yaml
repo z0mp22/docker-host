@@ -85,7 +85,7 @@ lovelace:
       mode: yaml
       title: Network
       icon: mdi:router-wireless
-      show_in_sidebar: true
+      show_in_sidebar: false
       filename: dashboards/network.yaml
 
 http:
@@ -271,6 +271,95 @@ rest:
         unique_id: driveway_stream_active
         value_template: "{{ 'Encode[0].MainFormat[0].VideoEnable=true' in value }}"
 
+  # UniFi Network Integration API, read-only via API key. Feeds the Network panel.
+  # Unlike the core unifi integration (username/password), an API key never hits
+  # /api/auth/login, so it can't trip or prolong the UDM's login lockout.
+  # Device ids below are also listed in panel_custom's network-panel config.
+  # Per-device stats sensors: state is CPU % (unknown while a device is offline).
+  - resource: "https://10.0.0.1/proxy/network/integration/v1/sites/88f7af54-98f8-306a-a1c7-c9349722b1f6/devices?limit=50"
+    headers:
+      X-API-KEY: !secret unifi_api_key
+    verify_ssl: false
+    timeout: 15
+    scan_interval: 60
+    sensor:
+      - name: Network devices
+        unique_id: net_devices
+        value_template: "{{ value_json.data | selectattr('state', 'eq', 'ONLINE') | list | count }}"
+        json_attributes:
+          - data
+  - resource: "https://10.0.0.1/proxy/network/integration/v1/sites/88f7af54-98f8-306a-a1c7-c9349722b1f6/clients?limit=200"
+    headers:
+      X-API-KEY: !secret unifi_api_key
+    verify_ssl: false
+    timeout: 15
+    scan_interval: 60
+    sensor:
+      - name: Network clients
+        unique_id: net_clients
+        unit_of_measurement: clients
+        state_class: measurement
+        value_template: "{{ value_json.totalCount }}"
+        json_attributes:
+          - data
+  - resource: "https://10.0.0.1/proxy/network/integration/v1/sites/88f7af54-98f8-306a-a1c7-c9349722b1f6/devices/a765e99e-5f8c-3c5a-b264-0770b4d1030a/statistics/latest"
+    headers:
+      X-API-KEY: !secret unifi_api_key
+    verify_ssl: false
+    timeout: 15
+    scan_interval: 60
+    sensor:
+      - name: UniFi ZsDM stats
+        unique_id: net_zsdm_stats
+        value_template: "{{ value_json.cpuUtilizationPct | default('unknown') }}"
+        json_attributes: [uptimeSec, memoryUtilizationPct, interfaces, lastHeartbeatAt]
+      # The gateway's uplink is the WAN: current traffic, not line capacity.
+      - name: Internet download
+        unique_id: net_internet_download
+        device_class: data_rate
+        unit_of_measurement: Mbit/s
+        state_class: measurement
+        value_template: "{{ (value_json.uplink.rxRateBps / 1000000) | round(2) }}"
+      - name: Internet upload
+        unique_id: net_internet_upload
+        device_class: data_rate
+        unit_of_measurement: Mbit/s
+        state_class: measurement
+        value_template: "{{ (value_json.uplink.txRateBps / 1000000) | round(2) }}"
+  - resource: "https://10.0.0.1/proxy/network/integration/v1/sites/88f7af54-98f8-306a-a1c7-c9349722b1f6/devices/9c60ab0b-af88-3925-9137-3ed00d80cf15/statistics/latest"
+    headers:
+      X-API-KEY: !secret unifi_api_key
+    verify_ssl: false
+    timeout: 15
+    scan_interval: 60
+    sensor:
+      - name: UniFi upstairs AP stats
+        unique_id: net_upstairs_ap_stats
+        value_template: "{{ value_json.cpuUtilizationPct | default('unknown') }}"
+        json_attributes: [uptimeSec, memoryUtilizationPct, interfaces, lastHeartbeatAt]
+  - resource: "https://10.0.0.1/proxy/network/integration/v1/sites/88f7af54-98f8-306a-a1c7-c9349722b1f6/devices/02e1fa61-05ce-30d6-9bde-21777c3c1d7f/statistics/latest"
+    headers:
+      X-API-KEY: !secret unifi_api_key
+    verify_ssl: false
+    timeout: 15
+    scan_interval: 60
+    sensor:
+      - name: UniFi garage AP stats
+        unique_id: net_garage_ap_stats
+        value_template: "{{ value_json.cpuUtilizationPct | default('unknown') }}"
+        json_attributes: [uptimeSec, memoryUtilizationPct, interfaces, lastHeartbeatAt]
+  - resource: "https://10.0.0.1/proxy/network/integration/v1/sites/88f7af54-98f8-306a-a1c7-c9349722b1f6/devices/e90714a2-c747-3be5-b51b-84c7b5d76442/statistics/latest"
+    headers:
+      X-API-KEY: !secret unifi_api_key
+    verify_ssl: false
+    timeout: 15
+    scan_interval: 60
+    sensor:
+      - name: UniFi middle floor stats
+        unique_id: net_middle_floor_stats
+        value_template: "{{ value_json.cpuUtilizationPct | default('unknown') }}"
+        json_attributes: [uptimeSec, memoryUtilizationPct, interfaces, lastHeartbeatAt]
+
 # Lift-session inputs. lift_shoulder_flag: read by all three
 # lift_session_dispatch_* commands at button-press time -- not auto-cleared
 # after a run, since "shoulder's bad this week" is a multi-day state the
@@ -314,6 +403,26 @@ panel_custom:
     sidebar_title: Coaching
     sidebar_icon: mdi:dumbbell
     module_url: /local/coach/coach-panel.js?v=1
+  - name: network-panel
+    url_path: network
+    sidebar_title: Network
+    sidebar_icon: mdi:router-wireless
+    module_url: /local/network/network-panel.js?v=1
+    config:
+      gateway: a765e99e-5f8c-3c5a-b264-0770b4d1030a
+      # UniFi device id -> its stats sensor (see the UniFi rest resources above).
+      stats:
+        a765e99e-5f8c-3c5a-b264-0770b4d1030a: sensor.unifi_zsdm_stats
+        9c60ab0b-af88-3925-9137-3ed00d80cf15: sensor.unifi_upstairs_ap_stats
+        02e1fa61-05ce-30d6-9bde-21777c3c1d7f: sensor.unifi_garage_ap_stats
+        e90714a2-c747-3be5-b51b-84c7b5d76442: sensor.unifi_middle_floor_stats
+      download: sensor.internet_download
+      upload: sensor.internet_upload
+      latency:
+        Cloudflare: sensor.internet_latency_cloudflare
+        Google: sensor.internet_latency_google
+      # Device ids of APs removed on purpose: shown as "Retired", not counted as outages.
+      retired: []
 
 automation: !include automations.yaml
 script: !include scripts.yaml
