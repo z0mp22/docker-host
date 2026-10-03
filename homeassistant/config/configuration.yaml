@@ -451,7 +451,7 @@ panel_custom:
     url_path: cameras
     sidebar_title: Security
     sidebar_icon: mdi:shield-home
-    module_url: /local/security/security-panel.js?v=1
+    module_url: /local/security/security-panel.js?v=2
     config:
       # Frigate camera ids; entities follow Frigate's {id}_{thing} naming.
       # labels: detections shown as activity. security: false = shown, but not counted in status.

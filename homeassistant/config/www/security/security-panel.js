@@ -3,6 +3,10 @@
 // binary_sensor.driveway_person_occupancy). Cameras come from panel_custom `config`.
 
 const ICONS = {
+  mdiChevronLeft: "M15.41,16.58L10.83,12L15.41,7.41L14,6L8,12L14,18L15.41,16.58Z",
+  mdiChevronRight: "M8.59,16.58L13.17,12L8.59,7.41L10,6L16,12L10,18L8.59,16.58Z",
+  mdiClose: "M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z",
+  mdiPlay: "M8,5.14V19.14L19,12.14L8,5.14Z",
   mdiAccount: "M12,4A4,4 0 0,1 16,8A4,4 0 0,1 12,12A4,4 0 0,1 8,8A4,4 0 0,1 12,4M12,14C16.42,14 20,15.79 20,18V20H4V18C4,15.79 7.58,14 12,14Z",
   mdiAlarmLight: "M6,6.9L3.87,4.78L5.28,3.37L7.4,5.5L6,6.9M13,1V4H11V1H13M20.13,4.78L18,6.9L16.6,5.5L18.72,3.37L20.13,4.78M4.5,10.5V12.5H1.5V10.5H4.5M19.5,10.5H22.5V12.5H19.5V10.5M6,20H18A2,2 0 0,1 20,22H4A2,2 0 0,1 6,20M12,5A6,6 0 0,1 18,11V19H6V11A6,6 0 0,1 12,5Z",
   mdiCar: "M5,11L6.5,6.5H17.5L19,11M17.5,16A1.5,1.5 0 0,1 16,14.5A1.5,1.5 0 0,1 17.5,13A1.5,1.5 0 0,1 19,14.5A1.5,1.5 0 0,1 17.5,16M6.5,16A1.5,1.5 0 0,1 5,14.5A1.5,1.5 0 0,1 6.5,13A1.5,1.5 0 0,1 8,14.5A1.5,1.5 0 0,1 6.5,16M18.92,6C18.72,5.42 18.16,5 17.5,5H6.5C5.84,5 5.28,5.42 5.08,6L3,12V20A1,1 0 0,0 4,21H5A1,1 0 0,0 6,20V19H18V20A1,1 0 0,0 19,21H20A1,1 0 0,0 21,20V12L18.92,6Z",
@@ -128,13 +132,30 @@ h1 { margin: 0; font-size: 34px; font-weight: 700; line-height: 1.1; }
 .snap div { padding: 6px 8px; font-size: 12.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .snap div b { color: var(--text); font-weight: 600; }
 .day { margin-top: 16px; font-size: 13px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
-.ev { display: grid; grid-template-columns: 72px 22px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 9px 0; border-top: 1px solid var(--line); font-size: 15px; }
+.ev { display: grid; grid-template-columns: 72px 22px minmax(0, 1fr) auto; font: inherit; color: inherit; background: none; border: 0; gap: 10px; align-items: center; padding: 9px 0; border-top: 1px solid var(--line); font-size: 15px; }
 .day + .ev { border-top: 0; }
 .ev .t { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .ev .ic { width: 20px; height: 20px; color: var(--muted); }
 .ev.alarm-ev .ic { color: var(--red); }
 .ev .w { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ev .d { color: var(--muted); font-size: 13px; white-space: nowrap; }
+.ev .d { color: var(--muted); font-size: 13px; white-space: nowrap; display: flex; align-items: center; gap: 6px; }
+.ev .d .ic { width: 16px; height: 16px; color: var(--steel); }
+.ev.play { width: 100%; text-align: left; border-radius: 0; }
+.ev.play:hover { background: rgba(148,170,200,.05); }
+.ev .th { width: 22px; height: 22px; border-radius: 6px; object-fit: cover; background: #0b111c; }
+.ev .w small { color: var(--muted); font-size: 12px; margin-left: 4px; }
+.modal { position: fixed; inset: 0; z-index: 20; background: rgba(3,6,12,.78); backdrop-filter: blur(6px); display: grid; place-items: center; padding: 20px; }
+.sheet { width: min(980px, 100%); max-height: 100%; overflow: auto; border-radius: 24px; background: linear-gradient(180deg, var(--card-2), var(--card)); border: 1px solid var(--line); padding: 16px; }
+.sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 2px 4px 12px; }
+.sheet-head b { display: block; font-size: 19px; font-weight: 600; }
+.sheet-head span { font-size: 14px; color: var(--muted); }
+.media { border-radius: 16px; overflow: hidden; background: #000; aspect-ratio: 16 / 9; display: grid; place-items: center; }
+.media video, .media img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.noclip { color: var(--muted); font-size: 15px; }
+.sheet-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+.btn2 { height: 42px; padding: 0 14px; border-radius: 14px; background: #172234; border: 1px solid var(--line); color: var(--steel); font-weight: 600; font-size: 15px; display: inline-flex; align-items: center; gap: 6px; }
+.btn2:disabled { opacity: .4; }
+.btn2 .ic { width: 20px; height: 20px; }
 .link { margin-top: 12px; color: var(--steel); font-weight: 600; font-size: 15px; }
 .links { display: flex; gap: 18px; flex-wrap: wrap; }
 .summary { margin-top: 10px; font-size: 14.5px; color: var(--muted); }
@@ -186,7 +207,9 @@ h1 { margin: 0; font-size: 34px; font-weight: 700; line-height: 1.1; }
   .cam .pills { top: 6px; left: 6px; gap: 4px; }
   .pill { height: 22px; font-size: 11px; padding: 0 6px; }
   .live { display: none; }
-  .ev { grid-template-columns: 64px 20px minmax(0, 1fr) auto; font-size: 14px; gap: 8px; }
+  .ev { grid-template-columns: 64px 22px minmax(0, 1fr) auto; font-size: 14px; gap: 8px; }
+  .modal { padding: 0; place-items: end stretch; }
+  .sheet { border-radius: 22px 22px 0 0; padding: 12px 12px calc(12px + env(safe-area-inset-bottom)); }
   .table { grid-template-columns: minmax(0, 1fr) auto; }
   .table .th { display: none; }
   .table .cn { grid-column: 1 / -1; padding-bottom: 2px; border-top: 1px solid var(--line); }
@@ -203,7 +226,13 @@ class SecurityPanel extends HTMLElement {
     this._visits = [];
     this._range = "recent";
     this._toast = "";
+    this._signed = new Map();
+    this._player = null;
+    this.shadowRoot.innerHTML = `<style>${CSS}</style><div id="main"></div><div id="player"></div>`;
+    this._main = this.shadowRoot.getElementById("main");
+    this._playerEl = this.shadowRoot.getElementById("player");
     this.shadowRoot.addEventListener("click", (e) => this._onClick(e));
+    this._onKey = (e) => e.key === "Escape" && this._player && this._closePlayer();
   }
 
   set hass(hass) {
@@ -233,10 +262,12 @@ class SecurityPanel extends HTMLElement {
     this._snapTimer = setInterval(() => this._refreshSnapshots(), 1000);
     this._historyTimer = setInterval(() => this._loadHistory(), 60e3);
     if (this._hass) this._loadHistory();
+    window.addEventListener("keydown", this._onKey);
     this._scheduleRender();
   }
 
   disconnectedCallback() {
+    window.removeEventListener("keydown", this._onKey);
     clearInterval(this._tick);
     clearInterval(this._snapTimer);
     clearInterval(this._historyTimer);
@@ -250,9 +281,62 @@ class SecurityPanel extends HTMLElement {
     return this._hass.states[`${suffix.split(".")[0]}.${cam.id}_${suffix.split(".")[1]}`];
   }
 
-  // Merge each detection sensor's "on" periods (Frigate flaps between frames) into visits.
+  get _instance() {
+    return this._cfg?.frigate_instance || "frigate";
+  }
+
+  // Visits come from Frigate's own events (with ids, so each can be played back).
+  // If the Frigate integration can't answer, fall back to HA's detection history.
   async _loadHistory() {
     if (!this._hass) return;
+    if (await this._loadEvents()) return;
+    await this._loadSensorHistory();
+  }
+
+  async _loadEvents() {
+    const cams = this._cameras.filter((c) => c.security);
+    const labels = [...new Set(cams.flatMap((c) => c.labels)), ...ALARM_SOUNDS];
+    try {
+      let res = await this._hass.callWS({
+        type: "frigate/events/get",
+        instance_id: this._instance,
+        labels,
+        after: Math.floor((Date.now() - HISTORY_DAYS * 864e5) / 1000),
+        limit: 1000,
+      });
+      if (typeof res === "string") res = JSON.parse(res);
+      if (!Array.isArray(res)) return false;
+      const byName = Object.fromEntries(cams.map((c) => [String(c.frigate || c.id).toLowerCase(), c]));
+      const open = {};
+      const visits = [];
+      for (const ev of res.sort((a, b) => a.start_time - b.start_time)) {
+        const cam = byName[String(ev.camera).toLowerCase()];
+        if (!cam) continue;
+        const alarm = ALARM_SOUNDS.includes(ev.label);
+        if (!alarm && !cam.labels.includes(ev.label)) continue;
+        const start = ev.start_time * 1000;
+        const end = ev.end_time ? ev.end_time * 1000 : null;
+        const key = `${cam.id}|${ev.label}`;
+        const cur = open[key];
+        if (cur && cur.end !== null && start - cur.end <= VISIT_GAP_MS) {
+          cur.end = end === null ? null : Math.max(cur.end, end);
+          cur.events.push(ev);
+        } else {
+          open[key] = { key: ev.id, cam, kind: ev.label, alarm, start, end, events: [ev] };
+          visits.push(open[key]);
+        }
+      }
+      this._visits = visits.sort((a, b) => b.start - a.start);
+      this._fromFrigate = true;
+      this._scheduleRender();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  // Merge each detection sensor's "on" periods (Frigate flaps between frames) into visits.
+  async _loadSensorHistory() {
     const sources = [];
     for (const c of this._cameras.filter((x) => x.security)) {
       for (const l of c.labels) sources.push({ id: `binary_sensor.${c.id}_${l}_occupancy`, cam: c, kind: l, alarm: false });
@@ -291,6 +375,73 @@ class SecurityPanel extends HTMLElement {
     } catch (_) {
       /* timeline is optional */
     }
+  }
+
+  _media(ev, file) {
+    return `/api/frigate/${encodeURIComponent(this._instance)}/notifications/${encodeURIComponent(ev.id)}/${file}`;
+  }
+
+  // <img>/<video> can't send HA's auth header, so media URLs are HA-signed paths.
+  async _sign(path) {
+    const hit = this._signed.get(path);
+    if (hit && hit.exp > Date.now()) return hit.url;
+    const res = await this._hass.callWS({ type: "auth/sign_path", path, expires: 6 * 3600 });
+    this._signed.set(path, { url: res.path, exp: Date.now() + 5.5 * 3600e3 });
+    return res.path;
+  }
+
+  _hydrate(root) {
+    for (const el of root.querySelectorAll("[data-sign]")) {
+      const path = el.dataset.sign;
+      const hit = this._signed.get(path);
+      if (hit && hit.exp > Date.now()) {
+        if (el.getAttribute("src") !== hit.url) el.src = hit.url;
+        continue;
+      }
+      this._sign(path).then((url) => {
+        if (el.dataset.sign === path) el.src = url;
+      }).catch(() => {});
+    }
+  }
+
+  _openPlayer(visit, idx = 0) {
+    this._player = { visit, idx };
+    this._renderPlayer();
+  }
+
+  _closePlayer() {
+    this._player = null;
+    this._playerEl.innerHTML = "";
+  }
+
+  _renderPlayer() {
+    const p = this._player;
+    if (!p) return;
+    const v = p.visit;
+    const ev = v.events[p.idx];
+    const n = v.events.length;
+    const when = `${dayLabel(ev.start_time * 1000)} ${this._fmtTime(ev.start_time * 1000)}`;
+    const len = ev.end_time ? fmtDur((ev.end_time - ev.start_time) * 1000) : "ongoing";
+    const media = ev.has_clip
+      ? `<video controls autoplay playsinline data-sign="${esc(this._media(ev, "clip.mp4"))}" poster=""></video>`
+      : ev.has_snapshot
+        ? `<img data-sign="${esc(this._media(ev, "snapshot.jpg"))}" alt="">`
+        : `<div class="noclip">No recording was saved for this event.</div>`;
+    this._playerEl.innerHTML = `
+      <div class="modal" data-action="close-player">
+        <div class="sheet" role="dialog" aria-label="Recording">
+          <div class="sheet-head">
+            <div><b>${esc(nice(v.kind))} · ${esc(v.cam.name)}</b><span>${esc(when)} · ${esc(len)}${ev.has_clip ? "" : " · snapshot only"}</span></div>
+            <button class="icon-btn" data-action="close-player" aria-label="Close">${svg("mdiClose")}</button>
+          </div>
+          <div class="media">${media}</div>
+          <div class="sheet-foot">
+            ${n > 1 ? `<button class="btn2" data-action="clip" data-step="-1" ${p.idx === 0 ? "disabled" : ""}>${svg("mdiChevronLeft")}Earlier</button><span class="muted">Clip ${p.idx + 1} of ${n}</span><button class="btn2" data-action="clip" data-step="1" ${p.idx === n - 1 ? "disabled" : ""}>Later${svg("mdiChevronRight")}</button>` : "<span></span>"}
+            <button class="btn2" data-action="live" data-entity="${esc(v.cam.cameraId || v.cam.camera || `camera.${v.cam.id}`)}">${svg("mdiPlayCircleOutline")}Live</button>
+          </div>
+        </div>
+      </div>`;
+    this._hydrate(this._playerEl);
   }
 
   _scheduleRender() {
@@ -346,9 +497,21 @@ class SecurityPanel extends HTMLElement {
     if (!el || !this._hass) return;
     const action = el.dataset.action;
     if (action === "menu") this.dispatchEvent(new Event("hass-toggle-menu", { bubbles: true, composed: true }));
-    else if (action === "live")
+    else if (action === "play") {
+      const v = this._visits.find((x) => x.key === el.dataset.key);
+      if (v?.events) this._openPlayer(v, Math.max(0, v.events.findIndex((e) => e.has_clip)));
+    } else if (action === "clip") {
+      const p = this._player;
+      if (p) {
+        p.idx = Math.min(p.visit.events.length - 1, Math.max(0, p.idx + Number(el.dataset.step)));
+        this._renderPlayer();
+      }
+    } else if (action === "close-player") {
+      if (e.target === el || el.tagName === "BUTTON") this._closePlayer();
+    } else if (action === "live") {
+      this._closePlayer();
       this.dispatchEvent(new CustomEvent("hass-more-info", { detail: { entityId: el.dataset.entity }, bubbles: true, composed: true }));
-    else if (action === "range") {
+    } else if (action === "range") {
       this._range = el.dataset.range;
       this._render();
     } else if (action === "toggle") {
@@ -463,7 +626,8 @@ class SecurityPanel extends HTMLElement {
     const visits = this._visits.filter((v) => now - v.start <= (week ? HISTORY_DAYS * 864e5 : 864e5));
     const perCam = Object.entries(visits.filter((v) => !v.alarm).reduce((a, v) => ((a[v.cam.name] = (a[v.cam.name] || 0) + 1), a), {})).sort((a, b) => b[1] - a[1]);
     const listed = this._range === "recent" ? visits.slice(0, 8) : visits.slice(0, 300);
-    const latest = sec.filter((c) => c.personPicture);
+    const latestVisits = sec.map((c) => this._visits.find((v) => v.cam.id === c.id && v.kind === "person" && v.events)).filter(Boolean);
+    const latest = latestVisits.length ? [] : sec.filter((c) => c.personPicture);
     let lastDay = null;
     const rows = listed
       .map((v) => {
@@ -472,14 +636,27 @@ class SecurityPanel extends HTMLElement {
         lastDay = day;
         const icon = v.alarm ? "mdiAlarmLight" : v.kind === "car" ? "mdiCar" : "mdiAccount";
         const dur = v.end ? fmtDur(v.end - v.start) : "ongoing";
-        return `${header}<div class="ev ${v.alarm ? "alarm-ev" : ""}"><span class="t">${this._fmtTime(v.start)}</span>${svg(icon)}<span class="w">${esc(nice(v.kind))} · ${esc(v.cam.name)}</span><span class="d">${esc(dur)}</span></div>`;
+        const first = v.events?.find((e) => e.has_clip) || v.events?.[0];
+        const thumb = first ? `<img class="th" data-sign="${esc(this._media(first, "thumbnail.jpg"))}" alt="">` : svg(icon);
+        const clips = v.events ? v.events.filter((e) => e.has_clip).length : 0;
+        const body = `<span class="t">${this._fmtTime(v.start)}</span>${thumb}<span class="w">${esc(nice(v.kind))} · ${esc(v.cam.name)}${clips > 1 ? ` <small>${clips} clips</small>` : ""}</span><span class="d">${esc(dur)}${first ? ` ${svg("mdiPlay")}` : ""}</span>`;
+        return first
+          ? `${header}<button class="ev play ${v.alarm ? "alarm-ev" : ""}" data-action="play" data-key="${esc(v.key)}">${body}</button>`
+          : `${header}<div class="ev ${v.alarm ? "alarm-ev" : ""}">${body}</div>`;
       })
       .join("");
     const timeline = `<section class="card a-timeline">
       <div class="head"><span class="eyebrow">Activity</span><span class="muted">${week ? "last 7 days" : "last 24 h"}</span></div>
       ${perCam.length ? `<div class="summary"><b>${plural(perCam.reduce((n, [, c]) => n + c, 0), "visit")}</b> · ${perCam.map(([n, c]) => `${esc(n)} ${c}`).join(" · ")}</div>` : ""}
       ${
-        latest.length
+        latestVisits.length
+          ? `<div class="latest">${latestVisits
+              .map((v) => {
+                const ev = v.events.find((e) => e.has_clip) || v.events[0];
+                return `<button class="snap" data-action="play" data-key="${esc(v.key)}"><img data-sign="${esc(this._media(ev, "snapshot.jpg"))}" alt="Latest person on ${esc(v.cam.name)}"><div><b>${esc(v.cam.name)}</b> · ${esc(agoText(v.start))}</div></button>`;
+              })
+              .join("")}</div>`
+          : latest.length
           ? `<div class="latest">${latest
               .map(
                 (c) => `<button class="snap" data-action="live" data-entity="${esc(c.cameraId)}"><img src="${esc(c.personPicture)}" alt="Latest person on ${esc(c.name)}"><div><b>${esc(c.name)}</b>${c.lastPerson ? ` · ${esc(agoText(c.lastPerson.start))}` : ""}</div></button>`,
@@ -533,7 +710,6 @@ class SecurityPanel extends HTMLElement {
 
     const s = status;
     const html = `
-      <style>${CSS}</style>
       <div class="app">
         <header class="top">
           ${this._narrow ? `<button class="icon-btn" data-action="menu" aria-label="Menu">${svg("mdiMenu")}</button>` : ""}
@@ -547,9 +723,10 @@ class SecurityPanel extends HTMLElement {
       </div>`;
     if (html !== this._html) {
       this._html = html;
-      this.shadowRoot.innerHTML = html;
+      this._main.innerHTML = html;
       this._refreshSnapshots();
     }
+    this._hydrate(this._main);
   }
 }
 
