@@ -406,7 +406,7 @@ panel_custom:
     url_path: house
     sidebar_title: Home
     sidebar_icon: mdi:home
-    module_url: /local/home/home-panel.js?v=1
+    module_url: /local/home/home-panel.js?v=2
     config:
       person: person.cody
       weather: weather.home
@@ -427,7 +427,8 @@ panel_custom:
         - {entity: media_player.plex_plex_for_roku_z_roku_ultra, name: Plex · Roku Ultra}
       cameras: [driveway, garage, basement]
       recordings: sensor.plex_recordings_sync_meta
-      coaching: sensor.lift_session_latest
+      # Every calendar.* entity shows in Up next (e.g. Google Calendar) except these.
+      calendars_exclude: [calendar.opensprinkler_schedule]
       network:
         devices: sensor.network_devices
         latency: {Cloudflare: sensor.internet_latency_cloudflare, Google: sensor.internet_latency_google}
@@ -442,7 +443,6 @@ panel_custom:
         irrigation: /irrigation
         recordings: /recordings
         network: /network
-        coaching: /coach
         media: /lovelace-roku/roku
   - name: irrigation-panel
     url_path: irrigation
