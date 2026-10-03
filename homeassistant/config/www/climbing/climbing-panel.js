@@ -59,9 +59,9 @@ function crumbs(b) {
 function readFilter() {
   try {
     const v = localStorage.getItem(FILTER_KEY);
-    return v in TYPES ? v : "all";
+    return v in TYPES ? v : "route";
   } catch {
-    return "all";
+    return "route";
   }
 }
 
@@ -376,7 +376,7 @@ class ClimbingPanel extends HTMLElement {
       : "";
 
     // Feed
-    const filtered = this._filter === "all" ? m.items : m.items.filter((i) => i.type === this._filter);
+    const filtered = m.items.filter((i) => i.type === this._filter);
     const shown = this._showAll ? filtered : filtered.slice(0, PAGE);
     const days = [];
     for (const i of shown) {
@@ -386,10 +386,8 @@ class ClimbingPanel extends HTMLElement {
       d.items.push(i);
     }
     const chip = (key, label, n) =>
-      `<button class="chip" data-action="filter" data-type="${key}" aria-pressed="${this._filter === key}">${esc(label)}${n === undefined ? "" : `<span class="n">${n}</span>`}</button>`;
-    const emptyText = !m.items.length
-      ? m.ok ? "Nothing new in the last 30 days." : "No feed data to show."
-      : TYPES[this._filter]?.none || "Nothing to show.";
+      `<button class="chip" data-action="filter" data-type="${key}" aria-pressed="${this._filter === key}">${esc(label)}<span class="n">${n}</span></button>`;
+    const emptyText = m.ok || m.items.length ? TYPES[this._filter].none : "No feed data to show.";
     const sourceText = m.source === "html" ? "via the backup page scrape" : m.source === "rss" ? "via RSS" : "";
     const footerParts = [];
     if (m.ok && m.lastAttempt) footerParts.push(`${svg("mdiSync")}<span>Checked ${esc(this._when(m.lastAttempt))}${sourceText ? ` ${esc(sourceText)}` : ""}</span>`);
@@ -397,7 +395,7 @@ class ClimbingPanel extends HTMLElement {
     const feed = `<section class="card a-feed">
       <div class="head"><span class="eyebrow">What's new</span><span class="muted">last 30 days</span></div>
       <div class="chips" role="group" aria-label="Filter by type">
-        ${chip("all", "All", m.items.length)}${Object.entries(TYPES).map(([k, t]) => chip(k, t.label, counts[k])).join("")}
+        ${Object.entries(TYPES).map(([k, t]) => chip(k, t.label, counts[k])).join("")}
       </div>
       ${
         days.length

@@ -520,7 +520,7 @@ panel_custom:
     url_path: climbing
     sidebar_title: Climbing
     sidebar_icon: mdi:image-filter-hdr
-    module_url: /local/climbing/climbing-panel.js?v=1
+    module_url: /local/climbing/climbing-panel.js?v=2
     config:
       # Written nightly by mountain-project-feed (docker-host cron, ~3:30 AM).
       feed: sensor.mountain_project_feed
