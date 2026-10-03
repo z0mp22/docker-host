@@ -37,7 +37,7 @@ lovelace:
       mode: yaml
       title: Home
       icon: mdi:home
-      show_in_sidebar: true
+      show_in_sidebar: false
       filename: dashboards/main.yaml
     lovelace-life:
       mode: yaml
@@ -401,6 +401,49 @@ input_text:
 # Served from www/<name>/ (synced by scripts/deploy.sh). Bump ?v= when a file
 # changes so the companion app doesn't keep a cached copy.
 panel_custom:
+  # Whole-house overview. "home" may collide with HA's own Home dashboard, so it lives at /house.
+  - name: home-panel
+    url_path: house
+    sidebar_title: Home
+    sidebar_icon: mdi:home
+    module_url: /local/home/home-panel.js?v=1
+    config:
+      person: person.cody
+      weather: weather.home
+      climate:
+        - {name: Bedroom, temperature: sensor.tp358s_1c99_temperature, humidity: sensor.tp358s_1c99_humidity}
+        - {name: Basement, temperature: sensor.tp358s_f429_temperature, humidity: sensor.tp358s_f429_humidity}
+      # Icons: mdiLamp, mdiFloorLamp, mdiDeskLamp, mdiCeilingLight, mdiCoachLamp, mdiOutdoorLamp,
+      # mdiGarageVariant, mdiStringLights, mdiFan, mdiPowerSocketUs (others fall back to a bulb).
+      lights:
+        - {entity: switch.master_bed_lamp, name: Bedroom lamp, icon: mdiLamp}
+        - {entity: switch.front_door_light_shelly_1, name: Front door, icon: mdiCoachLamp}
+        - {entity: switch.front_lights_shelly_1_plus, name: Garage lights, icon: mdiGarageVariant}
+        - {entity: light.basement, name: Basement, icon: mdiCeilingLight}
+        - {entity: switch.office_desk_light, name: Office desk, icon: mdiDeskLamp}
+        - {entity: switch.whole_house_fan_switch_1, name: Whole house fan, icon: mdiFan}
+      media:
+        - {entity: media_player.roku_4800x_a029, name: Living room Roku}
+        - {entity: media_player.plex_plex_for_roku_z_roku_ultra, name: Plex · Roku Ultra}
+      cameras: [driveway, garage, basement]
+      recordings: sensor.plex_recordings_sync_meta
+      coaching: sensor.lift_session_latest
+      network:
+        devices: sensor.network_devices
+        latency: {Cloudflare: sensor.internet_latency_cloudflare, Google: sensor.internet_latency_google}
+        stats:
+          e90714a2-c747-3be5-b51b-84c7b5d76442: sensor.unifi_middle_floor_stats
+          9c60ab0b-af88-3925-9137-3ed00d80cf15: sensor.unifi_upstairs_ap_stats
+          02e1fa61-05ce-30d6-9bde-21777c3c1d7f: sensor.unifi_garage_ap_stats
+          a765e99e-5f8c-3c5a-b264-0770b4d1030a: sensor.unifi_zsdm_stats
+        retired: []
+      links:
+        security: /cameras
+        irrigation: /irrigation
+        recordings: /recordings
+        network: /network
+        coaching: /coach
+        media: /lovelace-roku/roku
   - name: irrigation-panel
     url_path: irrigation
     sidebar_title: Irrigation
@@ -451,7 +494,7 @@ panel_custom:
     url_path: cameras
     sidebar_title: Security
     sidebar_icon: mdi:shield-home
-    module_url: /local/security/security-panel.js?v=2
+    module_url: /local/security/security-panel.js?v=3
     config:
       # Frigate camera ids; entities follow Frigate's {id}_{thing} naming.
       # labels: detections shown as activity. security: false = shown, but not counted in status.

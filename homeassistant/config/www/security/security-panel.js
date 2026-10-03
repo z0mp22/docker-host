@@ -97,7 +97,7 @@ h1 { margin: 0; font-size: 34px; font-weight: 700; line-height: 1.1; }
 .alarm .ic { width: 30px; height: 30px; color: var(--red); }
 
 .grid { display: grid; gap: 22px; align-items: start; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
-  grid-template-areas: "cams attn" "settings timeline"; }
+  grid-template-areas: "cams timeline" "settings attn"; }
 .card { background: linear-gradient(180deg, var(--card-2), var(--card)); border: 1px solid var(--line); border-radius: 30px; padding: 24px 26px; min-width: 0; }
 .a-cams { grid-area: cams; } .a-timeline { grid-area: timeline; } .a-attn { grid-area: attn; } .a-settings { grid-area: settings; }
 .eyebrow { font-size: 13px; letter-spacing: .12em; font-weight: 600; color: var(--muted); text-transform: uppercase; }
@@ -190,7 +190,7 @@ h1 { margin: 0; font-size: 34px; font-weight: 700; line-height: 1.1; }
 .toast { position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%); padding: 14px 20px; border-radius: 14px; background: #3a1d24; border: 1px solid rgba(240,97,109,.5); color: #ffd3d7; z-index: 10; max-width: 90vw; }
 
 @container (max-width: 980px) {
-  .grid { grid-template-columns: minmax(0, 1fr); grid-template-areas: "cams" "attn" "timeline" "settings"; }
+  .grid { grid-template-columns: minmax(0, 1fr); grid-template-areas: "cams" "timeline" "attn" "settings"; }
 }
 @container (max-width: 640px) {
   .app { padding: 14px 14px 24px; }
