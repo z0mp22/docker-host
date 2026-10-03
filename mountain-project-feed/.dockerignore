@@ -1,0 +1,5 @@
+tests/
+scripts/
+cron/
+**/__pycache__/
+README.md

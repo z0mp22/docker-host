@@ -177,3 +177,27 @@
     value_template: "{{ value_json.avg }}"
     json_attributes:
       - loss
+
+# Mountain Project "What's New" for Fort Collins (mountain-project-feed/ on this host; nightly
+# cron writes the file, see its run-feed.sh). State is the run status (ok / degraded / error);
+# the Climbing panel reads everything else from attributes. Missing file -> unavailable.
+- sensor:
+    name: Mountain Project feed
+    unique_id: mountain_project_feed_file
+    command: cat /config/mountain_project_feed.json 2>/dev/null || echo '{}'
+    scan_interval: 300
+    availability: "{{ value_json is defined and value_json.schema is defined }}"
+    value_template: "{{ value_json.status }}"
+    json_attributes:
+      - schema
+      - status
+      - source
+      - last_attempt
+      - last_success
+      - error
+      - warnings
+      - area
+      - counts
+      - new_count
+      - items
+    icon: mdi:image-filter-hdr

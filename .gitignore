@@ -32,6 +32,10 @@ garmin-coaching-report/tokens/
 garmin-coaching-report/reports/
 garmin-coaching-report/cron.log
 
+# Mountain Project feed runtime (on host only)
+mountain-project-feed/state/
+mountain-project-feed/*.lock
+
 # Legacy / scratch
 *.log
 *.tmp

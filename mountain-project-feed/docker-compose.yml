@@ -1,0 +1,7 @@
+version: '3.3'
+
+# Build-only: the nightly run is `scripts/run-feed.sh` (docker run --rm), not a long-lived service.
+services:
+  mountain-project-feed:
+    build: .
+    image: mountain-project-feed:local

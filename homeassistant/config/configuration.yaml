@@ -23,6 +23,13 @@ usb:
 webhook:
 zeroconf:
 
+# Defaults otherwise. The climbing feed carries ~30 KB of list attributes that change nightly;
+# keeping history of it would bloat the DB (and trips HA's 16 KB attribute warning).
+recorder:
+  exclude:
+    entities:
+      - sensor.mountain_project_feed
+
 # Load frontend themes from the themes folder
 frontend:
   themes: !include_dir_merge_named themes
@@ -509,6 +516,16 @@ panel_custom:
         - id: bambu
           name: Bambu printer
           security: false
+  - name: climbing-panel
+    url_path: climbing
+    sidebar_title: Climbing
+    sidebar_icon: mdi:image-filter-hdr
+    module_url: /local/climbing/climbing-panel.js?v=1
+    config:
+      # Written nightly by mountain-project-feed (docker-host cron, ~3:30 AM).
+      feed: sensor.mountain_project_feed
+      # A run is expected every 24 h (+ up to 15 min jitter); past this the panel says it stopped updating.
+      stale_hours: 26
 
 automation: !include automations.yaml
 script: !include scripts.yaml

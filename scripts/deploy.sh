@@ -246,6 +246,26 @@ deploy_garmin_coaching_report() {
   )
 }
 
+deploy_mountain_project_feed() {
+  log "deploying mountain-project-feed"
+  sync_exporter_stack "mountain-project-feed"
+  mkdir -p "${DEPLOY_ROOT}/mountain-project-feed/state"
+  install_file "${REPO_ROOT}/mountain-project-feed/scripts/run-feed.sh" \
+    "${DEPLOY_ROOT}/mountain-project-feed/scripts/run-feed.sh" 755
+  install_file "${REPO_ROOT}/mountain-project-feed/cron/mountain-project-feed" \
+    "/etc/cron.d/mountain-project-feed" 644
+  (
+    cd "${DEPLOY_ROOT}/mountain-project-feed"
+    docker compose build
+  )
+  # First deploy only: populate the Climbing panel now instead of waiting for tonight (~1 min).
+  if [ ! -f "${DEPLOY_ROOT}/homeassistant/mountain_project_feed.json" ]; then
+    "${DEPLOY_ROOT}/mountain-project-feed/scripts/run-feed.sh" \
+      >> "${DEPLOY_ROOT}/mountain-project-feed/cron.log" 2>&1 \
+      || log "WARN: initial mountain-project-feed run failed (see cron.log)"
+  fi
+}
+
 
 restart_homeassistant_if_running() {
   if docker ps -a --format '{{.Names}}' | grep -qx 'homeassistant'; then
@@ -331,6 +351,7 @@ main() {
   repair_homeassistant_config_entries
   install_plex_mqtt_bridge
   install_hdhomerun_signal_bridge
+  deploy_mountain_project_feed
   restart_homeassistant_if_running
   add_roku_integrations
   log "deploy complete"

@@ -101,7 +101,8 @@ docker-host/
 ├── npm-exporter/
 ├── npm-metrics-exporter/
 ├── unifi-poller/
-└── garmin-coaching-report/  # weekly coaching report (cron batch)
+├── garmin-coaching-report/  # weekly coaching report (cron batch)
+└── mountain-project-feed/   # nightly Mountain Project "What's New" (cron batch)
 ```
 
 Runtime on Pi mirrors this under `/docker/`.
@@ -151,6 +152,29 @@ The dashboard is a live/recent view (current reading + a long-term
 `statistics-graph`). The actual signal-vs-weather correlation (mean/median
 signal per channel per weather condition) is generated on demand on
 media-laptop: `./scripts/analyze_signal_weather.py` in `plex_recordings`.
+
+## Mountain Project feed (Climbing panel)
+
+Nightly pull of Mountain Project's "What's New" for Fort Collins (area `105800315`):
+new routes, areas and comments from the last 30 days, shown on the HA **Climbing**
+panel (`/climbing`). See [ADR 0004](docs/decisions/0004-mountain-project-feed.md).
+
+| Piece | Path |
+|-------|------|
+| Scraper image (`mountain-project-feed:local`) | `mountain-project-feed/` (tests: `uv run pytest` there) |
+| Nightly wrapper + cron (~3:30 AM + jitter) | `mountain-project-feed/scripts/run-feed.sh`, `mountain-project-feed/cron/mountain-project-feed` |
+| State on host | `/docker/mountain-project-feed/state/` (`feed.json`, `seen.json`), log `/docker/mountain-project-feed/cron.log` |
+| File HA reads | `/docker/homeassistant/mountain_project_feed.json` → `sensor.mountain_project_feed` (`command_line.yaml`) |
+| Panel | `homeassistant/config/www/climbing/climbing-panel.js` (`panel_custom` in `configuration.yaml`) |
+
+Run it now: `sudo /docker/mountain-project-feed/scripts/run-feed.sh` (about 1 min; it waits
+60 s between requests per MP's robots.txt crawl delay).
+
+Reading the panel status: **Up to date** = RSS worked. **Partial update** = RSS failed and
+the backup page scrape was used, or route type/stars were unavailable. **Update failed** =
+both sources failed (or the container didn't run); the last good list is still shown and
+the error is on the panel. **Not updating** = no run in 26 h, so check the cron and
+`cron.log`. **No data** = HA can't read the JSON file at all.
 
 ## Home Assistant note
 
