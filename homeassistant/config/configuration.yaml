@@ -67,7 +67,7 @@ lovelace:
       mode: yaml
       title: Recordings
       icon: mdi:television-classic
-      show_in_sidebar: true
+      show_in_sidebar: false
       filename: dashboards/recordings.yaml
     lovelace-tuner-signal:
       mode: yaml
@@ -423,6 +423,21 @@ panel_custom:
         Google: sensor.internet_latency_google
       # Device ids of APs removed on purpose: shown as "Retired", not counted as outages.
       retired: []
+  - name: recordings-panel
+    url_path: recordings
+    sidebar_title: Recordings
+    sidebar_icon: mdi:television-classic
+    module_url: /local/recordings/recordings-panel.js?v=1
+    config:
+      meta: sensor.plex_recordings_sync_meta
+      tuners: [sensor.tuner0, sensor.tuner1]
+      # Plex server machineIdentifier (GET :32400/identity on media-laptop), for Watch links.
+      plex_server: f711dff5db23ec95cd83c44cbcd0194875081f5c
+      # Used for the "room for about N more games" estimate (measured 2026-10: 14 GB).
+      avg_recording_gb: 14
+      team_colors:
+        Dallas Cowboys: "#60a5fa"
+        Denver Broncos: "#fb923c"
 
 automation: !include automations.yaml
 script: !include scripts.yaml

@@ -83,7 +83,7 @@ views:
                 entity: sensor.plex_recordings_status
                 tap_action:
                   action: navigate
-                  navigation_path: /lovelace-recordings/recordings
+                  navigation_path: /recordings
 
       - type: vertical-stack
         cards:
