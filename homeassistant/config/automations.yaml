@@ -259,35 +259,37 @@
          and trigger.to_state.state not in ['unavailable', 'unknown']
          and trigger.to_state.attributes.event_type == 'pressed' }}
   actions:
-  # The event picture usually lands a few seconds after the press; send without it if it doesn't.
+  - variables:
+      rang_at: "{{ now().strftime('%-I:%M %p') }}"
+      # Companion app notify entities are named notify.<device>; the action that takes
+      # images is notify.mobile_app_<device>.
+      mobile_notifiers: >-
+        {{ integration_entities('mobile_app')
+           | select('match', '^notify\\.')
+           | map('replace', 'notify.', 'notify.mobile_app_', 1)
+           | list }}
+  # A press doesn't always produce a new event picture, so ask the bridge for one and only
+  # attach it if it arrives; an old picture would show the wrong visitor.
+  - action: button.press
+    target:
+      entity_id: button.doorbell_refresh_last_event
+    continue_on_error: true
   - wait_for_trigger:
     - trigger: state
       entity_id: image.doorbell_last_event
-    timeout: '00:00:12'
+    timeout: '00:00:20'
     continue_on_timeout: true
   - variables:
-      mobile_notifiers: >-
-        {{ states.notify
-           | selectattr('entity_id', 'search', 'mobile_app')
-           | map(attribute='entity_id')
-           | list }}
+      fresh_image: '{{ wait.trigger is not none }}'
   - repeat:
       for_each: '{{ mobile_notifiers }}'
       sequence:
       - action: '{{ repeat.item }}'
         data:
           title: Doorbell
-          message: "Someone's at the front door · {{ now().strftime('%-I:%M %p') }}"
-          data:
-            image: /api/image_proxy/image.doorbell_last_event
-            tag: doorbell
-            channel: Doorbell
-            importance: high
-            priority: high
-            ttl: 0
-            clickAction: /cameras
-            url: /cameras
-            push:
-              sound:
-                name: default
-              interruption-level: time-sensitive
+          message: "Someone's at the front door · {{ rang_at }}"
+          data: >-
+            {% set d = {'tag': 'doorbell', 'channel': 'Doorbell', 'importance': 'high',
+                        'priority': 'high', 'ttl': 0, 'clickAction': '/cameras', 'url': '/cameras',
+                        'push': {'sound': {'name': 'default'}, 'interruption-level': 'time-sensitive'}} %}
+            {{ dict(d, image='/api/image_proxy/image.doorbell_last_event') if fresh_image else d }}
