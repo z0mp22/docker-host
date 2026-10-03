@@ -260,6 +260,17 @@ The phone overflow bug (§3 Layout) was caught at step 3. It would have shipped 
 - [ ] Color only for meaning; motion only for live state
 - [ ] Container queries; phone-first content order; `minmax(0, 1fr)` grids
 - [ ] Mocked preview at 1440/390 × each mode, with service calls asserted, before deploy
+- [ ] **Check the data before designing.** Network's entities had all been dead for 9 days, and its old
+      alert card reported "unavailable" as "unreachable". Look up the last real value of every entity.
+- [ ] **Check timestamps against reality.** `image.*_person` state is when HA loaded the picture, not when
+      someone was seen. The recordings sync's `recorded_at` is sometimes a day off, so use the filename date.
+      Derive event times from detection history instead.
+- [ ] **Separate "can't read the data" from "it's broken"** in status, attention lists and all-clear messages.
+- [ ] **Guard rest/command_line sensors with `availability`**, so an error response becomes unavailable
+      instead of a template error every poll.
+- [ ] **Check the `panel_custom` `url_path`** in the HA log after deploy ("Overwriting panel …").
+      `security` is a built-in path, which is why the Security panel lives at `/cameras`.
+- [ ] **Summarize high-volume history before listing it** (e.g. 42 visits a day becomes a summary plus the latest 8).
 
 ## 7. Known gaps / backlog
 
