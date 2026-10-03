@@ -447,7 +447,8 @@ panel_custom:
         Dallas Cowboys: "#60a5fa"
         Denver Broncos: "#fb923c"
   - name: security-panel
-    url_path: security
+    # "security" is already a built-in HA panel path, so this lives at /cameras.
+    url_path: cameras
     sidebar_title: Security
     sidebar_icon: mdi:shield-home
     module_url: /local/security/security-panel.js?v=1
