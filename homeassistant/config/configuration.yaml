@@ -285,6 +285,7 @@ rest:
     sensor:
       - name: Network devices
         unique_id: net_devices
+        availability: "{{ value_json is defined and value_json.data is defined }}"
         value_template: "{{ value_json.data | selectattr('state', 'eq', 'ONLINE') | list | count }}"
         json_attributes:
           - data
@@ -297,6 +298,7 @@ rest:
     sensor:
       - name: Network clients
         unique_id: net_clients
+        availability: "{{ value_json is defined and value_json.data is defined }}"
         unit_of_measurement: clients
         state_class: measurement
         value_template: "{{ value_json.totalCount }}"
@@ -310,17 +312,20 @@ rest:
     scan_interval: 60
     sensor:
       - name: UniFi ZsDM stats
+        availability: "{{ value_json is defined and value_json.lastHeartbeatAt is defined }}"
         unique_id: net_zsdm_stats
         value_template: "{{ value_json.cpuUtilizationPct | default('unknown') }}"
         json_attributes: [uptimeSec, memoryUtilizationPct, interfaces, lastHeartbeatAt]
       # The gateway's uplink is the WAN: current traffic, not line capacity.
       - name: Internet download
+        availability: "{{ value_json is defined and value_json.uplink is defined and value_json.uplink.rxRateBps is defined }}"
         unique_id: net_internet_download
         device_class: data_rate
         unit_of_measurement: Mbit/s
         state_class: measurement
         value_template: "{{ (value_json.uplink.rxRateBps / 1000000) | round(2) }}"
       - name: Internet upload
+        availability: "{{ value_json is defined and value_json.uplink is defined and value_json.uplink.rxRateBps is defined }}"
         unique_id: net_internet_upload
         device_class: data_rate
         unit_of_measurement: Mbit/s
@@ -334,6 +339,7 @@ rest:
     scan_interval: 60
     sensor:
       - name: UniFi upstairs AP stats
+        availability: "{{ value_json is defined and value_json.lastHeartbeatAt is defined }}"
         unique_id: net_upstairs_ap_stats
         value_template: "{{ value_json.cpuUtilizationPct | default('unknown') }}"
         json_attributes: [uptimeSec, memoryUtilizationPct, interfaces, lastHeartbeatAt]
@@ -345,6 +351,7 @@ rest:
     scan_interval: 60
     sensor:
       - name: UniFi garage AP stats
+        availability: "{{ value_json is defined and value_json.lastHeartbeatAt is defined }}"
         unique_id: net_garage_ap_stats
         value_template: "{{ value_json.cpuUtilizationPct | default('unknown') }}"
         json_attributes: [uptimeSec, memoryUtilizationPct, interfaces, lastHeartbeatAt]
@@ -356,6 +363,7 @@ rest:
     scan_interval: 60
     sensor:
       - name: UniFi middle floor stats
+        availability: "{{ value_json is defined and value_json.lastHeartbeatAt is defined }}"
         unique_id: net_middle_floor_stats
         value_template: "{{ value_json.cpuUtilizationPct | default('unknown') }}"
         json_attributes: [uptimeSec, memoryUtilizationPct, interfaces, lastHeartbeatAt]
