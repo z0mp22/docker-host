@@ -242,3 +242,52 @@
         {{ state_attr('sensor.lift_session_latest', 'rationale')
            or 'New lift session generated.' }}
   mode: single
+- id: '1791000000001'
+  alias: Doorbell rang
+  description: Push to every phone when the front doorbell is pressed, with the event picture
+  mode: single
+  max_exceeded: silent
+  triggers:
+  - trigger: state
+    entity_id: event.doorbell_doorbell
+  conditions:
+  # Event entities change state on every press; skip restores after the integration was unavailable.
+  - condition: template
+    value_template: >-
+      {{ trigger.from_state is not none
+         and trigger.from_state.state != 'unavailable'
+         and trigger.to_state.state not in ['unavailable', 'unknown']
+         and trigger.to_state.attributes.event_type == 'pressed' }}
+  actions:
+  # The event picture usually lands a few seconds after the press; send without it if it doesn't.
+  - wait_for_trigger:
+    - trigger: state
+      entity_id: image.doorbell_last_event
+    timeout: '00:00:12'
+    continue_on_timeout: true
+  - variables:
+      mobile_notifiers: >-
+        {{ states.notify
+           | selectattr('entity_id', 'search', 'mobile_app')
+           | map(attribute='entity_id')
+           | list }}
+  - repeat:
+      for_each: '{{ mobile_notifiers }}'
+      sequence:
+      - action: '{{ repeat.item }}'
+        data:
+          title: Doorbell
+          message: "Someone's at the front door · {{ now().strftime('%-I:%M %p') }}"
+          data:
+            image: /api/image_proxy/image.doorbell_last_event
+            tag: doorbell
+            channel: Doorbell
+            importance: high
+            priority: high
+            ttl: 0
+            clickAction: /cameras
+            url: /cameras
+            push:
+              sound:
+                name: default
+              interruption-level: time-sensitive

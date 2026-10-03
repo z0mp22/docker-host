@@ -51,7 +51,7 @@ check_container() {
 }
 
 main() {
-  for c in homeassistant mosquitto npm pihole node-exporter \
+  for c in homeassistant mosquitto npm pihole eufy-bridge node-exporter \
            pihole-exporter npm-exporter npm-metrics-exporter; do
     check_container "${c}"
   done

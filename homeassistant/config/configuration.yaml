@@ -417,9 +417,18 @@ panel_custom:
     url_path: house
     sidebar_title: Home
     sidebar_icon: mdi:home
-    module_url: /local/home/home-panel.js?v=2
+    module_url: /local/home/home-panel.js?v=3
     config:
       person: person.cody
+      # Eufy T8210 via the eufy-sdk integration (eufy-bridge container). The HomeBase shows up as
+      # "zdoorbell" with its own event entities; these are the doorbell's.
+      doorbell: &doorbell
+        name: Front door
+        camera: camera.doorbell
+        ring: event.doorbell_doorbell
+        detection: event.doorbell_detection
+        battery: sensor.doorbell_battery
+        last_event: image.doorbell_last_event
       weather: weather.home
       climate:
         - {name: Bedroom, temperature: sensor.tp358s_1c99_temperature, humidity: sensor.tp358s_1c99_humidity}
@@ -505,8 +514,9 @@ panel_custom:
     url_path: cameras
     sidebar_title: Security
     sidebar_icon: mdi:shield-home
-    module_url: /local/security/security-panel.js?v=3
+    module_url: /local/security/security-panel.js?v=4
     config:
+      doorbell: *doorbell
       # Frigate camera ids; entities follow Frigate's {id}_{thing} naming.
       # labels: detections shown as activity. security: false = shown, but not counted in status.
       cameras:

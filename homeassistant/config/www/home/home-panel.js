@@ -3,6 +3,7 @@
 // deliberately simple read of a domain; its own panel has the full detail.
 
 const ICONS = {
+  mdiDoorbell: "M12 10C10.9 10 10 10.9 10 12S10.9 14 12 14 14 13.1 14 12 13.1 10 12 10M16 2H8C6.9 2 6 2.9 6 4V20C6 21.1 6.9 22 8 22H16C17.1 22 18 21.1 18 20V4C18 2.9 17.1 2 16 2M16 20H8V4H16V20Z",
   mdiAccessPointOff: "M20.84 22.73L12.1 14C12.06 14 12.03 14 12 14C10.9 14 10 13.11 10 12C10 11.97 10 11.94 10 11.9L8.4 10.29C8.15 10.81 8 11.38 8 12C8 13.11 8.45 14.11 9.17 14.83L7.76 16.24C6.67 15.15 6 13.65 6 12C6 10.83 6.34 9.74 6.93 8.82L5.5 7.37C4.55 8.67 4 10.27 4 12C4 14.22 4.89 16.22 6.34 17.66L4.93 19.07C3.12 17.26 2 14.76 2 12C2 9.72 2.77 7.63 4.06 5.95L1.11 3L2.39 1.73L22.11 21.46L20.84 22.73M15.93 12.73L17.53 14.33C17.83 13.61 18 12.83 18 12C18 10.35 17.33 8.85 16.24 7.76L14.83 9.17C15.55 9.89 16 10.89 16 12C16 12.25 15.97 12.5 15.93 12.73M19.03 15.83L20.5 17.28C21.44 15.75 22 13.94 22 12C22 9.24 20.88 6.74 19.07 4.93L17.66 6.34C19.11 7.78 20 9.79 20 12C20 13.39 19.65 14.7 19.03 15.83Z",
   mdiAccountArrowRight: "M18 16H14V18H18V20L21 17L18 14V16M11 4C8.8 4 7 5.8 7 8S8.8 12 11 12 15 10.2 15 8 13.2 4 11 4M11 14C6.6 14 3 15.8 3 18V20H12.5C12.2 19.2 12 18.4 12 17.5C12 16.3 12.3 15.2 12.9 14.1C12.3 14.1 11.7 14 11 14",
   mdiAlarmLight: "M6,6.9L3.87,4.78L5.28,3.37L7.4,5.5L6,6.9M13,1V4H11V1H13M20.13,4.78L18,6.9L16.6,5.5L18.72,3.37L20.13,4.78M4.5,10.5V12.5H1.5V10.5H4.5M19.5,10.5H22.5V12.5H19.5V10.5M6,20H18A2,2 0 0,1 20,22H4A2,2 0 0,1 6,20M12,5A6,6 0 0,1 18,11V19H6V11A6,6 0 0,1 12,5Z",
@@ -55,6 +56,7 @@ const ICONS = {
 };
 
 const ALARM_SOUNDS = ["fire_alarm", "scream", "yell"];
+const RING_NOW_MS = 3 * 60e3;
 const LONG_OFFLINE_MS = 7 * 864e5;
 const WEATHER_REFRESH_MS = 30 * 60e3;
 const HISTORY_REFRESH_MS = 5 * 60e3;
@@ -163,6 +165,7 @@ h1 { margin: 2px 0 0; font-size: 34px; font-weight: 700; line-height: 1.1; }
 .dot.green { background: var(--green); box-shadow: 0 0 10px var(--green); }
 .dot.amber { background: var(--amber); box-shadow: 0 0 10px var(--amber); }
 .dot.red { background: var(--red); box-shadow: 0 0 10px var(--red); animation: pulse 1.2s ease-in-out infinite; }
+.dot.blue { background: var(--blue); box-shadow: 0 0 10px var(--blue); animation: pulse 1.6s ease-in-out infinite; }
 @keyframes pulse { 50% { opacity: .35; } }
 .chip { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 11px; border-radius: 10px; font-size: 14px; font-weight: 500; background: #172234; border: 1px solid var(--line); color: #c3cedd; }
 .chip .ic { width: 17px; height: 17px; }
@@ -567,6 +570,19 @@ class HomePanel extends HTMLElement {
       if (st[`binary_sensor.${c}_stream_active`]?.state === "off" || st[`switch.${c}_recordings`]?.state === "off" || st[`switch.${c}_detect`]?.state === "off")
         attn.push({ level: "amber", icon: "mdiCctv", title: `${nice(c)} camera isn't fully watching`, text: "Video, recording or detection is switched off.", go });
     }
+    this._ring = null;
+    const d = this._c.doorbell;
+    if (!d) return;
+    const name = d.name || "Front door";
+    const ents = [d.camera, d.ring, d.battery].map((id) => (id ? st[id] : undefined));
+    // Entities that don't exist yet mean the integration isn't installed: show nothing rather than an outage.
+    if (ents.some(Boolean) && !ents.some(live))
+      attn.push({ level: "red", icon: "mdiDoorbell", title: `${name} doorbell isn't reporting`, text: "Rings won't reach Home Assistant until the Eufy bridge is back.", go });
+    const at = live(st[d.ring]) ? Date.parse(st[d.ring].state) : NaN;
+    if (Number.isFinite(at) && Date.now() - at < RING_NOW_MS) {
+      this._ring = { name, at };
+      attn.push({ level: "info", icon: "mdiDoorbell", title: `${name} doorbell rang at ${this._fmtTime(at)}`, text: "Open Security to see who's there.", go });
+    }
   }
 
   _media() {
@@ -886,6 +902,8 @@ class HomePanel extends HTMLElement {
     const greet = hr < 5 ? "Good night" : hr < 12 ? "Good morning" : hr < 18 ? "Good afternoon" : "Good evening";
     const status = urgent.length
       ? { dot: "red", text: urgent[0].title }
+      : this._ring
+        ? { dot: "blue", text: `Doorbell rang · ${this._fmtTime(this._ring.at)}` }
       : needs.length
         ? { dot: "amber", text: `${plural(needs.length, "thing")} need${needs.length === 1 ? "s" : ""} attention` }
         : { dot: "green", text: "All good at home" };

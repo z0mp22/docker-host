@@ -63,6 +63,31 @@ services:
     networks:
       - docker_default
 
+  # Eufy HomeBase 2 + doorbell for the ha-eufy-sdk integration (HA connects to 127.0.0.1:3000).
+  # Ports are published on loopback only: the bundled go2rtc always listens on all interfaces, and its
+  # unauthenticated API can add exec: stream sources, so it must not be reachable from the LAN.
+  # Eufy allows one session per account: opening the Eufy phone app can bump this bridge's login.
+  eufy-bridge:
+    container_name: eufy-bridge
+    image: ghcr.io/mega-yfue/ha-eufy-sdk-bridge:0.3.0
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"
+      - "127.0.0.1:1984:1984"
+      - "127.0.0.1:8554:8554"
+    environment:
+      TZ: America/Denver
+      EUFY_EMAIL: ${EUFY_EMAIL:-}
+      EUFY_PASSWORD: ${EUFY_PASSWORD:-}
+      EUFY_COUNTRY: ${EUFY_COUNTRY:-US}
+      BRIDGE_HOST: 0.0.0.0
+      BRIDGE_PORT: 3000
+      BRIDGE_SELF_HOST: 127.0.0.1
+    volumes:
+      - /docker/eufy-bridge:/app/data
+    networks:
+      - docker_default
+
 networks:
   mqtt_network:
     external: true

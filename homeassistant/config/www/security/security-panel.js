@@ -1,6 +1,7 @@
 // Security panel: a dependency-free web component registered via panel_custom.
 // Reads Frigate integration entities, named {camera id}_{thing} (e.g.
 // binary_sensor.driveway_person_occupancy). Cameras come from panel_custom `config`.
+// The optional `doorbell` config takes explicit entity ids (Eufy via eufy-sdk, not Frigate).
 
 const ICONS = {
   mdiChevronLeft: "M15.41,16.58L10.83,12L15.41,7.41L14,6L8,12L14,18L15.41,16.58Z",
@@ -21,6 +22,10 @@ const ICONS = {
   mdiShieldCheckOutline: "M21,11C21,16.55 17.16,21.74 12,23C6.84,21.74 3,16.55 3,11V5L12,1L21,5V11M12,21C15.75,20 19,15.54 19,11.22V6.3L12,3.18L5,6.3V11.22C5,15.54 8.25,20 12,21M10,17L6,13L7.41,11.59L10,14.17L16.59,7.58L18,9",
   mdiShieldHome: "M11,13H13V16H16V11H18L12,6L6,11H8V16H11V13M12,1L21,5V11C21,16.55 17.16,21.74 12,23C6.84,21.74 3,16.55 3,11V5L12,1Z",
   mdiVideoOff: "M3.27,2L2,3.27L4.73,6H4A1,1 0 0,0 3,7V17A1,1 0 0,0 4,18H16C16.2,18 16.39,17.92 16.54,17.82L19.73,21L21,19.73M21,6.5L17,10.5V7A1,1 0 0,0 16,6H9.82L21,17.18V6.5Z",
+  mdiDoorbell: "M12 10C10.9 10 10 10.9 10 12S10.9 14 12 14 14 13.1 14 12 13.1 10 12 10M16 2H8C6.9 2 6 2.9 6 4V20C6 21.1 6.9 22 8 22H16C17.1 22 18 21.1 18 20V4C18 2.9 17.1 2 16 2M16 20H8V4H16V20Z",
+  mdiDoorbellVideo: "M14 15C14 16.11 13.11 17 12 17S10 16.11 10 15 10.9 13 12 13 14 13.9 14 15M18 4V20C18 21.1 17.11 22 16 22H8C6.9 22 6 21.11 6 20V4C6 2.9 6.9 2 8 2H16C17.11 2 18 2.9 18 4M10.5 7C10.5 7.83 11.17 8.5 12 8.5S13.5 7.83 13.5 7 12.83 5.5 12 5.5 10.5 6.17 10.5 7M16 10H8V20H16V10Z",
+  mdiBatteryAlert: "M13 14H11V8H13M13 18H11V16H13M16.7 4H15V2H9V4H7.3C6.6 4 6 4.6 6 5.3V20.6C6 21.4 6.6 22 7.3 22H16.6C17.3 22 17.9 21.4 17.9 20.7V5.3C18 4.6 17.4 4 16.7 4Z",
+  mdiPackageVariantClosed: "M21,16.5C21,16.88 20.79,17.21 20.47,17.38L12.57,21.82C12.41,21.94 12.21,22 12,22C11.79,22 11.59,21.94 11.43,21.82L3.53,17.38C3.21,17.21 3,16.88 3,16.5V7.5C3,7.12 3.21,6.79 3.53,6.62L11.43,2.18C11.59,2.06 11.79,2 12,2C12.21,2 12.41,2.06 12.57,2.18L20.47,6.62C20.79,6.79 21,7.12 21,7.5V16.5M12,4.15L10.11,5.22L16,8.61L17.96,7.5L12,4.15M6.04,7.5L12,10.85L13.96,9.75L8.08,6.35L6.04,7.5M5,15.91L11,19.29V12.58L5,9.21V15.91M19,15.91V9.21L13,12.58V19.29L19,15.91Z",
 };
 
 const HISTORY_DAYS = 7;
@@ -28,6 +33,11 @@ const VISIT_GAP_MS = 2 * 60e3;
 const SNAP_MS = 10e3;
 const SNAP_ACTIVE_MS = 2e3;
 const ALARM_SOUNDS = ["fire_alarm", "scream", "yell"];
+const RING_NOW_MS = 3 * 60e3;
+const BATTERY_LOW = 20;
+// Doorbell event types shown as activity; plain motion is left out as noise.
+const DOOR_KINDS = { ring: "Rang", person: "Person", package_delivered: "Package delivered", package_taken: "Package picked up" };
+const doorKind = (t) => (t === "stranger" ? "person" : t);
 
 const svg = (name) => `<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="${ICONS[name] || ""}"/></svg>`;
 const esc = (s) =>
@@ -125,6 +135,23 @@ h1 { margin: 0; font-size: 34px; font-weight: 700; line-height: 1.1; }
 .live .ic { width: 16px; height: 16px; }
 .hint { margin-top: 12px; font-size: 13px; color: var(--muted); }
 
+/* Doorbell */
+/* With a doorbell the two columns stack independently, so a tall card doesn't leave gaps beside it. */
+.grid.has-door { grid-template-areas: none; }
+.col { display: flex; flex-direction: column; gap: 22px; min-width: 0; }
+.a-door { grid-area: door; }
+.a-door.ringing { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(76,195,255,.25); }
+.cam.door-img { display: block; width: 100%; margin-top: 14px; aspect-ratio: 4 / 3; }
+.cam.door-img:disabled { cursor: default; }
+.door-meta { margin-top: 12px; font-size: 16px; line-height: 1.5; }
+.door-meta b { font-weight: 600; }
+.door-meta .muted { font-size: 14.5px; }
+.primary { margin-top: 14px; width: 100%; height: 56px; border-radius: 18px; display: flex; align-items: center; justify-content: center; gap: 8px;
+  font-size: 17px; font-weight: 600; background: #1c2940; border: 1px solid rgba(148,170,200,.22); color: var(--text); }
+.primary.now { background: linear-gradient(180deg, #7fd6ff, var(--blue)); border-color: transparent; color: #06213a; }
+.primary:disabled { opacity: .45; }
+.why { margin-top: 8px; font-size: 13px; color: var(--muted); text-align: center; }
+
 /* Timeline */
 .latest { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
 .snap { border-radius: 14px; overflow: hidden; background: #0b111c; border: 1px solid var(--line); text-align: left; padding: 0; }
@@ -191,6 +218,8 @@ h1 { margin: 0; font-size: 34px; font-weight: 700; line-height: 1.1; }
 
 @container (max-width: 980px) {
   .grid { grid-template-columns: minmax(0, 1fr); grid-template-areas: "cams" "timeline" "attn" "settings"; }
+  .grid.has-door { grid-template-areas: "door" "cams" "timeline" "attn" "settings"; }
+  .col { display: contents; }
 }
 @container (max-width: 640px) {
   .app { padding: 14px 14px 24px; }
@@ -207,6 +236,8 @@ h1 { margin: 0; font-size: 34px; font-weight: 700; line-height: 1.1; }
   .cam .pills { top: 6px; left: 6px; gap: 4px; }
   .pill { height: 22px; font-size: 11px; padding: 0 6px; }
   .live { display: none; }
+  .primary { height: 54px; font-size: 16px; border-radius: 16px; }
+  .door-meta { font-size: 15px; }
   .ev { grid-template-columns: 64px 22px minmax(0, 1fr) auto; font-size: 14px; gap: 8px; }
   .modal { padding: 0; place-items: end stretch; }
   .sheet { border-radius: 22px 22px 0 0; padding: 12px 12px calc(12px + env(safe-area-inset-bottom)); }
@@ -239,6 +270,12 @@ class SecurityPanel extends HTMLElement {
     const first = !this._hass;
     this._hass = hass;
     if (first && this.isConnected) this._loadHistory();
+    const d = this._door;
+    if (d) {
+      const sig = `${hass.states[d.ring]?.state}|${hass.states[d.detection]?.state}`;
+      if (this._doorSig !== undefined && sig !== this._doorSig) this._loadDoorHistory();
+      this._doorSig = sig;
+    }
     this._scheduleRender();
   }
 
@@ -281,16 +318,70 @@ class SecurityPanel extends HTMLElement {
     return this._hass.states[`${suffix.split(".")[0]}.${cam.id}_${suffix.split(".")[1]}`];
   }
 
+  get _door() {
+    const d = this._cfg?.doorbell;
+    return d ? { name: "Front door", ...d, id: "doorbell" } : null;
+  }
+
   get _instance() {
     return this._cfg?.frigate_instance || "frigate";
+  }
+
+  _mergeVisits() {
+    this._visits = [...(this._camVisits || []), ...(this._doorVisits || [])].sort((a, b) => b.start - a.start);
+    this._scheduleRender();
   }
 
   // Visits come from Frigate's own events (with ids, so each can be played back).
   // If the Frigate integration can't answer, fall back to HA's detection history.
   async _loadHistory() {
     if (!this._hass) return;
+    this._loadDoorHistory();
     if (await this._loadEvents()) return;
     await this._loadSensorHistory();
+  }
+
+  // Each change of an event entity is one ring/detection; its state is the event's timestamp.
+  async _loadDoorHistory() {
+    const d = this._door;
+    const ids = d ? [d.ring, d.detection].filter((id) => id && this._hass.states[id]) : [];
+    if (!ids.length) return;
+    const since = Date.now() - HISTORY_DAYS * 864e5;
+    try {
+      const res = await this._hass.callWS({
+        type: "history/history_during_period",
+        start_time: new Date(since).toISOString(),
+        entity_ids: ids,
+        minimal_response: false,
+        no_attributes: false,
+        significant_changes_only: false,
+      });
+      const events = [];
+      for (const id of ids) {
+        for (const r of res?.[id] || []) {
+          const at = Date.parse(r.s);
+          const kind = id === d.ring ? "ring" : doorKind(r.a?.event_type);
+          if (Number.isFinite(at) && at >= since && DOOR_KINDS[kind]) events.push({ at, kind });
+        }
+      }
+      const visits = [];
+      const open = {};
+      for (const ev of events.sort((a, b) => a.at - b.at)) {
+        const cur = open[ev.kind];
+        if (cur && ev.at - cur.end <= VISIT_GAP_MS) {
+          if (ev.at === cur.end) continue;
+          cur.end = ev.at;
+          cur.count += 1;
+        } else {
+          open[ev.kind] = { key: `door-${ev.kind}-${ev.at}`, cam: d, kind: ev.kind, door: true, alarm: false, start: ev.at, end: ev.at, count: 1 };
+          visits.push(open[ev.kind]);
+        }
+      }
+      this._doorVisits = visits;
+      this._mergeVisits();
+    } catch (_) {
+      /* timeline is optional */
+    }
   }
 
   async _loadEvents() {
@@ -326,7 +417,8 @@ class SecurityPanel extends HTMLElement {
           visits.push(open[key]);
         }
       }
-      this._visits = visits.sort((a, b) => b.start - a.start);
+      this._camVisits = visits;
+      this._mergeVisits();
       this._fromFrigate = true;
       this._scheduleRender();
       return true;
@@ -370,7 +462,8 @@ class SecurityPanel extends HTMLElement {
           }
         });
       }
-      this._visits = visits.sort((a, b) => b.start - a.start);
+      this._camVisits = visits;
+      this._mergeVisits();
       this._scheduleRender();
     } catch (_) {
       /* timeline is optional */
@@ -560,13 +653,73 @@ class SecurityPanel extends HTMLElement {
     });
   }
 
+  // null until the integration has created at least one of the configured entities.
+  _doorModel() {
+    const d = this._door;
+    if (!d) return null;
+    const st = this._hass.states;
+    const [cam, ring, det, bat, img] = [d.camera, d.ring, d.detection, d.battery, d.last_event].map((id) => (id ? st[id] : undefined));
+    if (![cam, ring, det, bat, img].some(Boolean)) return null;
+    const at = (s) => (live(s) ? Date.parse(s.state) : NaN);
+    // While the entity is unavailable, fall back to the last ring in history.
+    const lastRing = Number.isFinite(at(ring)) ? at(ring) : Math.max(-Infinity, ...(this._doorVisits || []).filter((v) => v.kind === "ring").map((v) => v.end));
+    const seenKind = doorKind(det?.attributes?.event_type);
+    const today = startOfDay(Date.now());
+    const battery = live(bat) && Number.isFinite(Number(bat.state)) ? Math.round(Number(bat.state)) : null;
+    return {
+      ...d,
+      cameraId: d.camera,
+      // The camera entity may idle while the doorbell sleeps, so any live entity means the bridge is reporting.
+      online: [cam, ring, bat].some(live),
+      canWatch: live(cam),
+      lastRing: Number.isFinite(lastRing) ? lastRing : null,
+      ringing: Number.isFinite(lastRing) && Date.now() - lastRing < RING_NOW_MS,
+      ringsToday: (this._doorVisits || []).filter((v) => v.kind === "ring" && v.start >= today).reduce((n, v) => n + v.count, 0),
+      lastSeen: DOOR_KINDS[seenKind] && seenKind !== "ring" && Number.isFinite(at(det)) ? { kind: seenKind, at: at(det) } : null,
+      battery,
+      low: battery !== null && battery < BATTERY_LOW,
+      picture: live(img) ? img.attributes?.entity_picture || "" : "",
+    };
+  }
+
+  _whenText(ms) {
+    const day = dayLabel(ms);
+    return `${agoText(ms)} · ${day === "Today" ? "" : `${day} `}${this._fmtTime(ms)}`;
+  }
+
+  _doorCard(door) {
+    const pills = [];
+    if (door.ringing) pills.push(`<span class="pill now">${svg("mdiDoorbell")}Rang ${esc(agoText(door.lastRing))}</span>`);
+    if (door.low) pills.push(`<span class="pill warn">${svg("mdiBatteryAlert")}${door.battery}%</span>`);
+    const ringLine = door.lastRing
+      ? `<b>Rang ${esc(this._whenText(door.lastRing))}</b>${door.ringsToday > 1 ? ` <span class="muted">· ${door.ringsToday} rings today</span>` : ""}`
+      : door.online
+        ? `<b>No rings in the last ${HISTORY_DAYS} days</b>`
+        : `<b>Can't read rings right now</b>`;
+    const seenLine = door.lastSeen ? `<div class="muted">${esc(DOOR_KINDS[door.lastSeen.kind])} seen ${esc(this._whenText(door.lastSeen.at))}</div>` : "";
+    const why = !door.online ? "The doorbell isn't reporting, so live view can't start." : !door.canWatch ? "Live view isn't available right now." : "";
+    return `<section class="card a-door ${door.ringing ? "ringing" : ""}">
+      <div class="head"><span class="eyebrow">${esc(door.name)}</span><span class="muted">${door.battery !== null ? `Battery ${door.battery}%` : ""}</span></div>
+      <button class="cam door-img ${door.online ? "" : "off"}" data-action="live" data-entity="${esc(door.cameraId)}" ${why ? "disabled" : ""} aria-label="Watch ${esc(door.name)} live">
+        ${door.picture ? `<img src="${esc(door.picture)}" alt="Latest picture from ${esc(door.name)}">` : ""}
+        ${!door.picture || !door.online ? `<div class="center">${svg("mdiDoorbellVideo")}<br>${door.online ? "No picture yet" : "Not reporting"}</div>` : ""}
+        <div class="pills">${pills.join("")}</div>
+      </button>
+      <div class="door-meta"><div>${ringLine}</div>${seenLine}</div>
+      <button class="primary ${door.ringing ? "now" : ""}" data-action="live" data-entity="${esc(door.cameraId)}" ${why ? "disabled" : ""}>${svg("mdiPlayCircleOutline")}Watch live</button>
+      ${why ? `<div class="why">${esc(why)}</div>` : ""}
+    </section>`;
+  }
+
   _render() {
     if (!this._hass) return;
     const cams = this._model();
+    const door = this._doorModel();
     const sec = cams.filter((c) => c.security);
     const now = Date.now();
 
     const offline = sec.filter((c) => !c.online);
+    const offlineNames = [...offline.map((c) => c.name), ...(door && !door.online ? [door.name] : [])];
     const alarms = sec.flatMap((c) => c.alarms.map((a) => ({ cam: c, kind: a })));
     const active = sec.filter((c) => c.present.length);
     const streamOff = sec.filter((c) => c.online && c.streamOn === false);
@@ -577,7 +730,8 @@ class SecurityPanel extends HTMLElement {
 
     let status;
     if (alarms.length) status = { dot: "red", label: `${nice(alarms[0].kind)} heard`, detail: [...new Set(alarms.map((a) => a.cam.name))].join(", ") };
-    else if (offline.length) status = { dot: "red", label: `${plural(offline.length, "camera")} offline`, detail: offline.map((c) => c.name).join(", ") };
+    else if (door?.ringing) status = { dot: "blue", label: "Doorbell rang", detail: `${door.name} · ${this._fmtTime(door.lastRing)}` };
+    else if (offlineNames.length) status = { dot: "red", label: `${plural(offlineNames.length, "camera")} offline`, detail: offlineNames.join(", ") };
     else if (active.length) {
       const c = active[0];
       status = { dot: "blue", label: `${nice(c.present[0])} in ${c.name}`, detail: `since ${this._fmtTime(c.presentSince)}${active.length > 1 ? ` · also ${active.slice(1).map((x) => x.name).join(", ")}` : ""}` };
@@ -589,6 +743,9 @@ class SecurityPanel extends HTMLElement {
     const items = [];
     for (const a of alarms) items.push({ level: "red", icon: "mdiAlarmLight", title: `${nice(a.kind)} detected on ${a.cam.name}`, text: "Tap the camera to watch live." });
     for (const c of offline) items.push({ level: "red", icon: "mdiCctvOff", title: `${c.name} camera is offline`, text: "Frigate isn't getting video from it, so nothing is being watched or recorded there." });
+    if (door && !door.online)
+      items.push({ level: "red", icon: "mdiDoorbell", title: `${door.name} doorbell isn't reporting`, text: "No status from the Eufy bridge, so rings won't show here. Check the eufy-bridge container and the HomeBase." });
+    if (door?.low) items.push({ level: "amber", icon: "mdiBatteryAlert", title: `${door.name} doorbell battery is at ${door.battery}%`, text: "Charge it soon. A flat doorbell doesn't ring." });
     for (const c of streamOff) items.push({ level: "amber", icon: "mdiVideoOff", title: `${c.name} video is switched off`, text: "Turned off at the camera itself. No recording or detection until it's back on." });
     for (const c of notRecording) items.push({ level: "amber", icon: "mdiRecordRec", title: `${c.name} isn't recording`, text: "Detection may still alert you, but no footage is being saved." });
     for (const c of noDetect) items.push({ level: "amber", icon: "mdiMotionSensorOff", title: `Detection is off on ${c.name}`, text: "No person alerts or snapshots from this camera." });
@@ -634,12 +791,13 @@ class SecurityPanel extends HTMLElement {
         const day = dayLabel(v.start);
         const header = day !== lastDay ? `<div class="day">${esc(day)}</div>` : "";
         lastDay = day;
-        const icon = v.alarm ? "mdiAlarmLight" : v.kind === "car" ? "mdiCar" : "mdiAccount";
-        const dur = v.end ? fmtDur(v.end - v.start) : "ongoing";
+        const icon = v.alarm ? "mdiAlarmLight" : v.kind === "car" ? "mdiCar" : v.kind === "ring" ? "mdiDoorbell" : v.kind.startsWith("package") ? "mdiPackageVariantClosed" : "mdiAccount";
+        const dur = v.door ? (v.count > 1 ? `${v.count}×` : "") : v.end ? fmtDur(v.end - v.start) : "ongoing";
+        const label = v.door ? DOOR_KINDS[v.kind] : nice(v.kind);
         const first = v.events?.find((e) => e.has_clip) || v.events?.[0];
         const thumb = first ? `<img class="th" data-sign="${esc(this._media(first, "thumbnail.jpg"))}" alt="">` : svg(icon);
         const clips = v.events ? v.events.filter((e) => e.has_clip).length : 0;
-        const body = `<span class="t">${this._fmtTime(v.start)}</span>${thumb}<span class="w">${esc(nice(v.kind))} · ${esc(v.cam.name)}${clips > 1 ? ` <small>${clips} clips</small>` : ""}</span><span class="d">${esc(dur)}${first ? ` ${svg("mdiPlay")}` : ""}</span>`;
+        const body = `<span class="t">${this._fmtTime(v.start)}</span>${thumb}<span class="w">${esc(label)} · ${esc(v.cam.name)}${clips > 1 ? ` <small>${clips} clips</small>` : ""}</span><span class="d">${esc(dur)}${first ? ` ${svg("mdiPlay")}` : ""}</span>`;
         return first
           ? `${header}<button class="ev play ${v.alarm ? "alarm-ev" : ""}" data-action="play" data-key="${esc(v.key)}">${body}</button>`
           : `${header}<div class="ev ${v.alarm ? "alarm-ev" : ""}">${body}</div>`;
@@ -664,7 +822,7 @@ class SecurityPanel extends HTMLElement {
               .join("")}</div>`
           : ""
       }
-      ${rows || `<div class="empty">No people or alarms ${week ? "this week" : "in the last 24 hours"}.</div>`}
+      ${rows || `<div class="empty">No ${door ? "visitors" : "people"} or alarms ${week ? "this week" : "in the last 24 hours"}.</div>`}
       <div class="links">
         ${this._range === "recent" && visits.length > listed.length ? `<button class="link" data-action="range" data-range="day">Show all ${visits.length} from today</button>` : ""}
         ${this._range !== "recent" ? `<button class="link" data-action="range" data-range="recent">Show less</button>` : ""}
@@ -718,7 +876,11 @@ class SecurityPanel extends HTMLElement {
             <div class="status"><span class="dot ${s.dot}"></span><b>${esc(s.label)}</b><span class="muted">·</span><span class="muted detail">${esc(s.detail)}</span></div></div>
         </header>
         ${alarms.length ? `<div class="alarm" role="alert">${svg("mdiAlarmLight")}<span>${esc(alarms.map((a) => `${nice(a.kind)} detected · ${a.cam.name}`).join(" · "))}</span></div>` : ""}
-        <main class="grid">${camsCard}${timeline}${attn}${settings}</main>
+        ${
+          door
+            ? `<main class="grid has-door"><div class="col">${camsCard}${settings}</div><div class="col">${this._doorCard(door)}${timeline}${attn}</div></main>`
+            : `<main class="grid">${camsCard}${timeline}${attn}${settings}</main>`
+        }
         ${this._toast ? `<div class="toast" role="alert">${esc(this._toast)}</div>` : ""}
       </div>`;
     if (html !== this._html) {
