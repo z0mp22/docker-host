@@ -1,0 +1,295 @@
+# HVAC running cost: Honeywell TCC thermostat (gas furnace + central AC) priced at
+# Fort Collins ToD electric rates (custom_templates/fc_tod.jinja) plus Xcel gas.
+# The thermostat only reports what it is doing, not power, so kW/BTU come from the
+# equipment assumptions below (editable on the /hvac panel).
+# Monthly totals live in utility_meter long-term statistics (the recorder keeps 10 days).
+
+input_number:
+  hvac_ac_kw:
+    name: "HVAC: AC condenser draw"
+    icon: mdi:snowflake
+    min: 0.5
+    max: 8
+    step: 0.1
+    unit_of_measurement: kW
+    mode: box
+  hvac_blower_kw:
+    name: "HVAC: furnace blower draw"
+    icon: mdi:fan
+    min: 0.05
+    max: 1.5
+    step: 0.05
+    unit_of_measurement: kW
+    mode: box
+  hvac_furnace_btuh:
+    name: "HVAC: furnace gas input"
+    icon: mdi:fire
+    min: 20000
+    max: 200000
+    step: 1000
+    unit_of_measurement: BTU/h
+    mode: box
+  hvac_gas_usd_per_therm:
+    name: "HVAC: gas price (all-in)"
+    icon: mdi:cash
+    min: 0.2
+    max: 3
+    step: 0.01
+    unit_of_measurement: USD/therm
+    mode: box
+
+template:
+  - sensor:
+      - name: FC electric tariff
+        unique_id: fc_electric_tariff
+        icon: mdi:clock-time-five-outline
+        state: >
+          {% from 'fc_tod.jinja' import fc_period %}{{ fc_period(now()) }}
+        attributes:
+          season: >
+            {% from 'fc_tod.jinja' import fc_season %}{{ fc_season(now()) }}
+          rate: >
+            {% from 'fc_tod.jinja' import fc_rate, fc_period %}{{ fc_rate(now(), fc_period(now())) | float }}
+          on_peak_rate: >
+            {% from 'fc_tod.jinja' import fc_rate %}{{ fc_rate(now(), 'on_peak') | float }}
+          off_peak_rate: >
+            {% from 'fc_tod.jinja' import fc_rate %}{{ fc_rate(now(), 'off_peak') | float }}
+          peak_start_hour: >
+            {% from 'fc_tod.jinja' import fc_peak_start %}{{ fc_peak_start(now()) | int }}
+          peak_end_hour: >
+            {% from 'fc_tod.jinja' import fc_peak_end %}{{ fc_peak_end(now()) | int }}
+          holiday: >
+            {% from 'fc_tod.jinja' import fc_is_holiday %}{{ fc_is_holiday(now()) == 'True' }}
+          next_change: >
+            {% from 'fc_tod.jinja' import fc_next_change %}{{ fc_next_change(now()) }}
+          rates_year: >
+            {% from 'fc_tod.jinja' import fc_rates_year %}{{ fc_rates_year(now()) | int }}
+          rates: >
+            {% from 'fc_tod.jinja' import fc_rates_json %}{{ fc_rates_json() | from_json }}
+
+      # heating/cooling/fan/idle/off. Honeywell's hvac_action is None in off mode, and
+      # fan-only shows as hvac_action "fan" or fan_action "running".
+      - name: HVAC activity
+        unique_id: hvac_activity
+        icon: mdi:hvac
+        availability: "{{ states('climate.thermostat') not in ['unavailable', 'unknown'] }}"
+        state: >
+          {% set c = 'climate.thermostat' %}
+          {% set a = state_attr(c, 'hvac_action') %}
+          {% if a == 'cooling' %}cooling
+          {% elif a == 'heating' %}heating
+          {% elif a == 'fan' or state_attr(c, 'fan_action') == 'running' %}fan
+          {% elif is_state(c, 'off') %}off
+          {% else %}idle{% endif %}
+
+      - name: HVAC estimated power
+        unique_id: hvac_estimated_power
+        unit_of_measurement: W
+        device_class: power
+        state_class: measurement
+        availability: "{{ has_value('sensor.hvac_activity') }}"
+        state: >
+          {% set act = states('sensor.hvac_activity') %}
+          {% set ac = states('input_number.hvac_ac_kw') | float(0) %}
+          {% set blower = states('input_number.hvac_blower_kw') | float(0) %}
+          {% if act == 'cooling' %}{{ ((ac + blower) * 1000) | round(0) }}
+          {% elif act in ['heating', 'fan'] %}{{ (blower * 1000) | round(0) }}
+          {% else %}0{% endif %}
+
+      - name: HVAC electric cost rate
+        unique_id: hvac_electric_cost_rate
+        unit_of_measurement: USD/h
+        state_class: measurement
+        icon: mdi:flash
+        availability: "{{ has_value('sensor.hvac_estimated_power') and state_attr('sensor.fc_electric_tariff', 'rate') is number }}"
+        state: >
+          {{ (states('sensor.hvac_estimated_power') | float(0) / 1000 * state_attr('sensor.fc_electric_tariff', 'rate')) | round(4) }}
+
+      - name: HVAC gas usage rate
+        unique_id: hvac_gas_usage_rate
+        unit_of_measurement: therm/h
+        state_class: measurement
+        icon: mdi:fire
+        availability: "{{ has_value('sensor.hvac_activity') }}"
+        state: >
+          {{ (states('input_number.hvac_furnace_btuh') | float(0) / 100000) | round(3) if is_state('sensor.hvac_activity', 'heating') else 0 }}
+
+      - name: HVAC gas cost rate
+        unique_id: hvac_gas_cost_rate
+        unit_of_measurement: USD/h
+        state_class: measurement
+        icon: mdi:fire
+        availability: "{{ has_value('sensor.hvac_gas_usage_rate') }}"
+        state: >
+          {{ (states('sensor.hvac_gas_usage_rate') | float(0) * states('input_number.hvac_gas_usd_per_therm') | float(0)) | round(4) }}
+
+      # 1 while in that activity. The "h/h" unit makes the Riemann integral come out in hours.
+      - name: HVAC heating flag
+        unique_id: hvac_heating_flag
+        unit_of_measurement: h/h
+        availability: "{{ has_value('sensor.hvac_activity') }}"
+        state: "{{ 1 if is_state('sensor.hvac_activity', 'heating') else 0 }}"
+      - name: HVAC cooling flag
+        unique_id: hvac_cooling_flag
+        unit_of_measurement: h/h
+        availability: "{{ has_value('sensor.hvac_activity') }}"
+        state: "{{ 1 if is_state('sensor.hvac_activity', 'cooling') else 0 }}"
+      - name: HVAC fan flag
+        unique_id: hvac_fan_flag
+        unit_of_measurement: h/h
+        availability: "{{ has_value('sensor.hvac_activity') }}"
+        state: "{{ 1 if is_state('sensor.hvac_activity', 'fan') else 0 }}"
+
+      - name: HVAC cost this month
+        unique_id: hvac_cost_this_month
+        unit_of_measurement: USD
+        device_class: monetary
+        icon: mdi:cash-multiple
+        availability: >
+          {{ has_value('sensor.hvac_electric_cost_monthly_on_peak') and has_value('sensor.hvac_electric_cost_monthly_off_peak')
+             and has_value('sensor.hvac_gas_cost_monthly') }}
+        state: >
+          {{ (states('sensor.hvac_electric_cost_monthly_on_peak') | float(0) + states('sensor.hvac_electric_cost_monthly_off_peak') | float(0)
+              + states('sensor.hvac_gas_cost_monthly') | float(0)) | round(2) }}
+
+# Riemann sums. "left" is exact for these step-shaped sources; max_sub_interval keeps
+# accumulating through long steady runs and lands tariff switches within a minute.
+sensor:
+  - platform: integration
+    name: HVAC estimated energy
+    unique_id: hvac_estimated_energy
+    source: sensor.hvac_estimated_power
+    unit_prefix: k
+    unit_time: h
+    method: left
+    round: 4
+    max_sub_interval: {minutes: 1}
+  - platform: integration
+    name: HVAC electric cost total
+    unique_id: hvac_electric_cost_total
+    source: sensor.hvac_electric_cost_rate
+    unit_time: h
+    method: left
+    round: 4
+    max_sub_interval: {minutes: 1}
+  - platform: integration
+    name: HVAC gas usage total
+    unique_id: hvac_gas_usage_total
+    source: sensor.hvac_gas_usage_rate
+    unit_time: h
+    method: left
+    round: 4
+    max_sub_interval: {minutes: 1}
+  - platform: integration
+    name: HVAC gas cost total
+    unique_id: hvac_gas_cost_total
+    source: sensor.hvac_gas_cost_rate
+    unit_time: h
+    method: left
+    round: 4
+    max_sub_interval: {minutes: 1}
+  - platform: integration
+    name: HVAC heating runtime
+    unique_id: hvac_heating_runtime
+    source: sensor.hvac_heating_flag
+    unit_time: h
+    method: left
+    round: 4
+    max_sub_interval: {minutes: 1}
+  - platform: integration
+    name: HVAC cooling runtime
+    unique_id: hvac_cooling_runtime
+    source: sensor.hvac_cooling_flag
+    unit_time: h
+    method: left
+    round: 4
+    max_sub_interval: {minutes: 1}
+  - platform: integration
+    name: HVAC fan runtime
+    unique_id: hvac_fan_runtime
+    source: sensor.hvac_fan_flag
+    unit_time: h
+    method: left
+    round: 4
+    max_sub_interval: {minutes: 1}
+
+# No `name:`, so entity ids follow the keys (tariff meters get _on_peak / _off_peak).
+utility_meter:
+  hvac_energy_monthly:
+    unique_id: hvac_energy_monthly
+    source: sensor.hvac_estimated_energy
+    cycle: monthly
+    tariffs: [on_peak, off_peak]
+  hvac_electric_cost_monthly:
+    unique_id: hvac_electric_cost_monthly
+    source: sensor.hvac_electric_cost_total
+    cycle: monthly
+    tariffs: [on_peak, off_peak]
+  hvac_gas_usage_monthly:
+    unique_id: hvac_gas_usage_monthly
+    source: sensor.hvac_gas_usage_total
+    cycle: monthly
+  hvac_gas_cost_monthly:
+    unique_id: hvac_gas_cost_monthly
+    source: sensor.hvac_gas_cost_total
+    cycle: monthly
+  hvac_heating_runtime_monthly:
+    unique_id: hvac_heating_runtime_monthly
+    source: sensor.hvac_heating_runtime
+    cycle: monthly
+  hvac_cooling_runtime_monthly:
+    unique_id: hvac_cooling_runtime_monthly
+    source: sensor.hvac_cooling_runtime
+    cycle: monthly
+  hvac_fan_runtime_monthly:
+    unique_id: hvac_fan_runtime_monthly
+    source: sensor.hvac_fan_runtime
+    cycle: monthly
+
+automation:
+  - id: hvac_cost_follow_tod_period
+    alias: "HVAC cost: follow Fort Collins ToD period"
+    mode: queued
+    triggers:
+      - trigger: state
+        entity_id: sensor.fc_electric_tariff
+        to: [on_peak, off_peak]
+      - trigger: homeassistant
+        event: start
+    conditions:
+      - condition: template
+        value_template: "{{ states('sensor.fc_electric_tariff') in ['on_peak', 'off_peak'] }}"
+    actions:
+      - delay: {seconds: 5}
+      - action: select.select_option
+        target:
+          entity_id: [select.hvac_energy_monthly, select.hvac_electric_cost_monthly]
+        data:
+          option: "{{ states('sensor.fc_electric_tariff') }}"
+
+  # input_numbers start at their min on first load, and `initial:` would undo panel edits
+  # on every restart, so seed typical values once (each min is below any real value).
+  - id: hvac_cost_seed_assumptions
+    alias: "HVAC cost: seed equipment assumptions"
+    mode: single
+    triggers:
+      - trigger: homeassistant
+        event: start
+    actions:
+      - delay: {seconds: 10}
+      - repeat:
+          for_each:
+            - {entity: input_number.hvac_ac_kw, min: 0.5, value: 3.5}
+            - {entity: input_number.hvac_blower_kw, min: 0.05, value: 0.5}
+            - {entity: input_number.hvac_furnace_btuh, min: 20000, value: 80000}
+            - {entity: input_number.hvac_gas_usd_per_therm, min: 0.2, value: 0.85}
+          sequence:
+            - if:
+                - condition: template
+                  value_template: "{{ states(repeat.item.entity) | float(-1) == repeat.item.min }}"
+              then:
+                - action: input_number.set_value
+                  target:
+                    entity_id: "{{ repeat.item.entity }}"
+                  data:
+                    value: "{{ repeat.item.value }}"

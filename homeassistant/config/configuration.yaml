@@ -23,6 +23,10 @@ usb:
 webhook:
 zeroconf:
 
+# One file per feature (helpers + sensors + automations together).
+homeassistant:
+  packages: !include_dir_named packages
+
 # Defaults otherwise. The climbing feed carries ~30 KB of list attributes that change nightly;
 # keeping history of it would bloat the DB (and trips HA's 16 KB attribute warning).
 recorder:
@@ -526,6 +530,16 @@ panel_custom:
       feed: sensor.mountain_project_feed
       # A run is expected every 24 h (+ up to 15 min jitter); past this the panel says it stopped updating.
       stale_hours: 26
+  - name: climate-panel
+    url_path: hvac
+    sidebar_title: Climate
+    sidebar_icon: mdi:thermostat
+    module_url: /local/climate/climate-panel.js?v=1
+    config:
+      # Honeywell TCC integration. If HA names it differently, rename the entity to this id
+      # (packages/hvac_cost.yaml reads it too).
+      climate: climate.thermostat
+      weather: weather.home
 
 automation: !include automations.yaml
 script: !include scripts.yaml

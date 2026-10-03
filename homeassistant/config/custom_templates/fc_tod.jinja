@@ -1,0 +1,68 @@
+{#- Fort Collins Utilities residential time-of-day (ToD) electric pricing.
+    https://www.fortcollins.gov/Services/Utilities/Pay-My-Bill/Rates
+    Council approves new rates each November, effective January: add the new year to RATES. -#}
+{%- set RATES = {
+  '2026': {'summer': {'on_peak': 0.3230, 'off_peak': 0.0898}, 'winter': {'on_peak': 0.2978, 'off_peak': 0.0898}},
+} -%}
+
+{%- macro fc_season(dt) -%}{{ 'summer' if 5 <= dt.month <= 9 else 'winter' }}{%- endmacro -%}
+
+{%- macro fc_peak_start(dt) -%}{{ 14 if 5 <= dt.month <= 9 else 17 }}{%- endmacro -%}
+
+{%- macro fc_peak_end(dt) -%}{{ 19 if 5 <= dt.month <= 9 else 21 }}{%- endmacro -%}
+
+{#- Off-peak holidays, as observed (Sat -> Fri, Sun -> Mon). Returns comma-joined YYYY-MM-DD. -#}
+{%- macro fc_holidays(y) -%}
+  {%- set base = now().replace(year=y, month=1, day=1, hour=12, minute=0, second=0, microsecond=0) -%}
+  {%- set ns = namespace(out=[]) -%}
+  {%- for yy, m, d in [(y, 1, 1), (y, 7, 4), (y, 12, 25), (y + 1, 1, 1)] -%}
+    {%- set dt = base.replace(year=yy, month=m, day=d) -%}
+    {%- set dt = dt - timedelta(days=1) if dt.weekday() == 5 else (dt + timedelta(days=1) if dt.weekday() == 6 else dt) -%}
+    {%- set ns.out = ns.out + [dt.strftime('%Y-%m-%d')] -%}
+  {%- endfor -%}
+  {%- set may31 = base.replace(month=5, day=31) -%}
+  {%- set sep1 = base.replace(month=9, day=1) -%}
+  {%- set nov1 = base.replace(month=11, day=1) -%}
+  {%- set ns.out = ns.out + [
+      (may31 - timedelta(days=may31.weekday())).strftime('%Y-%m-%d'),
+      (sep1 + timedelta(days=(7 - sep1.weekday()) % 7)).strftime('%Y-%m-%d'),
+      (nov1 + timedelta(days=(3 - nov1.weekday()) % 7 + 21)).strftime('%Y-%m-%d')] -%}
+  {{- ns.out | join(',') -}}
+{%- endmacro -%}
+
+{%- macro fc_is_holiday(dt) -%}{{ dt.strftime('%Y-%m-%d') in fc_holidays(dt.year).split(',') }}{%- endmacro -%}
+
+{%- macro fc_is_peak_day(dt) -%}{{ dt.weekday() < 5 and fc_is_holiday(dt) == 'False' }}{%- endmacro -%}
+
+{%- macro fc_period(dt) -%}
+  {{- 'on_peak' if fc_is_peak_day(dt) == 'True' and fc_peak_start(dt) | int <= dt.hour < fc_peak_end(dt) | int else 'off_peak' -}}
+{%- endmacro -%}
+
+{#- Start of the next period, as an ISO timestamp. -#}
+{%- macro fc_next_change(dt) -%}
+  {%- if fc_period(dt) == 'on_peak' -%}
+    {{- dt.replace(hour=fc_peak_end(dt) | int, minute=0, second=0, microsecond=0).isoformat() -}}
+  {%- else -%}
+    {%- set ns = namespace(found='') -%}
+    {%- for i in range(0, 12) -%}
+      {%- if not ns.found -%}
+        {%- set d = dt + timedelta(days=i) -%}
+        {%- set start = d.replace(hour=fc_peak_start(d) | int, minute=0, second=0, microsecond=0) -%}
+        {%- if fc_is_peak_day(d) == 'True' and start > dt -%}
+          {%- set ns.found = start.isoformat() -%}
+        {%- endif -%}
+      {%- endif -%}
+    {%- endfor -%}
+    {{- ns.found -}}
+  {%- endif -%}
+{%- endmacro -%}
+
+{#- Newest rate year at or before dt's year (so January keeps working until RATES is updated). -#}
+{%- macro fc_rates_year(dt) -%}
+  {%- set years = RATES.keys() | map('int') | select('le', dt.year) | list -%}
+  {{- (years | max if years else RATES.keys() | map('int') | min) -}}
+{%- endmacro -%}
+
+{%- macro fc_rate(dt, period) -%}{{ RATES[fc_rates_year(dt)][fc_season(dt)][period] }}{%- endmacro -%}
+
+{%- macro fc_rates_json() -%}{{ RATES | to_json }}{%- endmacro -%}
