@@ -3,6 +3,9 @@
 // deliberately simple read of a domain; its own panel has the full detail.
 
 const ICONS = {
+  mdiCheck: "M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z",
+  mdiClockOutline: "M12,20A8,8 0 0,0 20,12A8,8 0 0,0 12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20M12,2A10,10 0 0,1 22,12A10,10 0 0,1 12,22C6.47,22 2,17.5 2,12A10,10 0 0,1 12,2M12.5,7V12.25L17,14.92L16.25,16.15L11,13V7H12.5Z",
+  mdiWateringCan: "M18.5 7.47C17.76 8.2 17.57 9.25 17.92 10.15L15 13.07V11C15 10.45 14.55 10 14 10H12.97C13 9.83 13 9.67 13 9.5C13 6.46 10.54 4 7.5 4S2 6.46 2 9.5C2 11.21 2.78 12.73 4 13.74V20C4 20.55 4.45 21 5 21H14C14.55 21 15 20.55 15 20V15.89L19.33 11.56C20.23 11.91 21.28 11.73 22 11L18.5 7.47M4.05 10C4.03 9.83 4 9.67 4 9.5C4 7.57 5.57 6 7.5 6S11 7.57 11 9.5C11 9.67 10.97 9.83 10.95 10H4.05Z",
   mdiDoorbell: "M12 10C10.9 10 10 10.9 10 12S10.9 14 12 14 14 13.1 14 12 13.1 10 12 10M16 2H8C6.9 2 6 2.9 6 4V20C6 21.1 6.9 22 8 22H16C17.1 22 18 21.1 18 20V4C18 2.9 17.1 2 16 2M16 20H8V4H16V20Z",
   mdiAccessPointOff: "M20.84 22.73L12.1 14C12.06 14 12.03 14 12 14C10.9 14 10 13.11 10 12C10 11.97 10 11.94 10 11.9L8.4 10.29C8.15 10.81 8 11.38 8 12C8 13.11 8.45 14.11 9.17 14.83L7.76 16.24C6.67 15.15 6 13.65 6 12C6 10.83 6.34 9.74 6.93 8.82L5.5 7.37C4.55 8.67 4 10.27 4 12C4 14.22 4.89 16.22 6.34 17.66L4.93 19.07C3.12 17.26 2 14.76 2 12C2 9.72 2.77 7.63 4.06 5.95L1.11 3L2.39 1.73L22.11 21.46L20.84 22.73M15.93 12.73L17.53 14.33C17.83 13.61 18 12.83 18 12C18 10.35 17.33 8.85 16.24 7.76L14.83 9.17C15.55 9.89 16 10.89 16 12C16 12.25 15.97 12.5 15.93 12.73M19.03 15.83L20.5 17.28C21.44 15.75 22 13.94 22 12C22 9.24 20.88 6.74 19.07 4.93L17.66 6.34C19.11 7.78 20 9.79 20 12C20 13.39 19.65 14.7 19.03 15.83Z",
   mdiAccountArrowRight: "M18 16H14V18H18V20L21 17L18 14V16M11 4C8.8 4 7 5.8 7 8S8.8 12 11 12 15 10.2 15 8 13.2 4 11 4M11 14C6.6 14 3 15.8 3 18V20H12.5C12.2 19.2 12 18.4 12 17.5C12 16.3 12.3 15.2 12.9 14.1C12.3 14.1 11.7 14 11 14",
@@ -149,10 +152,11 @@ button:disabled { cursor: default; }
 .muted { color: var(--muted); }
 .app { max-width: 1480px; margin: 0 auto; padding: 28px 28px 40px; display: grid; gap: 22px;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  grid-template-areas: "head head" "lights lights" "weather weather" "tiles tiles" "climate climate" "agenda attn"; }
-.app.urgent { grid-template-areas: "head head" "attn attn" "lights lights" "weather weather" "tiles tiles" "climate climate" "agenda agenda"; }
+  grid-template-areas: "head head" "lights lights" "weather weather" "tiles tiles" "trees outdoor" "climate climate" "agenda attn"; }
+.app.urgent { grid-template-areas: "head head" "attn attn" "lights lights" "weather weather" "tiles tiles" "trees outdoor" "climate climate" "agenda agenda"; }
 .a-head { grid-area: head; } .a-lights { grid-area: lights; } .a-weather { grid-area: weather; } .a-tiles { grid-area: tiles; }
 .a-climate { grid-area: climate; } .a-agenda { grid-area: agenda; } .a-attn { grid-area: attn; }
+.a-trees { grid-area: trees; } .a-outdoor { grid-area: outdoor; }
 
 .top { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
 .icon-btn { width: 48px; height: 48px; border-radius: 16px; display: grid; place-items: center; background: var(--card-2); border: 1px solid var(--line); flex: none; }
@@ -262,6 +266,50 @@ h1 { margin: 2px 0 0; font-size: 34px; font-weight: 700; line-height: 1.1; }
 .seg button.on { background: #24324a; color: var(--text); font-weight: 600; }
 .empty { margin-top: 12px; padding: 18px; border-radius: 14px; border: 1px dashed var(--line); color: var(--muted); font-size: 14.5px; text-align: center; }
 
+/* Trees */
+.verdict { display: flex; align-items: center; gap: 14px; margin-top: 12px; }
+.verdict .vic { width: 52px; height: 52px; border-radius: 16px; display: grid; place-items: center; flex: none; background: #243246; color: #c3cedd; }
+.verdict .vic .ic { width: 28px; height: 28px; }
+.verdict.water .vic { background: linear-gradient(160deg, #86dcff, #1d8fe8); color: #fff; box-shadow: 0 8px 22px rgba(29,143,232,.35); }
+.verdict.final .vic { background: linear-gradient(160deg, #fcd58a, #d98b16); color: #3b2604; box-shadow: 0 8px 22px rgba(217,139,22,.35); }
+.verdict.skip .vic { background: linear-gradient(160deg, #6ee7a8, #15803d); color: #fff; }
+.verdict b { font-size: 26px; font-weight: 700; display: block; line-height: 1.1; }
+.verdict span { font-size: 14px; color: var(--muted); }
+.why2 { margin-top: 12px; font-size: 16px; line-height: 1.45; color: #dbe3ee; }
+.do { margin-top: 10px; display: grid; gap: 6px; font-size: 14.5px; color: #c3cedd; }
+.do div { display: flex; gap: 8px; align-items: flex-start; }
+.do .ic { width: 18px; height: 18px; color: var(--sky); margin-top: 1px; }
+.facts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 14px; }
+.fact { border-radius: 14px; background: #121a28; border: 1px solid var(--line); padding: 10px 12px; min-width: 0; }
+.fact b { display: block; font-size: 17px; font-weight: 600; overflow-wrap: anywhere; }
+.fact span { font-size: 12.5px; color: var(--muted); }
+.trees-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 14px; flex-wrap: wrap; font-size: 14px; color: var(--muted); }
+.btn { height: 42px; padding: 0 16px; border-radius: 14px; background: linear-gradient(180deg, #3fb6ff, #1b82e0); color: #fff; font-weight: 600; font-size: 15px; display: inline-flex; align-items: center; gap: 8px; }
+.btn .ic { width: 20px; height: 20px; }
+.btn:disabled { background: #243044; color: #6f7d92; }
+
+/* Outdoor */
+.score-row { display: flex; align-items: center; gap: 18px; margin-top: 12px; flex-wrap: wrap; }
+.ring2 { position: relative; width: 112px; height: 112px; flex: none; }
+.ring2 svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.ring2 .tr { fill: none; stroke: #1d2a40; stroke-width: 10; }
+.ring2 .pr { fill: none; stroke-width: 10; stroke-linecap: round; }
+.ring2 .c { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; }
+.ring2 .c b { font-size: 34px; font-weight: 700; line-height: 1; display: block; }
+.ring2 .c span { font-size: 11.5px; color: var(--muted); }
+.lvl { font-size: 22px; font-weight: 700; }
+.lvl.green { color: var(--green); } .lvl.yellow { color: var(--amber); } .lvl.red { color: var(--red); }
+.comp { display: grid; gap: 4px; font-size: 14px; color: #c3cedd; margin-top: 4px; }
+.timeline { margin-top: 14px; }
+.timeline svg { display: block; width: 100%; height: 130px; overflow: visible; }
+.timeline .l-score { fill: none; stroke: var(--green); stroke-width: 2.5; vector-effect: non-scaling-stroke; }
+.timeline .l-aqi { fill: none; stroke: #c084fc; stroke-width: 1.8; vector-effect: non-scaling-stroke; stroke-dasharray: 4 3; }
+.timeline .band { opacity: .07; }
+.timeline .wl { stroke: rgba(252,211,77,.55); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.timeline .wd { fill: var(--gold); }
+.wild { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.wild span { font-size: 12.5px; padding: 3px 8px; border-radius: 8px; background: rgba(252,211,77,.1); color: #f7d49a; border: 1px solid rgba(252,211,77,.25); }
+
 /* Agenda */
 .agenda { margin-top: 4px; display: flex; flex-direction: column; }
 .agday { font-size: 12.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); font-weight: 600; margin: 14px 0 2px; }
@@ -297,12 +345,15 @@ h1 { margin: 2px 0 0; font-size: 34px; font-weight: 700; line-height: 1.1; }
 }
 @container (max-width: 900px) {
   .app, .app.urgent { grid-template-columns: minmax(0, 1fr); }
-  .app { grid-template-areas: "head" "lights" "weather" "tiles" "climate" "agenda" "attn"; }
-  .app.urgent { grid-template-areas: "head" "attn" "lights" "weather" "tiles" "climate" "agenda"; }
+  .app { grid-template-areas: "head" "lights" "weather" "trees" "outdoor" "tiles" "climate" "agenda" "attn"; }
+  .app.urgent { grid-template-areas: "head" "attn" "lights" "weather" "trees" "outdoor" "tiles" "climate" "agenda"; }
   .a-climate { grid-template-columns: minmax(0, 1fr); gap: 14px; }
 }
 @container (max-width: 640px) {
   .app { padding: 14px 14px 24px; gap: 14px; }
+  .facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .verdict b { font-size: 22px; }
+  .ring2 { width: 96px; height: 96px; } .ring2 .c b { font-size: 28px; }
   .icon-btn { width: 44px; height: 44px; border-radius: 14px; }
   h1 { font-size: 24px; } .status { font-size: 15px; margin-top: 6px; }
   .card { border-radius: 22px; padding: 16px 14px; }
@@ -341,6 +392,7 @@ class HomePanel extends HTMLElement {
     this._hist = {};
     this._range = "24h";
     this._events = [];
+    this._wildlife = [];
     this._toast = "";
     this._showAllAttn = false;
     this.shadowRoot.addEventListener("click", (e) => this._onClick(e));
@@ -374,13 +426,14 @@ class HomePanel extends HTMLElement {
     this._wxTimer = setInterval(() => this._loadWeather(), WEATHER_REFRESH_MS);
     this._histTimer = setInterval(() => this._loadHistory(), HISTORY_REFRESH_MS);
     this._calTimer = setInterval(() => this._loadCalendars(), CALENDAR_REFRESH_MS);
+    this._wildTimer = setInterval(() => this._loadWildlife(), 10 * 60e3);
     if (this._hass) this._refreshAll();
     this._subscribe();
     this._scheduleRender();
   }
 
   disconnectedCallback() {
-    [this._tick, this._wxTimer, this._histTimer, this._calTimer].forEach(clearInterval);
+    [this._tick, this._wxTimer, this._histTimer, this._calTimer, this._wildTimer].forEach(clearInterval);
     this._unsub?.();
     this._unsub = null;
     this._subscribing = false;
@@ -394,6 +447,27 @@ class HomePanel extends HTMLElement {
     this._loadWeather();
     this._loadHistory();
     this._loadCalendars();
+    this._loadWildlife();
+  }
+
+  // Frigate wildlife detections for the outdoor timeline (last 24 h).
+  async _loadWildlife() {
+    const o = this._c.outdoor;
+    if (!this._hass || !o?.wildlife_labels?.length) return;
+    try {
+      let res = await this._hass.callWS({
+        type: "frigate/events/get",
+        instance_id: o.frigate_instance || "frigate",
+        labels: o.wildlife_labels,
+        after: Math.floor((Date.now() - 864e5) / 1000),
+        limit: 200,
+      });
+      if (typeof res === "string") res = JSON.parse(res);
+      this._wildlife = (Array.isArray(res) ? res : []).map((e) => ({ at: e.start_time * 1000, label: e.label, camera: e.camera }));
+      this._scheduleRender();
+    } catch (_) {
+      /* timeline still works without wildlife */
+    }
   }
 
   // HA's own daily forecast is only the fallback for when Open-Meteo can't be reached directly.
@@ -442,7 +516,8 @@ class HomePanel extends HTMLElement {
   }
 
   async _loadHistory() {
-    const ids = this._c.climate.flatMap((r) => [r.temperature, r.humidity]).filter(Boolean);
+    const o = this._c.outdoor || {};
+    const ids = [...this._c.climate.flatMap((r) => [r.temperature, r.humidity]), o.score, o.aqi].filter(Boolean);
     if (!this._hass || !ids.length) return;
     try {
       const res = await this._hass.callWS({
@@ -528,6 +603,13 @@ class HomePanel extends HTMLElement {
     else if (a === "range") {
       this._range = el.dataset.range;
       this._render();
+    } else if (a === "watered") {
+      const t = this._c.trees || {};
+      try {
+        await this._hass.callService("script", "turn_on", { entity_id: t.mark_watered || "script.trees_mark_watered" });
+      } catch (err) {
+        this._showToast(`Couldn't log watering: ${err.message || err}`);
+      }
     } else if (a === "more-attn") {
       this._showAllAttn = !this._showAllAttn;
       this._render();
@@ -870,6 +952,98 @@ class HomePanel extends HTMLElement {
     </section>`;
   }
 
+  _treesCard() {
+    const t = this._c.trees;
+    if (!t) return "";
+    const st = this._hass.states;
+    const d = st[t.decision];
+    if (!d) return `<section class="card a-trees"><div class="eyebrow">Trees</div><div class="empty">Trees sensors not set up.</div></section>`;
+    const a = d.attributes || {};
+    const code = a.code || "skip";
+    const water = code.startsWith("water");
+    const cls = code === "water_final" ? "final" : water ? "water" : "skip";
+    const title = { water: "Water today", water_final: "Final deep watering", water_winter: "Winter watering today" }[code] || "Skip today";
+    const lw = st[t.last_watered]?.state;
+    const lwMs = lw ? Date.parse(lw.replace(" ", "T")) : NaN;
+    const lwText = !Number.isFinite(lwMs) || new Date(lwMs).getFullYear() < 2000 ? "No watering logged yet" : `Last watered ${dayLabel(lwMs).toLowerCase()} at ${this._fmtTime(lwMs)}`;
+    const num1 = (v, u) => (v === undefined || v === null || v === "" || v === "None" ? "—" : `${Math.round(parseFloat(v) * 100) / 100}${u}`);
+    const notify = st[t.notify_time]?.state;
+    return `<section class="card a-trees">
+      <div class="head"><span class="eyebrow">Trees · ${esc(a.season || "")}</span>${notify ? `<span class="muted">Reminder ${esc(notify.slice(0, 5))}</span>` : ""}</div>
+      <div class="verdict ${cls}"><div class="vic">${svg(water ? "mdiWateringCan" : "mdiCheckCircleOutline")}</div><div><b>${esc(title)}</b><span>Hot Wings maple · Sensation boxelder</span></div></div>
+      <div class="why2">${esc(a.reason || "")}</div>
+      ${water ? `<div class="do"><div>${svg("mdiWateringCan")}<span>${esc(a.how_much || "")}</span></div><div>${svg("mdiClockOutline")}<span>${esc(a.when || "")}</span></div></div>` : ""}
+      <div class="facts">
+        <div class="fact"><b>${esc(num1(a.rain_7d, " in"))}</b><span>Rain, 7 days</span></div>
+        <div class="fact"><b>${esc(a.days_since_rain ?? "—")}</b><span>Days since rain</span></div>
+        <div class="fact"><b>${esc(num1(a.soil_temp, "°F"))}</b><span>Soil at 2 in</span></div>
+        <div class="fact"><b>${esc(String(a.next_hard_freeze || "—").replace("None in the NWS forecast", "None forecast"))}</b><span>Next hard freeze</span></div>
+      </div>
+      <div class="trees-foot"><span>${esc(lwText)}</span><button class="btn" data-action="watered">${svg("mdiCheck")}I watered</button></div>
+    </section>`;
+  }
+
+  _outdoorCard() {
+    const o = this._c.outdoor;
+    if (!o) return "";
+    const st = this._hass.states;
+    const score = num(st[o.score]?.state);
+    const level = st[o.level]?.state;
+    const aqiSt = st[o.aqi];
+    if (score === null) {
+      const missing = [!live(st[o.airnow]) && "AirNow", !live(st[o.purpleair_pm25]) && "PurpleAir"].filter(Boolean);
+      return `<section class="card a-outdoor"><div class="eyebrow">Outdoor score</div>
+        <div class="empty">Waiting for air-quality data${missing.length ? ` (${esc(missing.join(" and "))} not set up yet)` : ""}.</div></section>`;
+    }
+    const color = { green: "var(--green)", yellow: "var(--amber)", red: "var(--red)" }[level] || "var(--grey)";
+    const R = 46;
+    const C = 2 * Math.PI * R;
+    const sa = st[o.score]?.attributes || {};
+    const gust = num(st[o.wind_gust]?.state);
+    const pm = num(st[o.purpleair_pm25]?.state);
+    // 24 h timeline: score (0-100) and AQI on a shared 0-200 axis, wildlife ticks along the bottom.
+    const since = Date.now() - 864e5;
+    const series = (id) => thin((this._hist[id] || []).filter((p) => p[0] >= since));
+    const sp = series(o.score);
+    const ap = series(o.aqi);
+    const W = 600;
+    const H = 130;
+    const xOf = (t) => ((t - since) / 864e5) * W;
+    const yOf = (v, max) => 6 + (1 - Math.min(v, max) / max) * (H - 30);
+    const pathOf = (pts, max) => pts.map(([t, v], i) => `${i ? "L" : "M"}${xOf(t).toFixed(1)},${yOf(v, max).toFixed(1)}`).join("");
+    const wild = this._wildlife.filter((w) => w.at >= since);
+    const counts = Object.entries(wild.reduce((m, w) => ((m[w.label] = (m[w.label] || 0) + 1), m), {}));
+    const timeline =
+      sp.length > 1 || wild.length
+        ? `<div class="timeline"><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">
+            <rect class="band" x="0" y="${yOf(100, 100)}" width="${W}" height="${yOf(num(st["input_number.outdoor_green_min"]?.state) ?? 70, 100) - yOf(100, 100)}" fill="var(--green)"/>
+            ${sp.length > 1 ? `<path class="l-score" d="${pathOf(sp, 100)}" style="stroke:${color}"/>` : ""}
+            ${ap.length > 1 ? `<path class="l-aqi" d="${pathOf(ap, 200)}"/>` : ""}
+            ${wild.map((w) => `<line class="wl" x1="${xOf(w.at).toFixed(1)}" y1="${H - 22}" x2="${xOf(w.at).toFixed(1)}" y2="${H - 8}"/><circle class="wd" cx="${xOf(w.at).toFixed(1)}" cy="${H - 6}" r="3"><title>${esc(nice(w.label))} · ${esc(w.camera)} · ${esc(this._fmtTime(w.at))}</title></circle>`).join("")}
+          </svg>
+          <div class="axis"><span>24 h ago</span><span>Now</span></div>
+          <div class="legend"><span><i style="background:${color}"></i>Outdoor score</span><span><i style="background:#c084fc"></i>AQI (0–200)</span><span><i style="background:var(--gold);height:8px;width:8px;border-radius:50%"></i>Wildlife on cameras</span></div>
+          ${counts.length ? `<div class="wild">${counts.map(([l, n]) => `<span>${esc(nice(l))} × ${n}</span>`).join("")}</div>` : ""}
+        </div>`
+        : `<div class="empty">Collecting history…</div>`;
+    return `<section class="card a-outdoor">
+      <div class="head"><span class="eyebrow">Outdoor score</span><span class="muted">${esc(aqiSt?.attributes?.source || "")}</span></div>
+      <div class="score-row">
+        <div class="ring2"><svg viewBox="0 0 112 112"><circle class="tr" cx="56" cy="56" r="${R}"/><circle class="pr" cx="56" cy="56" r="${R}" stroke="${color}" stroke-dasharray="${((C * Math.max(0, Math.min(100, score))) / 100).toFixed(1)} ${C.toFixed(1)}"/></svg>
+          <div class="c"><div><b>${Math.round(score)}</b><span>of 100</span></div></div></div>
+        <div>
+          <div class="lvl ${esc(level || "")}">${esc({ green: "Good to go", yellow: "Use judgment", red: "Stay in" }[level] || "—")}</div>
+          <div class="comp">
+            <span>AQI ${esc(aqiSt?.state ?? "—")}${pm !== null ? ` · PurpleAir ${pm} µg/m³ (EPA-corrected)` : ""}</span>
+            ${gust !== null ? `<span>Wind gusts ${Math.round(gust)} mph</span>` : ""}
+            ${sa.climbing && sa.climbing !== "not included" ? `<span>Climbing ${esc(sa.climbing)} · Riding ${esc(sa.riding)}</span>` : ""}
+          </div>
+        </div>
+      </div>
+      ${timeline}
+    </section>`;
+  }
+
   _render() {
     if (!this._hass) return;
     const c = this._c;
@@ -984,7 +1158,7 @@ class HomePanel extends HTMLElement {
     const html = `
       <style>${CSS}</style>
       <div class="app ${urgent.length ? "urgent" : ""}">
-        ${header}${lights}${this._weatherCard(weather)}${tileHtml}${climate}${agendaHtml}${attnHtml}
+        ${header}${lights}${this._weatherCard(weather)}${tileHtml}${this._treesCard()}${this._outdoorCard()}${climate}${agendaHtml}${attnHtml}
         ${this._toast ? `<div class="toast" role="alert">${esc(this._toast)}</div>` : ""}
       </div>`;
     if (html !== this._html) {

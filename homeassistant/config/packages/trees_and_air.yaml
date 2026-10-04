@@ -295,7 +295,8 @@ input_boolean:
   outdoor_include_riding:
     name: "Outdoor: include riding score"
     icon: mdi:bike
-  trees_air_defaults_applied:
+  # Bump the suffix to re-apply the defaults below (e.g. after adding a helper).
+  trees_air_defaults_v2:
     name: "Trees & air: defaults applied"
     icon: mdi:check-decagram
 
@@ -749,16 +750,16 @@ automation:
     alias: "Trees & air: apply default settings"
     description: >-
       One-time defaults for the tuning helpers. Helpers keep their own value across restarts,
-      so this runs once (until input_boolean.trees_air_defaults_applied is turned off again).
+      so this runs once (until input_boolean.trees_air_defaults_v2 is turned off again).
     triggers:
       - trigger: homeassistant
         event: start
       - trigger: state
-        entity_id: input_boolean.trees_air_defaults_applied
+        entity_id: input_boolean.trees_air_defaults_v2
         to: "off"
     conditions:
       - condition: state
-        entity_id: input_boolean.trees_air_defaults_applied
+        entity_id: input_boolean.trees_air_defaults_v2
         state: "off"
     actions:
       - variables:
@@ -818,6 +819,13 @@ automation:
           entity_id: input_datetime.trees_notify_time
         data:
           time: "07:30:00"
+      # A new date+time helper starts at "today 00:00", which would read as "watered today".
+      # 1970 means "no watering logged yet" to the decision logic.
+      - action: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.trees_last_watered
+        data:
+          datetime: "1970-01-01 00:00:00"
       - action: input_boolean.turn_on
         target:
           entity_id:
@@ -825,7 +833,7 @@ automation:
             - input_boolean.trees_city_hours
       - action: input_boolean.turn_on
         target:
-          entity_id: input_boolean.trees_air_defaults_applied
+          entity_id: input_boolean.trees_air_defaults_v2
     mode: single
 
   - id: trees_daily_watering_notification
