@@ -463,7 +463,18 @@ panel_custom:
       cameras: [driveway, garage, basement]
       recordings: sensor.plex_recordings_sync_meta
       # Every calendar.* entity shows in Up next (e.g. Google Calendar) except these.
-      calendars_exclude: [calendar.opensprinkler_schedule]
+      calendars_exclude:
+        - calendar.opensprinkler_schedule
+        - calendar.week_numbers
+        # Games already appear in Up next as recordings at the same time.
+        - calendar.dallas_cowboys
+        - calendar.denver_broncos
+        # Finished seasons.
+        - calendar.2024_adult_spring_softball_spring_2024_tuesday_men_s_a_2hr
+        - calendar.2024_adult_summer_softball_summer_2024_tuesday_men_s_b_1hr_revised_5_29
+        - calendar.2025_adult_summer_softball_summer_2025_tuesday_men_s_a_2hr_revised_5_28
+        - calendar.2026_adult_spring_softball_spring_2026_tuesday_men_s_a
+        - calendar.2026_adult_summer_softball_summer_2026_tuesday_men_s_b_revised_7_22
       network:
         devices: sensor.network_devices
         latency: {Cloudflare: sensor.internet_latency_cloudflare, Google: sensor.internet_latency_google}
