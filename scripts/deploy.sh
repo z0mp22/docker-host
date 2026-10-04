@@ -75,10 +75,13 @@ sync_mosquitto() {
 }
 
 sync_npm_custom() {
-  log "syncing NPM stub_status config"
+  log "syncing NPM custom config (stub_status, real client IP)"
   sudo mkdir -p "${DEPLOY_ROOT}/npm/data/nginx/custom"
-  install_file "${REPO_ROOT}/npm/nginx/custom/http.conf" \
-    "${DEPLOY_ROOT}/npm/data/nginx/custom/http.conf" 644
+  local conf
+  for conf in http.conf server_proxy.conf; do
+    install_file "${REPO_ROOT}/npm/nginx/custom/${conf}" \
+      "${DEPLOY_ROOT}/npm/data/nginx/custom/${conf}" 644
+  done
 }
 
 sync_exporter_stack() {

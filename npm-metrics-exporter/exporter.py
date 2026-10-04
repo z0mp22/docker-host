@@ -20,8 +20,10 @@ LOG_DIR = os.environ.get("LOG_DIR", "/data/logs")
 LISTEN_ADDR = os.environ.get("LISTEN_ADDR", "0.0.0.0")
 LISTEN_PORT = int(os.environ.get("LISTEN_PORT", "9114"))
 
+# NPM "proxy" log_format: [time] <cache> <upstream status> <status> - <method> <scheme> <host> ...
+# Upstream status is "-" when nginx answers itself (http->https redirects, block-exploits 403s).
 ACCESS_RE = re.compile(
-    r"\] - (?P<status>\d{3}) \d{3} - (?P<method>\S+) (?P<scheme>\S+) (?P<domain>\S+)"
+    r"\] \S+ \S+ (?P<status>\d{3}) - (?P<method>\S+) (?P<scheme>\S+) (?P<domain>\S+)"
 )
 
 proxy_hosts_total = Gauge(

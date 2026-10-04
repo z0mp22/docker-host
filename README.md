@@ -19,6 +19,11 @@ Push to `main` → GitHub Actions deploys to `/docker` on the Pi via a self-host
 | unifi-poller | 9130 | `unifi-poller/` (optional) |
 | garmin-coaching-report | — (Mon 09:00 MT cron) | `garmin-coaching-report/` |
 
+`npm/nginx/custom/server_proxy.conf` makes NPM log the real visitor IP (Cloudflare's
+`CF-Connecting-IP`) instead of a Cloudflare edge. NPM's trusted-proxy list also includes
+CloudFront, so a client coming through CloudFront could set that header itself; fine for
+dashboards, don't use it for access control.
+
 Frigate NVR runs on **minipc** (`10.0.0.6`) — see [czampino/frigate](https://github.com/czampino/frigate).  
 Prometheus/Grafana scrape this host from **minipc** — see [z0mp22/minipc](https://github.com/z0mp22/minipc).
 
