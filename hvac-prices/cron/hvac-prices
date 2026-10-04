@@ -1,0 +1,4 @@
+# docker-host: hvac-prices — daily 6:30 AM (plus up to 15 min jitter); no-op once this month succeeded
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+30 6 * * * root /docker/hvac-prices/scripts/run-prices.sh --cron >> /docker/hvac-prices/cron.log 2>&1

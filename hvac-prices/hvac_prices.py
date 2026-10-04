@@ -1,22 +1,19 @@
 #!/usr/bin/env python3
-"""Refresh the HVAC cost prices in Home Assistant (homeassistant/config/packages/hvac_cost.yaml).
+"""Fetch the prices behind the HVAC cost model (homeassistant/config/packages/hvac_cost.yaml).
 
 Fort Collins ToD electric rates -> input_number.fc_rate_* / fc_rates_year
 Xcel marginal residential gas $/therm -> input_number.hvac_gas_usd_per_therm
-Result line -> input_text.hvac_prices_status (shown on the /hvac panel)
 
-Both sites need a real browser (Akamai bot wall; Salesforce file viewer), so this runs on
-a machine with Playwright + Chromium, from the systemd user timer next to this file.
-Usage: update_hvac_prices.py [--dry-run]
+Writes $STATE_DIR/prices.json; scripts/run-prices.sh publishes it to HA's config dir, where
+sensor.hvac_prices_feed reads it and an automation applies the prices. Both sites need a real
+browser (Akamai bot wall; Salesforce file viewer), hence Chromium in the image.
 """
-import argparse
 import html
 import json
 import os
 import re
 import subprocess
 import sys
-import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import date, datetime
@@ -24,9 +21,8 @@ from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 
-HA_URL = os.environ.get("HA_URL", "http://10.0.0.4:8123")
-TOKEN_FILE = Path(os.environ.get("HA_TOKEN_FILE", "~/.config/hvac-prices/ha_token")).expanduser()
-CHROMIUM = os.environ.get("CHROMIUM", "/snap/bin/chromium")
+STATE_DIR = Path(os.environ.get("STATE_DIR", "/state"))
+CHROMIUM = os.environ.get("CHROMIUM", "/usr/bin/chromium")
 FC_URL = "https://www.fortcollins.gov/Services/Utilities/Pay-My-Bill/Rates"
 XCEL_RATE_BOOKS = "https://www.xcelenergy.com/company/rates_and_regulations/rates/rate_books"
 UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36"
@@ -132,85 +128,54 @@ def fetch_xcel(ctx):
     return {"effective": eff, "summary_as_of": as_of, "per_therm_before_tax": total, "gca": gca, "marginal": marginal}
 
 
-def ha(token, method, path, body=None):
-    req = urllib.request.Request(
-        f"{HA_URL}{path}",
-        method=method,
-        data=json.dumps(body).encode() if body is not None else None,
-        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
-    )
-    with urllib.request.urlopen(req, timeout=30) as r:
-        return json.loads(r.read() or "null")
-
-
 def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--dry-run", action="store_true", help="fetch and print, don't write to Home Assistant")
-    args = ap.parse_args()
-    token = os.environ.get("HA_TOKEN") or TOKEN_FILE.read_text().strip()
+    out = STATE_DIR / "prices.json"
+    try:
+        previous = json.loads(out.read_text())
+    except (OSError, ValueError):
+        previous = {}
 
-    errors, targets, notes = [], {}, []
+    errors, prices, notes, details = [], {}, [], {}
     with sync_playwright() as p:
-        browser = p.chromium.launch(executable_path=CHROMIUM, args=["--no-sandbox"])
+        browser = p.chromium.launch(executable_path=CHROMIUM, args=["--no-sandbox", "--disable-dev-shm-usage"])
         ctx = browser.new_context(user_agent=UA)
         try:
             fc = fetch_fc(ctx.new_page())
+            details["fc"] = fc
             if fc["year"] > date.today().year:
                 notes.append(f"FC {fc['year']} rates published, applying in January")
             else:
-                targets.update({f"input_number.fc_rate_{k}": v for k, v in fc.items() if k != "year"})
-                targets["input_number.fc_rates_year"] = fc["year"]
+                prices.update({f"input_number.fc_rate_{k}": v for k, v in fc.items() if k != "year"})
+                prices["input_number.fc_rates_year"] = fc["year"]
                 notes.append(f"FC {fc['year']} rates")
-            print("Fort Collins:", fc)
         except Exception as e:
             errors.append(f"FC: {e}")
         try:
             gas = fetch_xcel(ctx)
-            targets["input_number.hvac_gas_usd_per_therm"] = gas["marginal"]
+            details["xcel"] = {k: str(v) if isinstance(v, date) else v for k, v in gas.items()}
+            prices["input_number.hvac_gas_usd_per_therm"] = gas["marginal"]
             notes.insert(0, f"Xcel {gas['effective']:%b %-d %Y} ${gas['marginal']:.3f}/therm")
-            print("Xcel:", gas)
         except Exception as e:
             errors.append(f"Xcel: {e}")
         browser.close()
 
-    changes = []
-    for entity, new in list(targets.items()):
-        try:
-            old = ha(token, "GET", f"/api/states/{entity}")["state"]
-        except urllib.error.HTTPError as e:
-            if e.code != 404:
-                raise
-            errors.append(f"{entity} doesn't exist in HA; deploy packages/hvac_cost.yaml")
-            continue
-        try:
-            changed = abs(float(old) - float(new)) > 1e-6
-        except ValueError:
-            changed = True
-        if changed:
-            changes.append((entity, old, new))
-    stamp = datetime.now().astimezone().isoformat(timespec="minutes")
-    status = f"{stamp} {'error · ' + ' | '.join(errors) if errors else 'ok'} · {' · '.join(notes)}"[:255]
-    print("changes:", changes or "none")
-    print("status:", status)
-    if args.dry_run:
-        return 1 if errors else 0
-
-    for entity, _, new in changes:
-        ha(token, "POST", "/api/services/input_number/set_value", {"entity_id": entity, "value": new})
-    ha(token, "POST", "/api/services/input_text/set_value", {"entity_id": "input_text.hvac_prices_status", "value": status})
-    if changes or errors:
-        lines = [f"- {e.split('.', 1)[1]}: {o} → {n}" for e, o, n in changes] + [f"- ⚠ {e}" for e in errors]
-        ha(token, "POST", "/api/services/persistent_notification/create", {
-            "notification_id": "hvac_prices",
-            "title": "HVAC price update failed" if errors else "HVAC prices updated",
-            "message": "\n".join(lines),
-        })
+    now = datetime.now().astimezone().isoformat(timespec="seconds")
+    feed = {
+        "schema": 1,
+        "status": "error" if errors else "ok",
+        "last_attempt": now,
+        "last_success": now if not errors else previous.get("last_success"),
+        "summary": " · ".join(notes),
+        "errors": errors,
+        "prices": prices,
+        "details": details,
+    }
+    tmp = out.with_suffix(".tmp")
+    tmp.write_text(json.dumps(feed, indent=1))
+    tmp.replace(out)
+    print(json.dumps(feed, indent=1))
     return 1 if errors else 0
 
 
 if __name__ == "__main__":
-    try:
-        sys.exit(main())
-    except PriceError as e:
-        print(f"error: {e}", file=sys.stderr)
-        sys.exit(1)
+    sys.exit(main())

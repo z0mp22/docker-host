@@ -266,6 +266,26 @@ deploy_mountain_project_feed() {
   fi
 }
 
+deploy_hvac_prices() {
+  log "deploying hvac-prices"
+  sync_exporter_stack "hvac-prices"
+  mkdir -p "${DEPLOY_ROOT}/hvac-prices/state"
+  install_file "${REPO_ROOT}/hvac-prices/scripts/run-prices.sh" \
+    "${DEPLOY_ROOT}/hvac-prices/scripts/run-prices.sh" 755
+  install_file "${REPO_ROOT}/hvac-prices/cron/hvac-prices" \
+    "/etc/cron.d/hvac-prices" 644
+  (
+    cd "${DEPLOY_ROOT}/hvac-prices"
+    docker compose build
+  )
+  # First deploy only: publish prices now instead of waiting for the next 6:30 AM run.
+  if [ ! -f "${DEPLOY_ROOT}/homeassistant/hvac_prices.json" ]; then
+    "${DEPLOY_ROOT}/hvac-prices/scripts/run-prices.sh" \
+      >> "${DEPLOY_ROOT}/hvac-prices/cron.log" 2>&1 \
+      || log "WARN: initial hvac-prices run failed (see cron.log)"
+  fi
+}
+
 
 restart_homeassistant_if_running() {
   if docker ps -a --format '{{.Names}}' | grep -qx 'homeassistant'; then
@@ -352,6 +372,7 @@ main() {
   install_plex_mqtt_bridge
   install_hdhomerun_signal_bridge
   deploy_mountain_project_feed
+  deploy_hvac_prices
   restart_homeassistant_if_running
   add_roku_integrations
   log "deploy complete"

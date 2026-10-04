@@ -1,7 +1,8 @@
 # HVAC running cost: Honeywell TCC thermostat (gas furnace + central AC) priced at
 # Fort Collins ToD electric rates (custom_templates/fc_tod.jinja) plus Xcel gas.
-# Prices (fc_rate_*, fc_rates_year, hvac_gas_usd_per_therm) are refreshed monthly by
-# tools/hvac-prices, which reports in input_text.hvac_prices_status.
+# Prices (fc_rate_*, fc_rates_year, hvac_gas_usd_per_therm) are refreshed monthly by the
+# hvac-prices job on docker-host: it writes /config/hvac_prices.json, sensor.hvac_prices_feed
+# reads it, and the "apply price feed" automation copies validated prices into the helpers.
 # The thermostat only reports what it is doing, not power, so kW/BTU come from the
 # equipment assumptions below (editable on the /hvac panel).
 # Monthly totals live in utility_meter long-term statistics (the recorder keeps 10 days).
@@ -197,6 +198,22 @@ template:
           {{ (states('sensor.hvac_electric_cost_monthly_on_peak') | float(0) + states('sensor.hvac_electric_cost_monthly_off_peak') | float(0)
               + states('sensor.hvac_gas_cost_monthly') | float(0)) | round(2) }}
 
+command_line:
+  - sensor:
+      name: HVAC prices feed
+      unique_id: hvac_prices_feed
+      command: cat /config/hvac_prices.json 2>/dev/null || echo '{}'
+      scan_interval: 900
+      availability: "{{ value_json is defined and value_json.schema is defined }}"
+      value_template: "{{ value_json.last_attempt }}"
+      json_attributes:
+        - status
+        - last_attempt
+        - last_success
+        - summary
+        - errors
+        - prices
+
 # Riemann sums. "left" is exact for these step-shaped sources; max_sub_interval keeps
 # accumulating through long steady runs and lands tariff switches within a minute.
 sensor:
@@ -311,6 +328,61 @@ automation:
           entity_id: [select.hvac_energy_monthly, select.hvac_electric_cost_monthly]
         data:
           option: "{{ states('sensor.fc_electric_tariff') }}"
+
+  # Applies each new feed once: the status line starts with the feed's last_attempt.
+  - id: hvac_cost_apply_price_feed
+    alias: "HVAC cost: apply price feed"
+    mode: queued
+    triggers:
+      - trigger: state
+        entity_id: sensor.hvac_prices_feed
+      - trigger: homeassistant
+        event: start
+    conditions:
+      - condition: template
+        value_template: >
+          {{ has_value('sensor.hvac_prices_feed')
+             and states('input_text.hvac_prices_status').split(' ')[0] != states('sensor.hvac_prices_feed') }}
+    actions:
+      - delay: {seconds: 15}
+      - variables:
+          feed: sensor.hvac_prices_feed
+          errors: "{{ state_attr('sensor.hvac_prices_feed', 'errors') or [] }}"
+          changes: >
+            {% set ns = namespace(out=[]) %}
+            {% for e, v in (state_attr('sensor.hvac_prices_feed', 'prices') or {}).items() %}
+              {% if e.startswith('input_number.') and states(e) | float(-1) | round(5) != v | float(0) | round(5) %}
+                {% set ns.out = ns.out + [{'entity': e, 'old': states(e), 'new': v}] %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.out }}
+      - repeat:
+          for_each: "{{ changes }}"
+          sequence:
+            - action: input_number.set_value
+              target:
+                entity_id: "{{ repeat.item.entity }}"
+              data:
+                value: "{{ repeat.item.new }}"
+      - action: input_text.set_value
+        target:
+          entity_id: input_text.hvac_prices_status
+        data:
+          value: >
+            {{ (states('sensor.hvac_prices_feed') ~ ' ' ~ ('error · ' ~ errors | join(' | ') if errors else 'ok')
+                ~ ' · ' ~ (state_attr('sensor.hvac_prices_feed', 'summary') or ''))[:255] }}
+      - if:
+          - condition: template
+            value_template: "{{ changes | count > 0 or errors | count > 0 }}"
+        then:
+          - action: persistent_notification.create
+            data:
+              notification_id: hvac_prices
+              title: "{{ 'HVAC price update failed' if errors else 'HVAC prices updated' }}"
+              message: >
+                {% for c in changes %}- {{ c.entity.split('.')[1] }}: {{ c.old }} → {{ c.new }}
+                {% endfor %}{% for e in errors %}- ⚠ {{ e }}
+                {% endfor %}
 
   # input_numbers start at their min on first load, and `initial:` would undo panel edits
   # on every restart, so seed typical values once (each min is below any real value).

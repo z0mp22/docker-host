@@ -1,0 +1,7 @@
+version: '3.3'
+
+# Build-only: runs come from `scripts/run-prices.sh` (docker run --rm), not a long-lived service.
+services:
+  hvac-prices:
+    build: .
+    image: hvac-prices:local
