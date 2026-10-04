@@ -34,6 +34,7 @@ const E = {
   coolH: "sensor.hvac_cooling_runtime_monthly",
   fanH: "sensor.hvac_fan_runtime_monthly",
   activity: "sensor.hvac_activity",
+  pricesStatus: "input_text.hvac_prices_status",
 };
 const STAT_IDS = [E.gasCost, E.elecOn, E.elecOff, E.therms, E.kwhOn, E.kwhOff];
 
@@ -41,7 +42,7 @@ const ASSUMPTIONS = [
   { entity: "input_number.hvac_ac_kw", label: "AC condenser", unit: "kW", step: 0.1, digits: 1, help: "Condenser nameplate: RLA × 240 V ÷ 1000" },
   { entity: "input_number.hvac_blower_kw", label: "Furnace blower", unit: "kW", step: 0.05, digits: 2, help: "Runs whenever heating, cooling or fan-only is on" },
   { entity: "input_number.hvac_furnace_btuh", label: "Furnace gas input", unit: "BTU/h", step: 5000, digits: 0, help: "“Input” on the furnace rating plate" },
-  { entity: "input_number.hvac_gas_usd_per_therm", label: "Gas price, all-in", unit: "$/therm", step: 0.01, digits: 2, help: "Last Xcel bill: total gas charges ÷ therms" },
+  { entity: "input_number.hvac_gas_usd_per_therm", label: "Gas price per therm", unit: "$/therm", step: 0.01, digits: 3, help: "Xcel usage charges + taxes; refreshed monthly, edits hold until then" },
 ];
 
 const MODE_META = {
@@ -853,8 +854,8 @@ class ClimatePanel extends HTMLElement {
       ["off", "Electric, off-peak", mo.elecOff, `${fmtNum(mo.kwhOff, 1)} kWh`],
     ];
     const ry = Number(m.ta.rates_year);
-    const stale = Number.isFinite(ry) && ry < now.getFullYear()
-      ? `<div class="note warn">Using ${ry} electric rates — add ${now.getFullYear()} rates to custom_templates/fc_tod.jinja.</div>`
+    const stale = Number.isFinite(ry) && ry > 0 && ry < now.getFullYear()
+      ? `<div class="note warn">Still using Fort Collins ${ry} electric rates — the monthly price update hasn't found ${now.getFullYear()} rates yet.</div>`
       : "";
     return `
       <section class="card month">
@@ -1016,6 +1017,21 @@ class ClimatePanel extends HTMLElement {
       </section>`;
   }
 
+  // Written by tools/hvac-prices: "<iso time> ok|error · details".
+  _pricesNote() {
+    const st = this._hass.states[E.pricesStatus];
+    const raw = st && !BAD.has(st.state) ? st.state.trim() : "";
+    if (!raw) return `<div class="note">Prices haven't been refreshed automatically yet; they update on the 1st of each month.</div>`;
+    const [stamp, ...rest] = raw.split(" ");
+    const t = Date.parse(stamp);
+    const when = Number.isFinite(t) ? new Date(t).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" }) : stamp;
+    const detail = rest.join(" ");
+    const failed = /^error\b/i.test(detail);
+    const ageDays = Number.isFinite(t) ? (Date.now() - t) / 864e5 : 0;
+    const late = ageDays > 35;
+    return `<div class="note ${failed || late ? "warn" : ""}">Prices last checked ${esc(when)}${late ? " (overdue — the monthly update hasn't run)" : ""}: ${esc(detail.replace(/^ok ·\s*/i, ""))}</div>`;
+  }
+
   _assumeCard(m) {
     const vals = ASSUMPTIONS.map((x) => {
       const st = this._hass.states[x.entity];
@@ -1024,7 +1040,7 @@ class ClimatePanel extends HTMLElement {
       if (local != null && live != null && Math.abs(local - live) < 1e-9) delete this._assume[x.entity];
       return { ...x, st, value: this._assume[x.entity]?.value ?? live };
     });
-    const fmt = (x) => (x.value == null ? "—" : x.unit === "$/therm" ? `$${x.value.toFixed(2)}` : fmtNum(x.value, x.digits));
+    const fmt = (x) => (x.value == null ? "—" : x.unit === "$/therm" ? `$${x.value.toFixed(3)}` : fmtNum(x.value, x.digits));
     const summary = vals.every((x) => x.value != null)
       ? `AC ${fmt(vals[0])} kW · blower ${fmt(vals[1])} kW · furnace ${Math.round(vals[2].value / 1000)}k BTU/h · gas ${fmt(vals[3])}/therm`
       : "Equipment numbers aren't loaded — check packages/hvac_cost.yaml";
@@ -1046,6 +1062,7 @@ class ClimatePanel extends HTMLElement {
           })
           .join("")}
         <div class="as-foot">
+          ${this._pricesNote()}
           <div class="note">Costs are estimated from runtime × these numbers, priced at the rate in effect at the time. Changes apply from now on; past months keep what they recorded.</div>
           <div class="note">Electric: Fort Collins ${esc(m.ta.rates_year ?? "")} ToD rates (${m.ta.on_peak_rate != null ? `${(m.ta.on_peak_rate * 100).toFixed(2)}¢ on-peak / ${(m.ta.off_peak_rate * 100).toFixed(2)}¢ off-peak` : "unavailable"} this season). Excludes the monthly base charge and the tier charge above 700 kWh, which apply to the whole home.</div>
         </div>`

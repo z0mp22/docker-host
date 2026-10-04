@@ -544,7 +544,7 @@ panel_custom:
     url_path: hvac
     sidebar_title: Climate
     sidebar_icon: mdi:thermostat
-    module_url: /local/climate/climate-panel.js?v=1
+    module_url: /local/climate/climate-panel.js?v=2
     config:
       # Honeywell TCC integration. If HA names it differently, rename the entity to this id
       # (packages/hvac_cost.yaml reads it too).

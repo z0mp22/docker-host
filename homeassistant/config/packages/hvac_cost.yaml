@@ -1,5 +1,7 @@
 # HVAC running cost: Honeywell TCC thermostat (gas furnace + central AC) priced at
 # Fort Collins ToD electric rates (custom_templates/fc_tod.jinja) plus Xcel gas.
+# Prices (fc_rate_*, fc_rates_year, hvac_gas_usd_per_therm) are refreshed monthly by
+# tools/hvac-prices, which reports in input_text.hvac_prices_status.
 # The thermostat only reports what it is doing, not power, so kW/BTU come from the
 # equipment assumptions below (editable on the /hvac panel).
 # Monthly totals live in utility_meter long-term statistics (the recorder keeps 10 days).
@@ -34,9 +36,54 @@ input_number:
     icon: mdi:cash
     min: 0.2
     max: 3
-    step: 0.01
+    step: 0.001
     unit_of_measurement: USD/therm
     mode: box
+  fc_rate_summer_on_peak:
+    name: "FC rate: summer on-peak"
+    icon: mdi:flash
+    min: 0.01
+    max: 1
+    step: 0.0001
+    unit_of_measurement: USD/kWh
+    mode: box
+  fc_rate_summer_off_peak:
+    name: "FC rate: summer off-peak"
+    icon: mdi:flash-outline
+    min: 0.01
+    max: 1
+    step: 0.0001
+    unit_of_measurement: USD/kWh
+    mode: box
+  fc_rate_winter_on_peak:
+    name: "FC rate: winter on-peak"
+    icon: mdi:flash
+    min: 0.01
+    max: 1
+    step: 0.0001
+    unit_of_measurement: USD/kWh
+    mode: box
+  fc_rate_winter_off_peak:
+    name: "FC rate: winter off-peak"
+    icon: mdi:flash-outline
+    min: 0.01
+    max: 1
+    step: 0.0001
+    unit_of_measurement: USD/kWh
+    mode: box
+  fc_rates_year:
+    name: "FC rates: year"
+    icon: mdi:calendar
+    min: 2020
+    max: 2100
+    step: 1
+    mode: box
+
+input_text:
+  hvac_prices_status:
+    name: "HVAC prices: last update"
+    icon: mdi:cash-sync
+    max: 255
 
 template:
   - sensor:
@@ -49,11 +96,11 @@ template:
           season: >
             {% from 'fc_tod.jinja' import fc_season %}{{ fc_season(now()) }}
           rate: >
-            {% from 'fc_tod.jinja' import fc_rate, fc_period %}{{ fc_rate(now(), fc_period(now())) | float }}
+            {% from 'fc_tod.jinja' import fc_rate, fc_period %}{{ fc_rate(now(), fc_period(now())) | float(none) }}
           on_peak_rate: >
-            {% from 'fc_tod.jinja' import fc_rate %}{{ fc_rate(now(), 'on_peak') | float }}
+            {% from 'fc_tod.jinja' import fc_rate %}{{ fc_rate(now(), 'on_peak') | float(none) }}
           off_peak_rate: >
-            {% from 'fc_tod.jinja' import fc_rate %}{{ fc_rate(now(), 'off_peak') | float }}
+            {% from 'fc_tod.jinja' import fc_rate %}{{ fc_rate(now(), 'off_peak') | float(none) }}
           peak_start_hour: >
             {% from 'fc_tod.jinja' import fc_peak_start %}{{ fc_peak_start(now()) | int }}
           peak_end_hour: >
@@ -63,9 +110,7 @@ template:
           next_change: >
             {% from 'fc_tod.jinja' import fc_next_change %}{{ fc_next_change(now()) }}
           rates_year: >
-            {% from 'fc_tod.jinja' import fc_rates_year %}{{ fc_rates_year(now()) | int }}
-          rates: >
-            {% from 'fc_tod.jinja' import fc_rates_json %}{{ fc_rates_json() | from_json }}
+            {% from 'fc_tod.jinja' import fc_rates_year %}{{ fc_rates_year() | int }}
 
       # heating/cooling/fan/idle/off. Honeywell's hvac_action is None in off mode, and
       # fan-only shows as hvac_action "fan" or fan_action "running".
@@ -283,6 +328,11 @@ automation:
             - {entity: input_number.hvac_blower_kw, min: 0.05, value: 0.5}
             - {entity: input_number.hvac_furnace_btuh, min: 20000, value: 80000}
             - {entity: input_number.hvac_gas_usd_per_therm, min: 0.2, value: 0.85}
+            - {entity: input_number.fc_rate_summer_on_peak, min: 0.01, value: 0.3230}
+            - {entity: input_number.fc_rate_summer_off_peak, min: 0.01, value: 0.0898}
+            - {entity: input_number.fc_rate_winter_on_peak, min: 0.01, value: 0.2978}
+            - {entity: input_number.fc_rate_winter_off_peak, min: 0.01, value: 0.0898}
+            - {entity: input_number.fc_rates_year, min: 2020, value: 2026}
           sequence:
             - if:
                 - condition: template

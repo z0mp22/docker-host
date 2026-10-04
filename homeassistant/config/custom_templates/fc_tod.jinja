@@ -1,9 +1,7 @@
 {#- Fort Collins Utilities residential time-of-day (ToD) electric pricing.
     https://www.fortcollins.gov/Services/Utilities/Pay-My-Bill/Rates
-    Council approves new rates each November, effective January: add the new year to RATES. -#}
-{%- set RATES = {
-  '2026': {'summer': {'on_peak': 0.3230, 'off_peak': 0.0898}, 'winter': {'on_peak': 0.2978, 'off_peak': 0.0898}},
-} -%}
+    Prices live in input_number.fc_rate_* (refreshed monthly by tools/hvac-prices); the
+    peak hours and holidays below are fixed here and the price job flags it if they change. -#}
 
 {%- macro fc_season(dt) -%}{{ 'summer' if 5 <= dt.month <= 9 else 'winter' }}{%- endmacro -%}
 
@@ -57,12 +55,10 @@
   {%- endif -%}
 {%- endmacro -%}
 
-{#- Newest rate year at or before dt's year (so January keeps working until RATES is updated). -#}
-{%- macro fc_rates_year(dt) -%}
-  {%- set years = RATES.keys() | map('int') | select('le', dt.year) | list -%}
-  {{- (years | max if years else RATES.keys() | map('int') | min) -}}
+{#- $/kWh for that season and period; empty if the helper isn't loaded. -#}
+{%- macro fc_rate(dt, period) -%}
+  {%- set v = states('input_number.fc_rate_' ~ fc_season(dt) ~ '_' ~ period) -%}
+  {{- v if v not in ['unknown', 'unavailable'] else '' -}}
 {%- endmacro -%}
 
-{%- macro fc_rate(dt, period) -%}{{ RATES[fc_rates_year(dt)][fc_season(dt)][period] }}{%- endmacro -%}
-
-{%- macro fc_rates_json() -%}{{ RATES | to_json }}{%- endmacro -%}
+{%- macro fc_rates_year() -%}{{ states('input_number.fc_rates_year') | int(0) }}{%- endmacro -%}
