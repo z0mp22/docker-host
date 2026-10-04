@@ -784,7 +784,9 @@ class SecurityPanel extends HTMLElement {
     const d = this._door;
     if (!d) return null;
     const st = this._hass.states;
-    const [cam, ring, det, bat, img] = [d.camera, d.ring, d.detection, d.battery, d.last_event].map((id) => (id ? st[id] : undefined));
+    const [cam, ring, det, bat, img, ringPic, ringPicAt] = [d.camera, d.ring, d.detection, d.battery, d.last_event, d.ring_picture, d.ring_picture_at].map(
+      (id) => (id ? st[id] : undefined),
+    );
     if (![cam, ring, det, bat, img].some(Boolean)) return null;
     const at = (s) => (live(s) ? Date.parse(s.state) : NaN);
     // While the entity is unavailable, fall back to the last ring in history.
@@ -804,8 +806,18 @@ class SecurityPanel extends HTMLElement {
       lastSeen: DOOR_KINDS[seenKind] && seenKind !== "ring" && Number.isFinite(at(det)) ? { kind: seenKind, at: at(det) } : null,
       battery,
       low: battery !== null && battery < BATTERY_LOW,
-      picture: live(img) ? img.attributes?.entity_picture || "" : "",
+      picture: this._doorPicture(img, ringPic, ringPicAt),
     };
+  }
+
+  // Eufy often has no new event picture for a press, so prefer the photo the "Doorbell rang"
+  // automation grabs at ring time whenever it's newer. The cache-buster changes per photo.
+  _doorPicture(img, ringPic, ringPicAt) {
+    const eventAt = live(img) ? Date.parse(img.state) : NaN;
+    const ringAt = Number(ringPicAt?.attributes?.timestamp) * 1000;
+    const ringUrl = live(ringPic) ? ringPic.attributes?.entity_picture : "";
+    if (ringUrl && Number.isFinite(ringAt) && !(eventAt > ringAt)) return `${ringUrl}${ringUrl.includes("?") ? "&" : "?"}_=${ringAt}`;
+    return live(img) ? img.attributes?.entity_picture || "" : "";
   }
 
   _whenText(ms) {

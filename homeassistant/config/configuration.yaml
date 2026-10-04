@@ -386,6 +386,19 @@ rest:
 # into before tapping "Submit Feedback" (scripts.yaml); that script reads it,
 # dispatches, then clears it back to empty -- see scripts.yaml for why
 # clearing happens client-side rather than waiting on the remote run.
+# Doorbell ring photo: the "Doorbell rang" automation runs this and records when it succeeded.
+# The photo is shown by the "Doorbell ring" Local File camera (UI config entry, since Local File
+# has no YAML setup) reading /config/doorbell/ring.jpg, so it stays behind HA's login.
+shell_command:
+  doorbell_ring_snapshot: python3 /config/shell/doorbell_snapshot.py
+
+input_datetime:
+  doorbell_ring_picture:
+    name: "Doorbell ring photo taken"
+    icon: mdi:doorbell-video
+    has_date: true
+    has_time: true
+
 input_boolean:
   lift_shoulder_flag:
     name: "Lift: shoulder flag active"
@@ -429,6 +442,8 @@ panel_custom:
         detection: event.doorbell_detection
         battery: sensor.doorbell_battery
         last_event: image.doorbell_last_event
+        ring_picture: camera.doorbell_ring
+        ring_picture_at: input_datetime.doorbell_ring_picture
       weather: weather.home
       climate:
         - {name: Bedroom, temperature: sensor.tp358s_1c99_temperature, humidity: sensor.tp358s_1c99_humidity}
@@ -514,7 +529,7 @@ panel_custom:
     url_path: cameras
     sidebar_title: Security
     sidebar_icon: mdi:shield-home
-    module_url: /local/security/security-panel.js?v=5
+    module_url: /local/security/security-panel.js?v=6
     config:
       doorbell: *doorbell
       # Frigate camera ids; entities follow Frigate's {id}_{thing} naming.

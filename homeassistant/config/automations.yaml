@@ -244,7 +244,10 @@
   mode: single
 - id: '1791000000001'
   alias: Doorbell rang
-  description: Push to every phone when the front doorbell is pressed, with the event picture
+  description: >-
+    Push to every phone the moment the front doorbell is pressed, then replace that alert
+    with a live photo grabbed while the doorbell is still awake (Eufy usually has no new
+    event picture for a press).
   mode: single
   max_exceeded: silent
   triggers:
@@ -260,7 +263,7 @@
          and trigger.to_state.attributes.event_type == 'pressed' }}
   actions:
   - variables:
-      rang_at: "{{ now().strftime('%-I:%M %p') }}"
+      message: "Someone's at the front door · {{ now().strftime('%-I:%M %p') }}"
       # Companion app notify entities are named notify.<device>; the action that takes
       # images is notify.mobile_app_<device>.
       mobile_notifiers: >-
@@ -268,28 +271,47 @@
            | select('match', '^notify\\.')
            | map('replace', 'notify.', 'notify.mobile_app_', 1)
            | list }}
-  # A press doesn't always produce a new event picture, so ask the bridge for one and only
-  # attach it if it arrives; an old picture would show the wrong visitor.
-  - action: button.press
-    target:
-      entity_id: button.doorbell_refresh_last_event
-    continue_on_error: true
-  - wait_for_trigger:
-    - trigger: state
-      entity_id: image.doorbell_last_event
-    timeout: '00:00:20'
-    continue_on_timeout: true
-  - variables:
-      fresh_image: '{{ wait.trigger is not none }}'
+      push_data:
+        tag: doorbell
+        channel: Doorbell
+        importance: high
+        priority: high
+        ttl: 0
+        clickAction: /cameras?live=camera.doorbell
+        url: /cameras?live=camera.doorbell
+        push:
+          sound:
+            name: default
+          interruption-level: time-sensitive
   - repeat:
       for_each: '{{ mobile_notifiers }}'
       sequence:
       - action: '{{ repeat.item }}'
         data:
           title: Doorbell
-          message: "Someone's at the front door · {{ rang_at }}"
-          data: >-
-            {% set d = {'tag': 'doorbell', 'channel': 'Doorbell', 'importance': 'high',
-                        'priority': 'high', 'ttl': 0, 'clickAction': '/cameras?live=camera.doorbell', 'url': '/cameras?live=camera.doorbell',
-                        'push': {'sound': {'name': 'default'}, 'interruption-level': 'time-sensitive'}} %}
-            {{ dict(d, image='/api/image_proxy/image.doorbell_last_event') if fresh_image else d }}
+          message: '{{ message }}'
+          data: '{{ push_data }}'
+  # Takes about 8 s (wakes the stream through eufy-bridge's go2rtc).
+  - action: shell_command.doorbell_ring_snapshot
+    response_variable: snapshot
+    continue_on_error: true
+  - if:
+    - condition: template
+      value_template: '{{ snapshot is defined and snapshot.returncode == 0 }}'
+    then:
+    - action: input_datetime.set_datetime
+      target:
+        entity_id: input_datetime.doorbell_ring_picture
+      data:
+        timestamp: '{{ now().timestamp() }}'
+    # Same tag replaces the first alert; alert_once keeps it from buzzing again.
+    - repeat:
+        for_each: '{{ mobile_notifiers }}'
+        sequence:
+        - action: '{{ repeat.item }}'
+          data:
+            title: Doorbell
+            message: '{{ message }}'
+            data: >-
+              {{ dict(push_data, image='/api/camera_proxy/camera.doorbell_ring?v=' ~ now().timestamp() | int,
+                      alert_once=true) }}
