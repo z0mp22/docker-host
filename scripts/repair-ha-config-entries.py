@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
@@ -94,7 +95,10 @@ def main() -> int:
     kept: list[dict] = []
     for entry in entries:
         host = entry.get("data", {}).get("host")
-        if entry.get("domain") == "roku" and host in {"10.0.0.208"}:
+        # The old ensure-roku-config-entries.py wrote Roku entries straight into storage with a
+        # 32-hex entry_id, and HA failed to start with them (2026-06). Entries HA creates itself
+        # (config flow, ULID ids) are fine and must survive deploys.
+        if entry.get("domain") == "roku" and re.fullmatch(r"[0-9a-f]{32}", entry.get("entry_id", "")):
             changed = True
             log(f"removed roku entry {entry.get('title', host)} ({host})")
             continue
