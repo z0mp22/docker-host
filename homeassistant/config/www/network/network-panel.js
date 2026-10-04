@@ -10,10 +10,15 @@ const ICONS = {
   mdiCheckCircleOutline: "M12 2C6.5 2 2 6.5 2 12S6.5 22 12 22 22 17.5 22 12 17.5 2 12 2M12 20C7.59 20 4 16.41 4 12S7.59 4 12 4 20 7.59 20 12 16.41 20 12 20M16.59 7.58L10 14.17L7.41 11.59L6 13L10 17L18 9L16.59 7.58Z",
   mdiEthernet: "M7,15H9V18H11V15H13V18H15V15H17V18H19V9H15V6H9V9H5V18H7V15M4.38,3H19.63C20.94,3 22,4.06 22,5.38V19.63A2.37,2.37 0 0,1 19.63,22H4.38C3.06,22 2,20.94 2,19.63V5.38C2,4.06 3.06,3 4.38,3Z",
   mdiLanDisconnect: "M4,1C2.89,1 2,1.89 2,3V7C2,8.11 2.89,9 4,9H1V11H13V9H10C11.11,9 12,8.11 12,7V3C12,1.89 11.11,1 10,1H4M4,3H10V7H4V3M14,13C12.89,13 12,13.89 12,15V19C12,20.11 12.89,21 14,21H11V23H23V21H20C21.11,21 22,20.11 22,19V15C22,13.89 21.11,13 20,13H14M3.88,13.46L2.46,14.88L4.59,17L2.46,19.12L3.88,20.54L6,18.41L8.12,20.54L9.54,19.12L7.41,17L9.54,14.88L8.12,13.46L6,15.59L3.88,13.46M14,15H20V19H14V15Z",
+  mdiLogin: "M11 7L9.6 8.4L12.2 11H2V13H12.2L9.6 15.6L11 17L16 12L11 7M20 19H12V21H20C21.1 21 22 20.1 22 19V5C22 3.9 21.1 3 20 3H12V5H20V19Z",
   mdiMemory: "M17,17H7V7H17M21,11V9H19V7C19,5.89 18.1,5 17,5H15V3H13V5H11V3H9V5H7C5.89,5 5,5.89 5,7V9H3V11H5V13H3V15H5V17A2,2 0 0,0 7,19H9V21H11V19H13V21H15V19H17A2,2 0 0,0 19,17V15H21V13H19V11M13,13H11V11H13M15,9H9V15H15V9Z",
   mdiMenu: "M3,6H21V8H3V6M3,11H21V13H3V11M3,16H21V18H3V16Z",
+  mdiOpenInNew: "M14,3V5H17.59L7.76,14.83L9.17,16.24L19,6.41V10H21V3M19,19H5V5H12V3H5C3.89,3 3,3.9 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V12H19V19Z",
   mdiRouterNetwork: "M5 9C3.9 9 3 9.9 3 11V15C3 16.11 3.9 17 5 17H11V19H10C9.45 19 9 19.45 9 20H2V22H9C9 22.55 9.45 23 10 23H14C14.55 23 15 22.55 15 22H22V20H15C15 19.45 14.55 19 14 19H13V17H19C20.11 17 21 16.11 21 15V11C21 9.9 20.11 9 19 9H5M6 12H8V14H6V12M9.5 12H11.5V14H9.5V12M13 12H15V14H13V12Z",
   mdiRouterWireless: "M20.2,5.9L21,5.1C19.6,3.7 17.8,3 16,3C14.2,3 12.4,3.7 11,5.1L11.8,5.9C13,4.8 14.5,4.2 16,4.2C17.5,4.2 19,4.8 20.2,5.9M19.3,6.7C18.4,5.8 17.2,5.3 16,5.3C14.8,5.3 13.6,5.8 12.7,6.7L13.5,7.5C14.2,6.8 15.1,6.5 16,6.5C16.9,6.5 17.8,6.8 18.5,7.5L19.3,6.7M19,13H17V9H15V13H5A2,2 0 0,0 3,15V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V15A2,2 0 0,0 19,13M8,18H6V16H8V18M11.5,18H9.5V16H11.5V18M15,18H13V16H15V18Z",
+  mdiShieldAlertOutline: "M21,11C21,16.55 17.16,21.74 12,23C6.84,21.74 3,16.55 3,11V5L12,1L21,5V11M12,21C15.75,20 19,15.54 19,11.22V6.3L12,3.18L5,6.3V11.22C5,15.54 8.25,20 12,21M11,7H13V13H11V7M11,15H13V17H11V15Z",
+  mdiShieldCheckOutline: "M21,11C21,16.55 17.16,21.74 12,23C6.84,21.74 3,16.55 3,11V5L12,1L21,5V11M12,21C15.75,20 19,15.54 19,11.22V6.3L12,3.18L5,6.3V11.22C5,15.54 8.25,20 12,21M10,17L6,13L7.41,11.59L10,14.17L16.59,7.58L18,9",
+  mdiShieldSearch: "M12,9A3,3 0 0,1 15,12A3,3 0 0,1 12,15A3,3 0 0,1 9,12A3,3 0 0,1 12,9M17.86,19.31C16.23,21.22 14.28,22.45 12,23C9.44,22.39 7.3,20.93 5.58,18.63C3.86,16.34 3,13.8 3,11V5L12,1L21,5V11C21,13.39 20.36,15.61 19.08,17.67L16.17,14.76C16.69,13.97 17,13 17,12A5,5 0 0,0 12,7A5,5 0 0,0 7,12A5,5 0 0,0 12,17C13,17 13.97,16.69 14.76,16.17L17.86,19.31Z",
   mdiTimerOutline: "M12,20A7,7 0 0,1 5,13A7,7 0 0,1 12,6A7,7 0 0,1 19,13A7,7 0 0,1 12,20M19.03,7.39L20.45,5.97C20,5.46 19.55,5 19.04,4.56L17.62,6C16.07,4.74 14.12,4 12,4A9,9 0 0,0 3,13A9,9 0 0,0 12,22C17,22 21,17.97 21,13C21,10.88 20.26,8.93 19.03,7.39M11,14H13V8H11M15,1H9V3H15V1Z",
   mdiUpdate: "M21,10.12H14.22L16.96,7.3C14.23,4.6 9.81,4.5 7.08,7.2C4.35,9.91 4.35,14.28 7.08,17C9.81,19.7 14.23,19.7 16.96,17C18.32,15.65 19,14.08 19,12.1H21C21,14.08 20.12,16.65 18.36,18.39C14.85,21.87 9.15,21.87 5.64,18.39C2.14,14.92 2.11,9.28 5.62,5.81C9.13,2.34 14.76,2.34 18.27,5.81L21,3V10.12M12.5,8V12.25L16,14.33L15.28,15.54L11,13V8H12.5Z",
   mdiWeb: "M16.36,14C16.44,13.34 16.5,12.68 16.5,12C16.5,11.32 16.44,10.66 16.36,10H19.74C19.9,10.64 20,11.31 20,12C20,12.69 19.9,13.36 19.74,14M14.59,19.56C15.19,18.45 15.65,17.25 15.97,16H18.92C17.96,17.65 16.43,18.93 14.59,19.56M14.34,14H9.66C9.56,13.34 9.5,12.68 9.5,12C9.5,11.32 9.56,10.65 9.66,10H14.34C14.43,10.65 14.5,11.32 14.5,12C14.5,12.68 14.43,13.34 14.34,14M12,19.96C11.17,18.76 10.5,17.43 10.09,16H13.91C13.5,17.43 12.83,18.76 12,19.96M8,8H5.08C6.03,6.34 7.57,5.06 9.4,4.44C8.8,5.55 8.35,6.75 8,8M5.08,16H8C8.35,17.25 8.8,18.45 9.4,19.56C7.57,18.93 6.03,17.65 5.08,16M4.26,14C4.1,13.36 4,12.69 4,12C4,11.31 4.1,10.64 4.26,10H7.64C7.56,10.66 7.5,11.32 7.5,12C7.5,12.68 7.56,13.34 7.64,14M12,4.03C12.83,5.23 13.5,6.57 13.91,8H10.09C10.5,6.57 11.17,5.23 12,4.03M18.92,8H15.97C15.65,6.75 15.19,5.55 14.59,4.44C16.43,5.07 17.96,6.34 18.92,8M12,2C6.47,2 2,6.5 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2Z",
@@ -22,6 +27,9 @@ const ICONS = {
 };
 
 const SLOW_MS = 100;
+// Failed Frigate/HA sign-ins per 24 h before the exposure card calls it password guessing.
+const FAILED_SIGNIN_WARN = 20;
+const SITE_NAMES = { frigate: "Frigate", ha: "Home Assistant", media: "Plex", opensprinkler: "OpenSprinkler" };
 const RETRY_WARN_PCT = 30;
 const HISTORY_HOURS = 24;
 
@@ -33,6 +41,7 @@ const num = (v) => {
   const n = parseFloat(v);
   return Number.isFinite(n) ? n : null;
 };
+const count = (n) => (n === null ? "—" : Math.round(n).toLocaleString());
 const live = (st) => !!st && !["unavailable", "unknown"].includes(st.state);
 
 function fmtUptime(sec) {
@@ -115,7 +124,7 @@ h1 { margin: 0; font-size: 34px; font-weight: 700; line-height: 1.1; }
   background: rgba(245,176,65,.08); border: 1px solid rgba(245,176,65,.3); color: #f7d49a; }
 
 .grid { display: grid; gap: 22px; align-items: start; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  grid-template-areas: "path path" "internet wifi" "clients attn"; }
+  grid-template-areas: "path path" "internet wifi" "clients attn" "expo expo"; }
 .card { background: linear-gradient(180deg, var(--card-2), var(--card)); border: 1px solid var(--line); border-radius: 30px; padding: 24px 26px; min-width: 0; }
 .a-path { grid-area: path; } .a-internet { grid-area: internet; } .a-wifi { grid-area: wifi; } .a-clients { grid-area: clients; } .a-attn { grid-area: attn; }
 .eyebrow { font-size: 13px; letter-spacing: .12em; font-weight: 600; color: var(--muted); text-transform: uppercase; }
@@ -203,8 +212,19 @@ h1 { margin: 0; font-size: 34px; font-weight: 700; line-height: 1.1; }
 .allgood { display: flex; gap: 12px; align-items: center; margin-top: 14px; font-size: 16px; color: #b9f2cc; }
 .allgood .ic { color: var(--green); }
 
+/* Internet exposure */
+.a-expo { grid-area: expo; }
+.big.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.expo-status { margin-top: 14px; }
+.hosts { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; margin-top: 10px; }
+.host { border-radius: 16px; background: #121a28; border: 1px solid var(--line); padding: 10px 14px; min-width: 0; }
+.host b { display: block; font-size: 16px; font-weight: 600; }
+.host span { font-size: 13px; color: var(--muted); }
+a.link { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
+a.link .ic { width: 16px; height: 16px; }
+
 @container (max-width: 980px) {
-  .grid { grid-template-columns: minmax(0, 1fr); grid-template-areas: "path" "attn" "internet" "wifi" "clients"; }
+  .grid { grid-template-columns: minmax(0, 1fr); grid-template-areas: "path" "attn" "expo" "internet" "wifi" "clients"; }
 }
 @container (max-width: 640px) {
   .app { padding: 14px 14px 24px; }
@@ -224,6 +244,7 @@ h1 { margin: 0; font-size: 34px; font-weight: 700; line-height: 1.1; }
   .metric { padding: 12px; } .metric .v { font-size: 22px; } .metric .v small { font-size: 13px; } .metric .l { font-size: 12.5px; }
   .ap { padding: 12px; } .ap-name { font-size: 16px; } .ap-clients { font-size: 22px; }
   .counts .total { font-size: 36px; }
+  .big.four { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .row { font-size: 14px; }
 }
 `;
@@ -360,9 +381,54 @@ class NetworkPanel extends HTMLElement {
       clients,
       totalClients: live(clientSensor) ? num(clientSensor.state) : null,
       latency,
+      exposure: this._exposure(),
       down: num(st[c.download]?.state),
       up: num(st[c.upload]?.state),
     };
+  }
+
+  // Internet exposure: 24 h summary of NPM access logs (sensor attributes.result holds Loki
+  // series tagged m=requests|probes|got_through|unrecognized|attacker_ips|failed_signins).
+  _exposure() {
+    const c = this._config;
+    const st = this._hass.states;
+    if (!c.exposure || !st[c.exposure]) return null;
+    const s = st[c.exposure];
+    if (!live(s)) return { ok: false };
+    const res = s.attributes?.result || [];
+    const of = (m) => res.filter((r) => r.metric?.m === m);
+    const total = (m) => of(m).reduce((a, r) => a + (num(r.value?.[1]) ?? 0), 0);
+    const sites = {};
+    for (const m of ["requests", "probes"])
+      for (const r of of(m)) (sites[r.metric.site] ||= { requests: 0, probes: 0 })[m] = num(r.value?.[1]) ?? 0;
+    const si = st[c.exposure_sign_in];
+    return {
+      ok: true,
+      probes: total("probes"),
+      gotThrough: total("got_through"),
+      unrecognized: total("unrecognized"),
+      // Only counted once NPM logs real client IPs; null until then.
+      attackerIps: of("attacker_ips").length ? total("attacker_ips") : null,
+      failed: total("failed_signins"),
+      sites: Object.entries(sites).sort((a, b) => b[1].requests - a[1].requests),
+      signIn: live(si) ? { at: Date.parse(si.state), ...si.attributes } : null,
+    };
+  }
+
+  _evaluateExposure(x) {
+    if (!x) return null;
+    if (!x.ok) return { level: "grey", icon: "mdiShieldSearch", word: "No data", sub: "Can't read the access-log pipeline (Loki on minipc) right now" };
+    if (x.gotThrough > 0)
+      return { level: "red", icon: "mdiShieldAlertOutline", word: "Possible break-in", sub: `${plural(x.gotThrough, "attack request")} got real content back in the last 24 h` };
+    if (x.unrecognized > 0)
+      return { level: "amber", icon: "mdiShieldAlertOutline", word: "Unknown password", sub: `OpenSprinkler was used with a password that isn't yours (${plural(x.unrecognized, "request")})` };
+    if (x.failed >= FAILED_SIGNIN_WARN)
+      return { level: "amber", icon: "mdiShieldAlertOutline", word: "Password guessing", sub: `${plural(x.failed, "failed sign-in")} to Frigate or Home Assistant in 24 h` };
+    if (x.probes > 0) {
+      const from = x.attackerIps ? ` from ${count(x.attackerIps)} address${x.attackerIps === 1 ? "" : "es"}` : "";
+      return { level: "green", icon: "mdiShieldCheckOutline", word: "Nothing got through", sub: `${count(x.probes)} attack probes${from} in 24 h, all turned away` };
+    }
+    return { level: "green", icon: "mdiShieldCheckOutline", word: "Quiet", sub: "No attack probes in the last 24 h" };
   }
 
   _evaluate(m) {
@@ -392,11 +458,16 @@ class NetworkPanel extends HTMLElement {
     else if (downAps.length) wifi = { level: "amber", word: "Degraded", sub: `${downAps.map((a) => a.name).join(", ")} offline · ${wireless} on Wi-Fi` };
     else wifi = { level: "green", word: "Online", sub: `${plural(activeAps.length, "access point")} · ${wireless} on Wi-Fi` };
 
-    // Headline: the most upstream problem wins; "can't read data" is never reported as "down".
+    const exposure = this._evaluateExposure(m.exposure);
+
+    // Headline: a possible break-in first, then the most upstream network problem; "can't read
+    // data" is never reported as "down".
     let status;
-    if (internet.level === "red") status = { dot: "red", label: "Internet down", detail: internet.sub };
+    if (exposure?.level === "red") status = { dot: "red", label: exposure.word, detail: exposure.sub };
+    else if (internet.level === "red") status = { dot: "red", label: "Internet down", detail: internet.sub };
     else if (gateway.level === "red") status = { dot: "red", label: "Gateway offline", detail: gateway.sub };
     else if (wifi.level === "red") status = { dot: "red", label: "Wi-Fi down", detail: wifi.sub };
+    else if (exposure?.level === "amber") status = { dot: "amber", label: exposure.word, detail: exposure.sub };
     else if (internet.level === "amber") status = { dot: "amber", label: "Internet slow", detail: internet.sub };
     else if (wifi.level === "amber") status = { dot: "amber", label: "Wi-Fi degraded", detail: wifi.sub };
     else if (gateway.level === "amber") status = { dot: "amber", label: "Gateway busy", detail: gateway.sub };
@@ -404,6 +475,8 @@ class NetworkPanel extends HTMLElement {
     else status = { dot: "green", label: "All good", detail: `${internet.sub.split(" · ")[0]} · ${plural(m.totalClients ?? 0, "device")} connected` };
 
     const items = [];
+    if (exposure && ["red", "amber"].includes(exposure.level))
+      items.push({ level: exposure.level, icon: "mdiShieldAlertOutline", title: exposure.word, text: `${exposure.sub}. Details on the Internet Exposure dashboard (Grafana).` });
     for (const a of downAps)
       items.push({ level: "amber", icon: "mdiAccessPointOff", title: `${a.name} is offline${a.lastSeen ? ` since ${since(a.lastSeen)}` : ""}`, text: a.lastSeen && Date.now() - a.lastSeen > 7 * 864e5 ? "Out for a while. If it's been removed on purpose, mark it retired so it stops counting against Wi-Fi status." : "Anything that relied on this access point is on a weaker signal or disconnected." });
     for (const d of m.devices.filter((x) => x.firmwareUpdatable)) items.push({ level: "info", icon: "mdiUpdate", title: `Firmware update for ${d.name}`, text: `Running ${d.firmwareVersion}. Update from the UniFi app when convenient.` });
@@ -416,7 +489,7 @@ class NetworkPanel extends HTMLElement {
     }
     for (const l of m.latency.filter((x) => x.ms !== null && (x.loss ?? 0) > 0))
       items.push({ level: "info", icon: "mdiLanDisconnect", title: `Packet loss to ${l.label}`, text: `${Math.round(l.loss)}% of pings lost in the last check.` });
-    return { internet, gateway, wifi, status, items };
+    return { internet, gateway, wifi, exposure, status, items };
   }
 
   _render() {
@@ -528,6 +601,38 @@ class NetworkPanel extends HTMLElement {
         }
       </section>`;
 
+    const x = m.exposure;
+    const xe = ev.exposure;
+    const signIn = x?.signIn;
+    const expo = !xe
+      ? ""
+      : `
+      <section class="card a-expo">
+        <div class="head"><span class="eyebrow">Internet exposure</span><span class="muted">last 24 h</span></div>
+        <div class="item expo-status ${xe.level === "green" ? "info" : xe.level}">${svg(xe.icon)}<div><b>${esc(xe.word)}</b><span>${esc(xe.sub)}</span></div></div>
+        ${
+          x.ok
+            ? `<div class="big four">
+          ${metric("Attack probes", "mdiShieldSearch", count(x.probes), "")}
+          ${metric("Attacker addresses", "mdiWeb", count(x.attackerIps), "")}
+          ${metric("Got through", "mdiShieldAlertOutline", count(x.gotThrough), "", x.gotThrough > 0 ? "bad" : "")}
+          ${metric("Failed sign-ins", "mdiLogin", count(x.failed), "", x.failed >= FAILED_SIGNIN_WARN ? "warn" : "")}
+        </div>
+        ${x.attackerIps === null ? `<div class="note">Attacker addresses appear once NPM logs real visitor IPs.</div>` : ""}
+        <div class="group">Reachable from the internet</div>
+        <div class="hosts">${x.sites
+          .map(([site, v]) => `<div class="host"><b>${esc(SITE_NAMES[site] || site)}</b><span>${count(v.requests)} requests · ${count(v.probes)} probes</span></div>`)
+          .join("")}</div>
+        ${
+          signIn
+            ? `<div class="kv"><span>Last Frigate sign-in <b>${esc(ago(new Date(signIn.at).toISOString()))} · ${esc(signIn.client_family || "unknown device")}${signIn.country && !["unknown", "LAN"].includes(signIn.country) ? ` · ${esc(signIn.country)}` : ""}</b></span></div>`
+            : ""
+        }`
+            : ""
+        }
+        ${c.exposure_dashboard ? `<a class="link" href="${esc(c.exposure_dashboard)}" target="_blank" rel="noopener">Open the full dashboard (home network) ${svg("mdiOpenInNew")}</a>` : ""}
+      </section>`;
+
     const s = ev.status;
     const banner = !m.unifiOk
       ? `<div class="banner">${svg("mdiAlertOutline")}<span>Can't read data from UniFi (the API key may have been revoked, or the UDM is unreachable). Internet checks below still work; gateway and Wi-Fi details are unknown — not necessarily down.</span></div>`
@@ -542,7 +647,7 @@ class NetworkPanel extends HTMLElement {
             <div class="status"><span class="dot ${s.dot}"></span><b>${esc(s.label)}</b><span class="muted">·</span><span class="muted detail">${esc(s.detail)}</span></div></div>
         </header>
         ${banner}
-        <main class="grid">${path}${internet}${wifi}${clientsCard}${attn}</main>
+        <main class="grid">${path}${internet}${wifi}${clientsCard}${attn}${expo}</main>
       </div>`;
     if (html !== this._html) {
       this._html = html;

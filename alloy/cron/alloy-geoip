@@ -1,0 +1,4 @@
+# docker-host: alloy — refresh db-ip lite GeoIP databases monthly (3rd, 4:20 AM), then restart Alloy
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+20 4 3 * * root RESTART_ALLOY=1 /docker/alloy/scripts/update-geoip.sh >> /docker/alloy/geoip.log 2>&1
