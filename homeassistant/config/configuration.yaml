@@ -510,7 +510,7 @@ panel_custom:
     url_path: irrigation
     sidebar_title: Irrigation
     sidebar_icon: mdi:sprinkler-variant
-    module_url: /local/irrigation/irrigation-panel.js?v=2
+    module_url: /local/irrigation/irrigation-panel.js?v=3
   - name: coach-panel
     url_path: coach
     sidebar_title: Coaching

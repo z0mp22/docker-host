@@ -431,6 +431,7 @@ class IrrigationPanel extends HTMLElement {
     this._lastWatered = {};
     this._lastRuns = [];
     this._starts = new Map();
+    this._cycles = [];
     this._scheduleSig = "";
     this._runSeen = new Map();
     this._forecast = null;
@@ -553,7 +554,8 @@ class IrrigationPanel extends HTMLElement {
   async _loadSchedule() {
     if (!this._hass?.callApi || !this._hass.states[CALENDAR_ENTITY]) return;
     const model = readModel(this._hass.states);
-    const start = new Date();
+    // From midnight, so cycles that already ran today still count toward "cycle 2 of 2".
+    const start = new Date(dayKey(Date.now()));
     const end = new Date(start.getTime() + SCHEDULE_DAYS * 864e5);
     try {
       const events = await this._hass.callApi(
@@ -570,11 +572,17 @@ class IrrigationPanel extends HTMLElement {
         byProgram.get(name).push({ start: s, end: Number.isFinite(t) ? t : s });
       }
       const starts = new Map();
+      const cycles = [];
       for (const [name, intervals] of byProgram) {
         const runs = groupRuns(intervals, (model.controller?.stationDelay || 0) * 1000);
         starts.set(name, sameDay(runs, runs[0]).map((r) => r.start));
+        for (const r of runs) {
+          const day = sameDay(runs, r);
+          cycles.push({ program: name, start: r.start, end: r.end, i: day.indexOf(r) + 1, n: day.length, dayEnd: day[day.length - 1].end });
+        }
       }
       this._starts = starts;
+      this._cycles = cycles.sort((a, b) => a.start - b.start);
       this._scheduleRender();
     } catch (_) {
       /* fall back to the program's first start time */
@@ -763,8 +771,10 @@ class IrrigationPanel extends HTMLElement {
     }
     const starts = p.enabled ? this._starts.get(p.name) : null;
     if (starts?.length) {
-      const each = starts.length > 1 ? " each" : "";
-      return `${when} at ${listJoin(starts.map((t) => this._fmtTime(t)))} · ${fmtDuration(p.totalMinutes)}${each}`;
+      const total = starts.length > 1
+        ? `${fmtDuration(p.totalMinutes)} each, ${fmtDuration(p.totalMinutes * starts.length)}/day`
+        : fmtDuration(p.totalMinutes);
+      return `${when} at ${listJoin(starts.map((t) => this._fmtTime(t)))} · ${total}`;
     }
     const at = p.startType && p.startType !== "Midnight" ? p.startType.toLowerCase() : this._clock(p.startTime);
     return `${when} at ${at} · ${fmtDuration(p.totalMinutes)}`;
@@ -826,6 +836,21 @@ class IrrigationPanel extends HTMLElement {
     const plannedMinutes = selected.reduce((sum, s) => sum + plan.m[s.idx], 0);
     const plannedEnd = cursor;
 
+    // Programs with repeating start times run in cycles with a soak in between.
+    const sameCycleDay = (a, b) => a.program === b.program && dayKey(a.start) === dayKey(b.start);
+    const nextCycle = (c) => this._cycles.find((x) => sameCycleDay(x, c) && x.i === c.i + 1);
+    const cycle = active ? this._cycles.find((c) => c.n > 1 && c.start - 60000 <= now && now <= c.end + 5 * 60000) : null;
+    const cycleAfter = cycle && nextCycle(cycle);
+    // Soaking only if the previous cycle really ran (a rain delay or stop can skip it).
+    const soak = active
+      ? null
+      : this._cycles.find((c) => {
+          if (c.i < 2 || c.start <= now) return false;
+          const prev = this._cycles.find((x) => sameCycleDay(x, c) && x.i === c.i - 1);
+          return prev && prev.end <= now && this._lastRuns.some((r) => r.start >= prev.start - 120000 && r.start <= prev.end);
+        });
+    const cycleText = (c) => `cycle ${c.i} of ${c.n}`;
+
     // Header status
     let status = { dot: "", label: "Ready", detail: `${plural(selected.length, "zone")} set to water` };
     if (!online) status = { dot: "grey", label: "Offline", detail: "OpenSprinkler is unavailable" };
@@ -833,8 +858,10 @@ class IrrigationPanel extends HTMLElement {
     else if (model.paused) status = { dot: "amber", label: "Paused", detail: model.pauseEnd ? `until ${this._fmtTime(model.pauseEnd)}` : "Watering is paused" };
     else if (active) {
       const left = Math.max(1, Math.ceil((Math.max(...queue.map((s) => s.end)) - now) / 60000));
-      status = { dot: "blue", label: "Watering", detail: current ? `${current.name} · ${fmtDuration(left)} left` : `Next zone starting · ${fmtDuration(left)} left` };
+      const detail = current ? `${current.name} · ${fmtDuration(left)} left` : `Next zone starting · ${fmtDuration(left)} left`;
+      status = { dot: "blue", label: "Watering", detail: cycle ? `${detail} · ${cycleText(cycle)}` : detail };
     } else if (model.rainDelay) status = { dot: "amber", label: "Rain delay", detail: model.rainStop ? `until ${this._fmtDay(model.rainStop)} ${this._fmtTime(model.rainStop)}` : "Rain delay active" };
+    else if (soak) status = { dot: "amber", label: "Soaking", detail: `${cycleText(soak)} at ${this._fmtTime(soak.start)}` };
 
     const chip = this._rainChip(model);
 
@@ -849,6 +876,7 @@ class IrrigationPanel extends HTMLElement {
       ringSub = current
         ? `Watering <b>${esc(current.name)}</b> · done at <b>${this._fmtTime(t1)}</b>`
         : `Between zones · done at <b>${this._fmtTime(t1)}</b>`;
+      if (cycleAfter) ringSub += `<br>Cycle ${cycleAfter.i} at <b>${this._fmtTime(cycleAfter.start)}</b> · all done <b>${this._fmtTime(cycleAfter.dayEnd)}</b>`;
     } else {
       ringNum = Math.round(plannedMinutes);
       ringLabel = ringNum === 1 ? "minute planned" : "minutes planned";
@@ -888,7 +916,7 @@ class IrrigationPanel extends HTMLElement {
     const delayNote = delayMs && (active ? runRows.length : planRows.length) > 1 ? `<div class="note">${fmtDuration(delayMs / 60000)} pause between zones</div>` : "";
     const order = `
       <div class="card order-card">
-        <div class="card-head"><span class="eyebrow">${active ? "Now watering" : "Watering order"}</span><span class="muted">${active || !planRows.length ? "" : "If started now"}</span></div>
+        <div class="card-head"><span class="eyebrow">${active ? `Now watering${cycle ? ` · ${cycleText(cycle)}` : ""}` : "Watering order"}</span><span class="muted">${active || !planRows.length ? "" : "If started now"}</span></div>
         ${delayNote}
         ${orderList ? `<ol class="order">${orderList}</ol>` : `<div class="empty">No zones selected.</div>`}
       </div>`;
@@ -981,7 +1009,9 @@ class IrrigationPanel extends HTMLElement {
         <button class="cta stop ${this._busy ? "busy" : ""}" data-action="stop" ${this._busy ? "disabled" : ""}>${svg("mdiStop")} Stop</button>`;
     } else {
       const canStart = ctrlOn && !model.paused && selected.length > 0 && !this._busy;
-      const why = !ctrlOn ? "Turn the controller on to water" : model.paused ? "Watering is paused" : selected.length ? `Done at about ${this._fmtTime(plannedEnd)}` : "Tap a zone to add it";
+      const why = !ctrlOn ? "Turn the controller on to water" : model.paused ? "Watering is paused" : selected.length
+        ? `Done at about ${this._fmtTime(plannedEnd)}${soak ? ` · cycle ${soak.i} at ${this._fmtTime(soak.start)}` : ""}`
+        : "Tap a zone to add it";
       foot = `
         <div class="foot-text"><div class="eyebrow">Ready to water</div><div class="foot-main">${plural(selected.length, "zone")} · ${fmtDuration(plannedMinutes)}</div><div class="foot-sub">${esc(why)}</div></div>
         <button class="cta ${this._busy ? "busy" : ""}" data-action="start" ${canStart ? "" : "disabled"}>${svg("mdiPlay")} Start watering</button>`;
