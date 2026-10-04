@@ -430,7 +430,7 @@ panel_custom:
     url_path: house
     sidebar_title: Home
     sidebar_icon: mdi:home
-    module_url: /local/home/home-panel.js?v=3
+    module_url: /local/home/home-panel.js?v=4
     config:
       person: person.cody
       # Eufy T8210 via the eufy-sdk integration (eufy-bridge container). The HomeBase shows up as
@@ -484,6 +484,22 @@ panel_custom:
           02e1fa61-05ce-30d6-9bde-21777c3c1d7f: sensor.unifi_garage_ap_stats
           a765e99e-5f8c-3c5a-b264-0770b4d1030a: sensor.unifi_zsdm_stats
         retired: []
+      # packages/trees_and_air.yaml
+      trees:
+        decision: sensor.trees_watering_decision
+        last_watered: input_datetime.trees_last_watered
+        notify_time: input_datetime.trees_notify_time
+        mark_watered: script.trees_mark_watered
+      outdoor:
+        score: sensor.outdoor_activity_score
+        level: sensor.outdoor_activity_level
+        aqi: sensor.outdoor_air_aqi
+        airnow: sensor.airnow_air_quality_index
+        purpleair_pm25: sensor.purpleair_pm2_5_corrected
+        wind_gust: sensor.nws_zone_home_wind_gust
+        frigate_instance: frigate
+        # Frigate labels shown as wildlife markers on the outdoor timeline.
+        wildlife_labels: [cat, dog, bear, bird, deer, fox, raccoon]
       links:
         security: /cameras
         irrigation: /irrigation
