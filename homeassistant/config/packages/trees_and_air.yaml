@@ -1,0 +1,886 @@
+# Trees watering decision + outdoor air/activity score.
+#
+# PROJECT 1 - young trees (Hot Wings Tatarian Maple, Sensation Boxelder Maple, planted 2026-09-12)
+#   Daily "water today / skip" with a plain-English reason, a push notification at a chosen
+#   time, and a Home dashboard card.
+#   Guidance sources:
+#   - CSU Extension Fact Sheet 7.211 "Fall and Winter Watering" (Klett & Cox, reviewed Aug 2025):
+#     water only when air is above 40 F, at midday so it soaks in before a night freeze, only
+#     without snow cover, about once or twice a month in dry spells; 10 gal per inch of trunk
+#     diameter, soaked to ~12 in. Maples are on its list of shallow-rooted trees that need it.
+#   - CSU Extension GardenNotes #635 "Care of Recently Planted Trees" (rev. Aug 2024): daily for
+#     the first weeks, every 2-3 days for several months, then weekly; ~1-1.5 gal per inch of
+#     caliper per irrigation; check soil first (clay soils are easy to overwater); in winter,
+#     water monthly on sunny days above 40 F when the ground is not frozen.
+#   - City of Fort Collins voluntary Water Shortage Watch (declared 2026-05-01, still in effect
+#     as of 2026-10-03): no watering 10 AM-6 PM, lawns 2 days/week, ~1 in/week; it explicitly
+#     asks residents to keep prioritising trees with careful hand or drip watering.
+#   Data: Open-Meteo REST (past rainfall, soil temperature, snow depth: the core Open-Meteo
+#   integration exposes none of these) and the NWS integration (overnight lows / first freeze).
+#
+# PROJECT 2 - smoke and air gate
+#   0-100 outdoor activity score with a green/yellow/red level.
+#   - AirNow integration: official AQI (NowCast).
+#   - PurpleAir REST: the core PurpleAir integration only reads the API's default pm2.5 field
+#     (the ATM channel for outdoor sensors), but EPA's correction needs CF=1 per channel, so
+#     A/B CF=1 and humidity come from the API directly. Correction: EPA extended US-wide
+#     correction, Barkjohn et al. 2022 (Sensors 22:9669):
+#       PA < 570:        0.524*PA - 0.0862*RH + 5.75     (RH = PurpleAir's own humidity)
+#       570 <= PA <= 611: linear blend, w = 0.0244*PA - 13.9
+#       PA > 611:        4.21e-4*PA^2 + 0.392*PA + 3.44
+#     QC: A and B must agree within 5 ug/m3 or 70%, else the reading is dropped.
+#     AQI uses EPA's 2024 PM2.5 breakpoints (9.0 / 35.4 / 55.4 / 125.4 / 225.4).
+#   - NWS integration: wind gust and RH as secondary inputs (RH also backfills the
+#     correction if the PurpleAir humidity is missing).
+#   - Climbing and riding scores are placeholders to be wired up later.
+#
+# Every threshold is a helper. Defaults are set once by "Trees & air: apply default settings"
+# (helpers restore their own value across restarts, so `initial:` would wipe UI tuning).
+
+input_number:
+  # --- Trees ---
+  trees_rain_skip_7d:
+    name: "Trees: skip if rain in last 7 days ≥"
+    min: 0
+    max: 3
+    step: 0.05
+    unit_of_measurement: in
+    mode: box
+    icon: mdi:weather-rainy
+  trees_rain_skip_48h:
+    name: "Trees: skip if rain in last 48 h ≥"
+    min: 0
+    max: 3
+    step: 0.05
+    unit_of_measurement: in
+    mode: box
+    icon: mdi:weather-pouring
+  trees_min_effective_rain:
+    name: "Trees: smallest daily rain that counts"
+    min: 0
+    max: 1
+    step: 0.01
+    unit_of_measurement: in
+    mode: box
+    icon: mdi:water-outline
+  trees_soil_frozen_temp:
+    name: "Trees: soil counts as frozen at or below"
+    min: 20
+    max: 40
+    step: 0.5
+    unit_of_measurement: "°F"
+    mode: box
+    icon: mdi:snowflake-thermometer
+  trees_moisture_wet_pct:
+    name: "Trees: moisture sensor counts as wet at or above"
+    min: 0
+    max: 100
+    step: 1
+    unit_of_measurement: "%"
+    mode: box
+    icon: mdi:water-percent
+  trees_interval_days:
+    name: "Trees: water every (growing season)"
+    min: 1
+    max: 14
+    step: 1
+    unit_of_measurement: days
+    mode: box
+    icon: mdi:calendar-refresh
+  trees_freeze_temp:
+    name: "Trees: freeze at or below"
+    min: 20
+    max: 36
+    step: 1
+    unit_of_measurement: "°F"
+    mode: box
+    icon: mdi:snowflake
+  trees_hard_freeze_temp:
+    name: "Trees: hard freeze at or below"
+    min: 10
+    max: 32
+    step: 1
+    unit_of_measurement: "°F"
+    mode: box
+    icon: mdi:snowflake-alert
+  trees_final_watering_lead_days:
+    name: "Trees: final-watering reminder lead time"
+    min: 1
+    max: 7
+    step: 1
+    unit_of_measurement: days
+    mode: box
+    icon: mdi:bell-ring-outline
+  trees_winter_min_air_temp:
+    name: "Trees: winter watering only if today's high ≥"
+    min: 30
+    max: 60
+    step: 1
+    unit_of_measurement: "°F"
+    mode: box
+    icon: mdi:thermometer-chevron-up
+  trees_winter_interval_days:
+    name: "Trees: winter watering at most every"
+    min: 7
+    max: 45
+    step: 1
+    unit_of_measurement: days
+    mode: box
+    icon: mdi:calendar-month
+  trees_dry_spell_days:
+    name: "Trees: dry spell length for winter watering"
+    min: 3
+    max: 60
+    step: 1
+    unit_of_measurement: days
+    mode: box
+    icon: mdi:weather-sunny-alert
+  trees_snow_cover_in:
+    name: "Trees: snow cover at or above"
+    min: 0
+    max: 12
+    step: 0.25
+    unit_of_measurement: in
+    mode: box
+    icon: mdi:snowflake-variant
+  trees_caliper_hot_wings:
+    name: "Trees: Hot Wings maple trunk diameter"
+    min: 0.25
+    max: 6
+    step: 0.25
+    unit_of_measurement: in
+    mode: box
+    icon: mdi:tree
+  trees_caliper_sensation:
+    name: "Trees: Sensation boxelder trunk diameter"
+    min: 0.25
+    max: 6
+    step: 0.25
+    unit_of_measurement: in
+    mode: box
+    icon: mdi:tree-outline
+  trees_gal_per_inch_regular:
+    name: "Trees: gallons per inch of trunk (routine)"
+    min: 0.5
+    max: 15
+    step: 0.5
+    unit_of_measurement: gal
+    mode: box
+    icon: mdi:watering-can-outline
+  trees_gal_per_inch_deep:
+    name: "Trees: gallons per inch of trunk (deep / winter)"
+    min: 1
+    max: 20
+    step: 0.5
+    unit_of_measurement: gal
+    mode: box
+    icon: mdi:watering-can
+
+  # --- Outdoor air / activity ---
+  outdoor_aqi_good:
+    name: "Outdoor: AQI at or below this scores 100"
+    min: 0
+    max: 200
+    step: 1
+    mode: box
+    icon: mdi:air-filter
+  outdoor_aqi_zero:
+    name: "Outdoor: AQI at or above this scores 0"
+    min: 25
+    max: 400
+    step: 1
+    mode: box
+    icon: mdi:smoke
+  outdoor_green_min:
+    name: "Outdoor: green at or above"
+    min: 0
+    max: 100
+    step: 1
+    mode: box
+    icon: mdi:circle
+  outdoor_yellow_min:
+    name: "Outdoor: yellow at or above (else red)"
+    min: 0
+    max: 100
+    step: 1
+    mode: box
+    icon: mdi:circle-half-full
+  outdoor_wind_gust_limit:
+    name: "Outdoor: gusty at or above"
+    min: 5
+    max: 80
+    step: 1
+    unit_of_measurement: mph
+    mode: box
+    icon: mdi:weather-windy
+  outdoor_wind_penalty:
+    name: "Outdoor: points off when gusty"
+    min: 0
+    max: 100
+    step: 1
+    mode: box
+    icon: mdi:weather-windy-variant
+  outdoor_fire_weather_rh:
+    name: "Outdoor: fire-weather humidity at or below"
+    min: 0
+    max: 50
+    step: 1
+    unit_of_measurement: "%"
+    mode: box
+    icon: mdi:fire-alert
+  outdoor_fire_weather_penalty:
+    name: "Outdoor: extra points off in fire weather"
+    min: 0
+    max: 100
+    step: 1
+    mode: box
+    icon: mdi:fire
+  outdoor_purpleair_max_age_min:
+    name: "Outdoor: ignore PurpleAir readings older than"
+    min: 5
+    max: 240
+    step: 5
+    unit_of_measurement: min
+    mode: box
+    icon: mdi:timer-sand
+  outdoor_climbing_score:
+    name: "Outdoor: climbing score (placeholder)"
+    min: 0
+    max: 100
+    step: 1
+    mode: slider
+    icon: mdi:carabiner
+  outdoor_riding_score:
+    name: "Outdoor: riding score (placeholder)"
+    min: 0
+    max: 100
+    step: 1
+    mode: slider
+    icon: mdi:bike
+  outdoor_weight_air:
+    name: "Outdoor: weight of air score"
+    min: 0
+    max: 10
+    step: 0.5
+    mode: box
+    icon: mdi:scale-balance
+  outdoor_weight_climbing:
+    name: "Outdoor: weight of climbing score"
+    min: 0
+    max: 10
+    step: 0.5
+    mode: box
+    icon: mdi:scale-balance
+  outdoor_weight_riding:
+    name: "Outdoor: weight of riding score"
+    min: 0
+    max: 10
+    step: 0.5
+    mode: box
+    icon: mdi:scale-balance
+
+input_boolean:
+  trees_notifications:
+    name: "Trees: send the daily notification"
+    icon: mdi:bell-outline
+  trees_use_moisture_sensor:
+    name: "Trees: use the soil moisture sensor"
+    icon: mdi:water-check
+  trees_city_hours:
+    name: "Trees: follow Fort Collins watering hours (growing season)"
+    icon: mdi:clock-time-ten-outline
+  outdoor_include_climbing:
+    name: "Outdoor: include climbing score"
+    icon: mdi:carabiner
+  outdoor_include_riding:
+    name: "Outdoor: include riding score"
+    icon: mdi:bike
+  trees_air_defaults_applied:
+    name: "Trees & air: defaults applied"
+    icon: mdi:check-decagram
+
+input_select:
+  trees_season_mode:
+    name: "Trees: season"
+    options:
+      - Auto
+      - Growing season
+      - Winter
+    icon: mdi:calendar-weather
+
+input_datetime:
+  trees_notify_time:
+    name: "Trees: notification time"
+    has_date: false
+    has_time: true
+    icon: mdi:bell-ring
+  trees_last_watered:
+    name: "Trees: last watered"
+    has_date: true
+    has_time: true
+    icon: mdi:watering-can
+
+input_text:
+  purpleair_sensor_index:
+    name: "Outdoor: PurpleAir sensor index"
+    icon: mdi:numeric
+    max: 12
+
+rest:
+  # Open-Meteo: past 60 days + 3-day forecast of rain/snow/lows, plus current soil temperature
+  # and snow depth. snow_depth comes back in feet when precipitation_unit=inch.
+  - resource_template: >-
+      https://api.open-meteo.com/v1/forecast?latitude={{ state_attr('zone.home', 'latitude') | round(3) }}&longitude={{ state_attr('zone.home', 'longitude') | round(3) }}&timezone=America%2FDenver&temperature_unit=fahrenheit&precipitation_unit=inch&past_days=60&forecast_days=3&daily=precipitation_sum,snowfall_sum,temperature_2m_min,temperature_2m_max&current=soil_temperature_0cm,soil_temperature_6cm,snow_depth,temperature_2m
+    scan_interval: 1800
+    timeout: 20
+    sensor:
+      - name: Trees Open-Meteo
+        unique_id: trees_open_meteo
+        icon: mdi:weather-partly-rainy
+        availability: "{{ value_json is defined and value_json.daily is defined and value_json.current is defined }}"
+        value_template: "{{ value_json.current.time }}"
+        json_attributes:
+          - daily
+          - current
+
+  # PurpleAir: one sensor's A/B CF=1 PM2.5 + humidity (about 10 points per call; a new key's
+  # 1,000,000 free points last ~2 years at this interval). Pick the sensor with
+  # input_text.purpleair_sensor_index; the API key lives in secrets.yaml.
+  - resource_template: "https://api.purpleair.com/v1/sensors/{{ states('input_text.purpleair_sensor_index') | trim }}?fields=pm2.5_cf_1_a,pm2.5_cf_1_b,humidity,last_seen,name"
+    headers:
+      X-API-Key: !secret purpleair_api_key
+    scan_interval: 600
+    timeout: 20
+    sensor:
+      - name: PurpleAir raw
+        unique_id: purpleair_raw
+        icon: mdi:air-filter
+        availability: "{{ value_json is defined and value_json.sensor is defined }}"
+        value_template: "{{ value_json.sensor.last_seen }}"
+        json_attributes_path: "$.sensor"
+        json_attributes:
+          - pm2.5_cf_1_a
+          - pm2.5_cf_1_b
+          - humidity
+          - last_seen
+          - name
+
+template:
+  # NWS twice-daily forecast: overnight lows for the next week and today's high.
+  - triggers:
+      - trigger: homeassistant
+        event: start
+      - trigger: time_pattern
+        minutes: "/30"
+    actions:
+      - action: weather.get_forecasts
+        target:
+          entity_id: weather.nws_zone_home
+        data:
+          type: twice_daily
+        response_variable: nws
+        continue_on_error: true
+    sensor:
+      - name: Trees overnight low
+        unique_id: trees_overnight_low
+        unit_of_measurement: "°F"
+        device_class: temperature
+        icon: mdi:weather-night
+        availability: "{{ nws is defined and (nws.get('weather.nws_zone_home', {}).get('forecast') or []) | count > 0 }}"
+        state: >-
+          {% set fc = nws['weather.nws_zone_home'].forecast %}
+          {% set nights = fc | rejectattr('is_daytime') | list %}
+          {{ nights[0].temperature if nights else none }}
+        attributes:
+          nights: >-
+            {% set fc = (nws.get('weather.nws_zone_home', {}).get('forecast') or []) if nws is defined else [] %}
+            {% set ns = namespace(out=[]) %}
+            {% for f in fc if not f.is_daytime %}{% set ns.out = ns.out + [[f.datetime, f.temperature]] %}{% endfor %}
+            {{ ns.out }}
+          today_high: >-
+            {% set fc = (nws.get('weather.nws_zone_home', {}).get('forecast') or []) if nws is defined else [] %}
+            {% set day = fc | selectattr('is_daytime') | list %}
+            {% set d = day[0] if day else none %}
+            {{ d.temperature if d and as_datetime(d.datetime).date() == now().date() else none }}
+
+  - sensor:
+      # ---------------- Trees: inputs ----------------
+      - name: Trees rain last 7 days
+        unique_id: trees_rain_7d
+        unit_of_measurement: in
+        icon: mdi:weather-rainy
+        availability: "{{ state_attr('sensor.trees_open_meteo', 'daily') is not none }}"
+        state: >-
+          {% set d = state_attr('sensor.trees_open_meteo', 'daily') %}
+          {% set today = now().strftime('%Y-%m-%d') %}
+          {% set i = d.time.index(today) if today in d.time else d.time | count - 1 %}
+          {{ (d.precipitation_sum[i - 6:i + 1] | map('float', 0) | sum) | round(2) }}
+      - name: Trees rain last 48 hours
+        unique_id: trees_rain_48h
+        unit_of_measurement: in
+        icon: mdi:weather-pouring
+        availability: "{{ state_attr('sensor.trees_open_meteo', 'daily') is not none }}"
+        state: >-
+          {% set d = state_attr('sensor.trees_open_meteo', 'daily') %}
+          {% set today = now().strftime('%Y-%m-%d') %}
+          {% set i = d.time.index(today) if today in d.time else d.time | count - 1 %}
+          {{ (d.precipitation_sum[i - 1:i + 1] | map('float', 0) | sum) | round(2) }}
+      - name: Trees days since rain
+        unique_id: trees_days_since_rain
+        unit_of_measurement: days
+        icon: mdi:weather-sunny-alert
+        availability: "{{ state_attr('sensor.trees_open_meteo', 'daily') is not none }}"
+        state: >-
+          {% set d = state_attr('sensor.trees_open_meteo', 'daily') %}
+          {% set today = now().strftime('%Y-%m-%d') %}
+          {% set i = d.time.index(today) if today in d.time else d.time | count - 1 %}
+          {% set m = states('input_number.trees_min_effective_rain') | float(0.1) %}
+          {% set ns = namespace(n=none) %}
+          {% for k in range(i, -1, -1) %}
+            {% if ns.n is none and (d.precipitation_sum[k] | float(0)) >= m %}{% set ns.n = i - k %}{% endif %}
+          {% endfor %}
+          {{ ns.n if ns.n is not none else i + 1 }}
+      - name: Trees soil temperature
+        unique_id: trees_soil_temperature
+        unit_of_measurement: "°F"
+        device_class: temperature
+        state_class: measurement
+        icon: mdi:thermometer-low
+        availability: "{{ (state_attr('sensor.trees_open_meteo', 'current') or {}).soil_temperature_6cm is number }}"
+        state: "{{ state_attr('sensor.trees_open_meteo', 'current').soil_temperature_6cm }}"
+        attributes:
+          surface: "{{ (state_attr('sensor.trees_open_meteo', 'current') or {}).get('soil_temperature_0cm') }}"
+      - name: Trees snow depth
+        unique_id: trees_snow_depth
+        unit_of_measurement: in
+        icon: mdi:snowflake-variant
+        availability: "{{ (state_attr('sensor.trees_open_meteo', 'current') or {}).snow_depth is number }}"
+        state: "{{ (state_attr('sensor.trees_open_meteo', 'current').snow_depth * 12) | round(1) }}"
+      - name: Trees season
+        unique_id: trees_season
+        icon: mdi:calendar-weather
+        state: >-
+          {% set mode = states('input_select.trees_season_mode') %}
+          {% if mode in ['Growing season', 'Winter'] %}{{ mode }}
+          {% else %}
+            {% set d = state_attr('sensor.trees_open_meteo', 'daily') %}
+            {% set hard = states('input_number.trees_hard_freeze_temp') | float(28) %}
+            {% if d %}
+              {% set today = now().strftime('%Y-%m-%d') %}
+              {% set i = d.time.index(today) if today in d.time else d.time | count - 1 %}
+              {% set lows = d.temperature_2m_min[0:i] | reject('none') | list %}
+              {{ 'Winter' if lows and (lows | min) <= hard else 'Growing season' }}
+            {% else %}Growing season{% endif %}
+          {% endif %}
+        attributes:
+          reason: >-
+            {% if states('input_select.trees_season_mode') != 'Auto' %}Set manually.
+            {% else %}Winter once a hard freeze has happened in the last 60 days.{% endif %}
+
+      # ---------------- Outdoor: PurpleAir with EPA correction ----------------
+      - name: PurpleAir PM2.5 corrected
+        unique_id: purpleair_pm25_corrected
+        unit_of_measurement: "µg/m³"
+        device_class: pm25
+        state_class: measurement
+        availability: >-
+          {%- set a = state_attr('sensor.purpleair_raw', 'pm2.5_cf_1_a') -%}
+          {%- set b = state_attr('sensor.purpleair_raw', 'pm2.5_cf_1_b') -%}
+          {%- set seen = state_attr('sensor.purpleair_raw', 'last_seen') -%}
+          {%- set max_age = states('input_number.outdoor_purpleair_max_age_min') | float(30) * 60 -%}
+          {{ a is number and b is number and seen is number and (now().timestamp() - seen) <= max_age
+             and ((a - b) | abs <= 5 or ((a - b) | abs) / ([((a + b) / 2), 0.001] | max) < 0.7) }}
+        state: >-
+          {%- set a = state_attr('sensor.purpleair_raw', 'pm2.5_cf_1_a') | float -%}
+          {%- set b = state_attr('sensor.purpleair_raw', 'pm2.5_cf_1_b') | float -%}
+          {%- set pa = (a + b) / 2 -%}
+          {%- set rh = state_attr('sensor.purpleair_raw', 'humidity') | float(states('sensor.nws_zone_home_relative_humidity') | float(30)) -%}
+          {%- set low = 0.524 * pa - 0.0862 * rh + 5.75 -%}
+          {%- set high = 0.000421 * pa ** 2 + 0.392 * pa + 3.44 -%}
+          {%- if pa < 570 -%}{% set pm = low %}
+          {%- elif pa > 611 -%}{% set pm = high %}
+          {%- else -%}{% set w = 0.0244 * pa - 13.9 %}{% set pm = w * high + (1 - w) * low %}
+          {%- endif -%}
+          {{ [pm, 0] | max | round(1) }}
+        attributes:
+          method: "EPA extended US-wide correction (Barkjohn et al. 2022) on PurpleAir CF=1, A/B averaged"
+          raw_cf1_average: >-
+            {{ (((state_attr('sensor.purpleair_raw', 'pm2.5_cf_1_a') | float(0)) + (state_attr('sensor.purpleair_raw', 'pm2.5_cf_1_b') | float(0))) / 2) | round(1) }}
+          humidity_used: "{{ state_attr('sensor.purpleair_raw', 'humidity') if state_attr('sensor.purpleair_raw', 'humidity') is number else states('sensor.nws_zone_home_relative_humidity') }}"
+          sensor_name: "{{ state_attr('sensor.purpleair_raw', 'name') }}"
+
+      - name: PurpleAir AQI
+        unique_id: purpleair_aqi
+        device_class: aqi
+        state_class: measurement
+        availability: "{{ states('sensor.purpleair_pm2_5_corrected') | is_number }}"
+        state: >-
+          {#- EPA 2024 PM2.5 AQI breakpoints; concentration truncated to 0.1. -#}
+          {%- set c = ((states('sensor.purpleair_pm2_5_corrected') | float * 10) | round(0, 'floor')) / 10 -%}
+          {%- set bp = [[0.0, 9.0, 0, 50], [9.1, 35.4, 51, 100], [35.5, 55.4, 101, 150], [55.5, 125.4, 151, 200], [125.5, 225.4, 201, 300], [225.5, 325.4, 301, 500]] -%}
+          {%- set ns = namespace(aqi=500) -%}
+          {%- for r in bp -%}{%- if c >= r[0] and c <= r[1] -%}{%- set ns.aqi = (r[3] - r[2]) / (r[1] - r[0]) * (c - r[0]) + r[2] -%}{%- endif -%}{%- endfor -%}
+          {{ ns.aqi | round(0) | int }}
+
+      # ---------------- Outdoor: score ----------------
+      - name: Outdoor air AQI
+        unique_id: outdoor_air_aqi
+        device_class: aqi
+        state_class: measurement
+        availability: "{{ states('sensor.airnow_air_quality_index') | is_number or states('sensor.purpleair_aqi') | is_number }}"
+        state: >-
+          {{ [states('sensor.airnow_air_quality_index'), states('sensor.purpleair_aqi')] | select('is_number') | map('float') | max | int }}
+        attributes:
+          airnow: "{{ states('sensor.airnow_air_quality_index') }}"
+          purpleair: "{{ states('sensor.purpleair_aqi') }}"
+          source: >-
+            {%- set an = states('sensor.airnow_air_quality_index') | float(none) -%}
+            {%- set pa = states('sensor.purpleair_aqi') | float(none) -%}
+            {%- if an is not none and pa is not none -%}{{ 'PurpleAir (nearby sensor)' if pa > an else 'AirNow (official)' }}
+            {%- elif pa is not none -%}PurpleAir only{%- else -%}AirNow only{%- endif -%}
+
+      - name: Outdoor air score
+        unique_id: outdoor_air_score
+        unit_of_measurement: points
+        state_class: measurement
+        icon: mdi:weather-hazy
+        availability: "{{ states('sensor.outdoor_air_aqi') | is_number }}"
+        state: >-
+          {%- set aqi = states('sensor.outdoor_air_aqi') | float -%}
+          {%- set g = states('input_number.outdoor_aqi_good') | float(50) -%}
+          {%- set z = [states('input_number.outdoor_aqi_zero') | float(150), g + 1] | max -%}
+          {%- set base = 100 if aqi <= g else (0 if aqi >= z else 100 * (z - aqi) / (z - g)) -%}
+          {%- set gust = [states('sensor.nws_zone_home_wind_gust') | float(0), states('sensor.nws_zone_home_wind_speed') | float(0)] | max -%}
+          {%- set rh = states('sensor.nws_zone_home_relative_humidity') | float(100) -%}
+          {%- set gusty = gust >= states('input_number.outdoor_wind_gust_limit') | float(25) -%}
+          {%- set pen = (states('input_number.outdoor_wind_penalty') | float(15)) if gusty else 0 -%}
+          {%- set fire = (states('input_number.outdoor_fire_weather_penalty') | float(10)) if gusty and rh <= states('input_number.outdoor_fire_weather_rh') | float(15) else 0 -%}
+          {{ [base - pen - fire, 0] | max | round(0) | int }}
+        attributes:
+          aqi: "{{ states('sensor.outdoor_air_aqi') }}"
+          wind_gust: "{{ states('sensor.nws_zone_home_wind_gust') }}"
+          humidity: "{{ states('sensor.nws_zone_home_relative_humidity') }}"
+
+      - name: Outdoor activity score
+        unique_id: outdoor_activity_score
+        unit_of_measurement: points
+        state_class: measurement
+        icon: mdi:hiking
+        availability: "{{ states('sensor.outdoor_air_score') | is_number }}"
+        state: >-
+          {#- Weighted mean of the included scores, capped by the air score: air is a gate. -#}
+          {%- set air = states('sensor.outdoor_air_score') | float -%}
+          {%- set parts = [[air, states('input_number.outdoor_weight_air') | float(1)]] -%}
+          {%- if is_state('input_boolean.outdoor_include_climbing', 'on') -%}{%- set parts = parts + [[states('input_number.outdoor_climbing_score') | float(100), states('input_number.outdoor_weight_climbing') | float(1)]] -%}{%- endif -%}
+          {%- if is_state('input_boolean.outdoor_include_riding', 'on') -%}{%- set parts = parts + [[states('input_number.outdoor_riding_score') | float(100), states('input_number.outdoor_weight_riding') | float(1)]] -%}{%- endif -%}
+          {%- set ns = namespace(sw=0, w=0) -%}
+          {%- for p in parts -%}{%- set ns.sw = ns.sw + p[0] * p[1] -%}{%- set ns.w = ns.w + p[1] -%}{%- endfor -%}
+          {%- set mean = ns.sw / ns.w if ns.w > 0 else air -%}
+          {{ [mean, air] | min | round(0) | int }}
+        attributes:
+          air: "{{ states('sensor.outdoor_air_score') }}"
+          climbing: "{{ states('input_number.outdoor_climbing_score') if is_state('input_boolean.outdoor_include_climbing', 'on') else 'not included' }}"
+          riding: "{{ states('input_number.outdoor_riding_score') if is_state('input_boolean.outdoor_include_riding', 'on') else 'not included' }}"
+          summary: >-
+            {%- set aqi = states('sensor.outdoor_air_aqi') -%}
+            {%- set gust = states('sensor.nws_zone_home_wind_gust') | float(0) -%}
+            {%- set parts = ['AQI ' ~ aqi ~ ' (' ~ state_attr('sensor.outdoor_air_aqi', 'source') ~ ')'] -%}
+            {%- if gust >= states('input_number.outdoor_wind_gust_limit') | float(25) -%}{%- set parts = parts + ['gusts ' ~ gust | round(0) ~ ' mph'] -%}{%- endif -%}
+            {{ parts | join(' · ') }}
+
+      - name: Outdoor activity level
+        unique_id: outdoor_activity_level
+        icon: >-
+          {{ {'green': 'mdi:circle', 'yellow': 'mdi:circle-half-full', 'red': 'mdi:alert-circle'}.get(this.state, 'mdi:circle-outline') if this.state is defined else 'mdi:circle-outline' }}
+        availability: "{{ states('sensor.outdoor_activity_score') | is_number }}"
+        state: >-
+          {%- set s = states('sensor.outdoor_activity_score') | float -%}
+          {%- if s >= states('input_number.outdoor_green_min') | float(70) -%}green
+          {%- elif s >= states('input_number.outdoor_yellow_min') | float(40) -%}yellow
+          {%- else -%}red{%- endif -%}
+
+  # ---------------- Trees: decision ----------------
+  # Inputs and the decision are computed once as variables; state and attributes read them.
+  - triggers:
+      - trigger: homeassistant
+        event: start
+      - trigger: event
+        event_type: event_template_reloaded
+      - trigger: time_pattern
+        minutes: "/10"
+      - trigger: state
+        entity_id:
+          - sensor.trees_open_meteo
+          - sensor.trees_overnight_low
+          - sensor.trees_season
+          - sensor.tree_soil_moisture
+          - input_datetime.trees_last_watered
+          - input_boolean.trees_use_moisture_sensor
+          - input_boolean.trees_city_hours
+          - input_select.trees_season_mode
+          - input_number.trees_rain_skip_7d
+          - input_number.trees_rain_skip_48h
+          - input_number.trees_min_effective_rain
+          - input_number.trees_soil_frozen_temp
+          - input_number.trees_moisture_wet_pct
+          - input_number.trees_interval_days
+          - input_number.trees_freeze_temp
+          - input_number.trees_hard_freeze_temp
+          - input_number.trees_final_watering_lead_days
+          - input_number.trees_winter_min_air_temp
+          - input_number.trees_winter_interval_days
+          - input_number.trees_dry_spell_days
+          - input_number.trees_snow_cover_in
+          - input_number.trees_caliper_hot_wings
+          - input_number.trees_caliper_sensation
+          - input_number.trees_gal_per_inch_regular
+          - input_number.trees_gal_per_inch_deep
+    variables:
+      moist: "{{ states('sensor.tree_soil_moisture') | float(none) }}"
+      wet_pct: "{{ states('input_number.trees_moisture_wet_pct') | float(35) }}"
+      use_moist: "{{ is_state('input_boolean.trees_use_moisture_sensor', 'on') }}"
+      soil: "{{ states('sensor.trees_soil_temperature') | float(none) }}"
+      frozen_t: "{{ states('input_number.trees_soil_frozen_temp') | float(32) }}"
+      rain7: "{{ states('sensor.trees_rain_last_7_days') | float(0) }}"
+      rain2: "{{ states('sensor.trees_rain_last_48_hours') | float(0) }}"
+      t7: "{{ states('input_number.trees_rain_skip_7d') | float(1) }}"
+      t2: "{{ states('input_number.trees_rain_skip_48h') | float(0.5) }}"
+      snow: "{{ states('sensor.trees_snow_depth') | float(0) }}"
+      snow_t: "{{ states('input_number.trees_snow_cover_in') | float(0.5) }}"
+      dry: "{{ states('sensor.trees_days_since_rain') | int(0) }}"
+      dry_t: "{{ states('input_number.trees_dry_spell_days') | int(14) }}"
+      season: "{{ states('sensor.trees_season') }}"
+      lead: "{{ states('input_number.trees_final_watering_lead_days') | int(2) }}"
+      win_t: "{{ states('input_number.trees_winter_min_air_temp') | float(40) }}"
+      since: >-
+        {% set lw = as_datetime(states('input_datetime.trees_last_watered'), none) %}
+        {{ (now().date() - lw.date()).days if lw is not none and lw.year > 2000 else none }}
+      interval: >-
+        {{ states('input_number.trees_interval_days') | int(3) if season == 'Growing season' else states('input_number.trees_winter_interval_days') | int(14) }}
+      hard: >-
+        {% set t = states('input_number.trees_hard_freeze_temp') | float(28) %}
+        {% set ns = namespace(n=none) %}
+        {% for n in state_attr('sensor.trees_overnight_low', 'nights') or [] %}{% if ns.n is none and n[1] is number and n[1] <= t %}{% set ns.n = n %}{% endif %}{% endfor %}
+        {{ ns.n }}
+      freeze: >-
+        {% set t = states('input_number.trees_freeze_temp') | float(32) %}
+        {% set ns = namespace(n=none) %}
+        {% for n in state_attr('sensor.trees_overnight_low', 'nights') or [] %}{% if ns.n is none and n[1] is number and n[1] <= t %}{% set ns.n = n %}{% endif %}{% endfor %}
+        {{ ns.n }}
+      hard_days: "{{ (as_datetime(hard[0]).date() - now().date()).days if hard else none }}"
+      hard_when: >-
+        {% if hard %}{% set dd = hard_days %}{{ 'tonight' if dd == 0 else ('tomorrow night' if dd == 1 else as_datetime(hard[0]).strftime('%A') ~ ' night') }}{% endif %}
+      high: >-
+        {% set h = state_attr('sensor.trees_overnight_low', 'today_high') %}
+        {% if h is number %}{{ h }}{% else %}
+          {% set d = state_attr('sensor.trees_open_meteo', 'daily') %}
+          {% set today = now().strftime('%Y-%m-%d') %}
+          {{ d.temperature_2m_max[d.time.index(today)] if d and today in d.time else none }}
+        {% endif %}
+      final_due: "{{ season == 'Growing season' and hard_days is not none and hard_days <= lead }}"
+      decision: >-
+        {%- if use_moist and moist is not none and moist >= wet_pct -%}skip_wet
+        {%- elif soil is not none and soil <= frozen_t -%}skip_frozen
+        {%- elif season == 'Winter' and snow >= snow_t -%}skip_snow
+        {%- elif rain2 >= t2 or rain7 >= t7 -%}skip_rain
+        {%- elif final_due and (since is none or since >= 1) -%}water_final
+        {%- elif season == 'Growing season' and (since is none or since >= interval) -%}water
+        {%- elif season == 'Growing season' -%}skip_recent
+        {%- elif high is number and high < win_t -%}skip_cold
+        {%- elif dry >= dry_t and (since is none or since >= interval) -%}water_winter
+        {%- else -%}skip_winter{%- endif -%}
+      ago: >-
+        {{ ('last watered ' ~ since ~ (' day ago' if since == 1 else ' days ago')) if since is not none else 'no watering logged yet' }}
+      reason: >-
+        {%- if decision == 'skip_wet' -%}Soil sensor reads {{ moist | round(0) }}% (wet at {{ wet_pct | round(0) }}%), so the root zone still has water.
+        {%- elif decision == 'skip_frozen' -%}Ground is frozen ({{ soil | round(0) }}°F at 2 in deep), so water would run off or ice over.
+        {%- elif decision == 'skip_snow' -%}{{ snow }} in of snow on the ground; it will melt into the root zone.
+        {%- elif decision == 'skip_rain' -%}{{ rain2 if rain2 >= t2 else rain7 }} in of rain in the last {{ '48 hours' if rain2 >= t2 else '7 days' }}{{ (', so the soil is already moist ahead of the hard freeze ' ~ hard_when) if final_due else '' }}.
+        {%- elif decision == 'water_final' -%}Hard freeze ({{ hard[1] | round(0) }}°F) expected {{ hard_when }}. Give them a final deep soak so the roots go into winter moist.
+        {%- elif decision == 'water' -%}Only {{ rain7 }} in of rain in 7 days, and {{ ago }} (new trees: every {{ interval }} days).
+        {%- elif decision == 'skip_recent' -%}{{ ago | capitalize }}; next watering due in {{ interval - since }} day{{ '' if interval - since == 1 else 's' }}. {{ rain7 }} in of rain this week.
+        {%- elif decision == 'skip_cold' -%}Today's high is only {{ high | round(0) }}°F; winter watering needs a day above {{ win_t | round(0) }}°F so it soaks in.
+        {%- elif decision == 'water_winter' -%}{{ dry }} days without real precipitation, no snow cover, and a high of {{ high | round(0) if high is number else '?' }}°F: a good winter watering day.
+        {%- else -%}Winter: {{ ago }}, {{ dry }} days since real precipitation. Only needed every {{ interval }}+ days during a dry spell of {{ dry_t }}+ days.
+        {%- endif -%}
+    sensor:
+      - name: Trees watering decision
+        unique_id: trees_watering_decision_v2
+        icon: "{{ 'mdi:watering-can' if decision.startswith('water') else 'mdi:watering-can-outline' }}"
+        state: >-
+          {{ {'water': 'Water', 'water_final': 'Water (final deep watering)', 'water_winter': 'Water (winter)'}.get(decision, 'Skip') }}
+        attributes:
+          code: "{{ decision }}"
+          reason: "{{ reason }}"
+          how_much: >-
+            {%- set deep = decision in ['water_final', 'water_winter'] -%}
+            {%- set per = states('input_number.trees_gal_per_inch_deep') | float(10) if deep else states('input_number.trees_gal_per_inch_regular') | float(1.5) -%}
+            {%- set hw = states('input_number.trees_caliper_hot_wings') | float(1) -%}
+            {%- set se = states('input_number.trees_caliper_sensation') | float(1) -%}
+            {%- if decision.startswith('water') -%}About {{ (hw * per) | round(1) }} gal for the Hot Wings maple and {{ (se * per) | round(1) }} gal for the Sensation boxelder, slowly at the root ball{{ ' and out toward the drip line' if deep else '' }}.{%- else -%}None today.{%- endif -%}
+          when: >-
+            {%- if not decision.startswith('water') -%}—
+            {%- elif decision == 'water_winter' -%}Midday once it's above freezing, so it soaks in before tonight (CSU 7.211).
+            {%- elif is_state('input_boolean.trees_city_hours', 'on') -%}Before 10 AM or after 6 PM (Fort Collins voluntary Water Shortage Watch).
+            {%- else -%}Morning or evening, when less is lost to evaporation.{%- endif -%}
+          season: "{{ season }}"
+          rain_7d: "{{ rain7 }}"
+          rain_48h: "{{ rain2 }}"
+          soil_temp: "{{ soil }}"
+          days_since_rain: "{{ dry }}"
+          days_since_watered: "{{ since }}"
+          today_high: "{{ high }}"
+          next_freeze: "{{ (as_datetime(freeze[0]).strftime('%a %b %-d') ~ ' · ' ~ (freeze[1] | round(0)) ~ '°F') if freeze else 'None in the NWS forecast' }}"
+          next_hard_freeze: "{{ (as_datetime(hard[0]).strftime('%a %b %-d') ~ ' · ' ~ (hard[1] | round(0)) ~ '°F') if hard else 'None in the NWS forecast' }}"
+
+script:
+  trees_mark_watered:
+    alias: "Trees: mark watered now"
+    icon: mdi:watering-can
+    sequence:
+      - action: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.trees_last_watered
+        data:
+          datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+
+automation:
+  - id: trees_air_apply_defaults
+    alias: "Trees & air: apply default settings"
+    description: >-
+      One-time defaults for the tuning helpers. Helpers keep their own value across restarts,
+      so this runs once (until input_boolean.trees_air_defaults_applied is turned off again).
+    triggers:
+      - trigger: homeassistant
+        event: start
+      - trigger: state
+        entity_id: input_boolean.trees_air_defaults_applied
+        to: "off"
+    conditions:
+      - condition: state
+        entity_id: input_boolean.trees_air_defaults_applied
+        state: "off"
+    actions:
+      - variables:
+          defaults:
+            # Fort Collins/CSU ~1 in/week target; a full inch within 7 days replaces a deep watering.
+            input_number.trees_rain_skip_7d: 1.0
+            # Half an inch in 48 h soaks a new tree's root ball (CSU: soak to ~12 in).
+            input_number.trees_rain_skip_48h: 0.5
+            # Showers under 0.1 in mostly wet the surface and evaporate.
+            input_number.trees_min_effective_rain: 0.1
+            input_number.trees_soil_frozen_temp: 32
+            input_number.trees_moisture_wet_pct: 35
+            # GardenNotes #635: every 2-3 days for several months after planting.
+            input_number.trees_interval_days: 3
+            input_number.trees_freeze_temp: 32
+            # NWS hard freeze: 28 F or colder.
+            input_number.trees_hard_freeze_temp: 28
+            input_number.trees_final_watering_lead_days: 2
+            # CSU 7.211: water only when air is above 40 F.
+            input_number.trees_winter_min_air_temp: 40
+            # CSU 7.211: about once or twice a month in dry spells; new trees are most susceptible.
+            input_number.trees_winter_interval_days: 14
+            input_number.trees_dry_spell_days: 14
+            input_number.trees_snow_cover_in: 0.5
+            input_number.trees_caliper_hot_wings: 1.0
+            input_number.trees_caliper_sensation: 1.0
+            # GardenNotes #635: 1-1.5 gal per inch of caliper per routine irrigation.
+            input_number.trees_gal_per_inch_regular: 1.5
+            # CSU 7.211: 10 gal per inch of trunk diameter for deep / winter watering.
+            input_number.trees_gal_per_inch_deep: 10
+            # AQI 50 is the top of "Good"; 150 the top of "Unhealthy for Sensitive Groups".
+            input_number.outdoor_aqi_good: 50
+            input_number.outdoor_aqi_zero: 150
+            input_number.outdoor_green_min: 70
+            input_number.outdoor_yellow_min: 40
+            input_number.outdoor_wind_gust_limit: 25
+            input_number.outdoor_wind_penalty: 15
+            # Red-flag style: very dry air + wind.
+            input_number.outdoor_fire_weather_rh: 15
+            input_number.outdoor_fire_weather_penalty: 10
+            input_number.outdoor_purpleair_max_age_min: 30
+            input_number.outdoor_climbing_score: 100
+            input_number.outdoor_riding_score: 100
+            input_number.outdoor_weight_air: 1
+            input_number.outdoor_weight_climbing: 1
+            input_number.outdoor_weight_riding: 1
+      - repeat:
+          for_each: "{{ defaults.items() | map('list') | list }}"
+          sequence:
+            - action: input_number.set_value
+              target:
+                entity_id: "{{ repeat.item[0] }}"
+              data:
+                value: "{{ repeat.item[1] }}"
+      - action: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.trees_notify_time
+        data:
+          time: "07:30:00"
+      - action: input_boolean.turn_on
+        target:
+          entity_id:
+            - input_boolean.trees_notifications
+            - input_boolean.trees_city_hours
+      - action: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.trees_air_defaults_applied
+    mode: single
+
+  - id: trees_daily_watering_notification
+    alias: "Trees: daily watering decision"
+    description: Pushes today's water/skip decision to every mobile app at the chosen time.
+    triggers:
+      - trigger: time
+        at: input_datetime.trees_notify_time
+    conditions:
+      - condition: state
+        entity_id: input_boolean.trees_notifications
+        state: "on"
+    actions:
+      - variables:
+          code: "{{ state_attr('sensor.trees_watering_decision', 'code') or 'skip' }}"
+          water: "{{ code.startswith('water') }}"
+          title: >-
+            {%- if code == 'water_final' -%}Trees: final deep watering today
+            {%- elif code == 'water_winter' -%}Trees: winter watering today
+            {%- elif water -%}Trees: water today
+            {%- else -%}Trees: skip watering today{%- endif -%}
+          message: >-
+            {{ state_attr('sensor.trees_watering_decision', 'reason') }}{% if water %} {{ state_attr('sensor.trees_watering_decision', 'how_much') }} {{ state_attr('sensor.trees_watering_decision', 'when') }}{% endif %}
+          notifiers: >-
+            {{ states.notify | selectattr('entity_id', 'search', 'mobile_app') | map(attribute='entity_id') | list }}
+      - choose:
+          - conditions: "{{ notifiers | count > 0 }}"
+            sequence:
+              - repeat:
+                  for_each: "{{ notifiers }}"
+                  sequence:
+                    - action: "{{ repeat.item }}"
+                      data:
+                        title: "{{ title }}"
+                        message: "{{ message }}"
+                        data:
+                          tag: trees-watering
+                          channel: Trees
+                          actions: >-
+                            {{ [{'action': 'TREES_WATERED', 'title': 'I watered'}] if water else [] }}
+        default:
+          - action: persistent_notification.create
+            data:
+              notification_id: trees_watering
+              title: "{{ title }}"
+              message: "{{ message }}"
+    mode: single
+
+  - id: trees_watered_from_notification
+    alias: "Trees: log watering from the notification"
+    triggers:
+      - trigger: event
+        event_type: mobile_app_notification_action
+        event_data:
+          action: TREES_WATERED
+    actions:
+      - action: script.trees_mark_watered
+    mode: single
