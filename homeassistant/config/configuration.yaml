@@ -40,59 +40,18 @@ frontend:
   extra_module_url:
     - /hacsfiles/lovelace-mushroom/mushroom.js
 
-# Load dashboards
+# Dashboards are the panel_custom panels below. The only Lovelace dashboard left is Tuner Signal,
+# which keeps long-term statistics charts the Recordings panel doesn't have. resource_mode: yaml
+# keeps card resources out of the UI (Mushroom comes from frontend.extra_module_url above).
 lovelace:
-  mode: yaml
+  resource_mode: yaml
   dashboards:
-    lovelace-main:
-      mode: yaml
-      title: Home
-      icon: mdi:home
-      show_in_sidebar: false
-      filename: dashboards/main.yaml
-    lovelace-life:
-      mode: yaml
-      title: Yard
-      icon: mdi:sprinkler
-      show_in_sidebar: false
-      filename: dashboards/life.yaml
-    lovelace-security:
-      mode: yaml
-      title: Security
-      icon: mdi:shield-home
-      show_in_sidebar: false
-      filename: dashboards/security.yaml
-    # Replaced by the TV panel (/tv); kept reachable but out of the sidebar.
-    lovelace-roku:
-      mode: yaml
-      title: Roku
-      icon: mdi:television-play
-      show_in_sidebar: false
-      filename: dashboards/roku.yaml
-    lovelace-recordings:
-      mode: yaml
-      title: Recordings
-      icon: mdi:television-classic
-      show_in_sidebar: false
-      filename: dashboards/recordings.yaml
     lovelace-tuner-signal:
       mode: yaml
       title: Tuner Signal
       icon: mdi:antenna
       show_in_sidebar: true
       filename: dashboards/tuner_signal.yaml
-    lovelace-coaching:
-      mode: yaml
-      title: Coaching
-      icon: mdi:dumbbell
-      show_in_sidebar: false
-      filename: dashboards/coaching.yaml
-    lovelace-network:
-      mode: yaml
-      title: Network
-      icon: mdi:router-wireless
-      show_in_sidebar: false
-      filename: dashboards/network.yaml
 
 http:
   use_x_forwarded_for: true

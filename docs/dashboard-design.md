@@ -1,7 +1,7 @@
 # Dashboard design playbook
 
 Lessons from building the Irrigation panel (`homeassistant/config/www/irrigation/`) and cleaning up
-the Overview dashboard (`homeassistant/config/ui-lovelace.yaml`), written so the next dashboard
+the Overview dashboard (`ui-lovelace.yaml`, removed 2026-10-04 in favour of the Home panel), written so the next dashboard
 starts from these decisions instead of rediscovering them.
 
 ## 1. Start from the job, not the entities
