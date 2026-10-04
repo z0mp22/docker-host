@@ -289,6 +289,27 @@ deploy_hvac_prices() {
   fi
 }
 
+deploy_alloy() {
+  log "deploying alloy (NPM access logs -> Loki on minipc)"
+  sync_exporter_stack "alloy"
+  preserve_env_file "alloy"
+  chmod 600 "${DEPLOY_ROOT}/alloy/.env" 2>/dev/null || true
+  mkdir -p "${DEPLOY_ROOT}/alloy/data" "${DEPLOY_ROOT}/alloy/geo" "${DEPLOY_ROOT}/alloy/backfill"
+  install_file "${REPO_ROOT}/alloy/cron/alloy-geoip" "/etc/cron.d/alloy-geoip" 644
+  # Alloy's GeoIP stages need both databases to exist before it starts.
+  if [ ! -f "${DEPLOY_ROOT}/alloy/geo/dbip-country-lite.mmdb" ] \
+     || [ ! -f "${DEPLOY_ROOT}/alloy/geo/dbip-asn-lite.mmdb" ]; then
+    GEO_DIR="${DEPLOY_ROOT}/alloy/geo" bash "${DEPLOY_ROOT}/alloy/scripts/update-geoip.sh" \
+      || log "WARN: GeoIP download failed; alloy will not ship logs until it succeeds"
+  fi
+  (
+    cd "${DEPLOY_ROOT}/alloy"
+    [ "${PULL_IMAGES:-0}" = "1" ] && docker compose pull
+    # Recreate on config changes: the config is a bind-mounted file Alloy reads at start.
+    docker compose up -d --force-recreate
+  )
+}
+
 
 restart_homeassistant_if_running() {
   if docker ps -a --format '{{.Names}}' | grep -qx 'homeassistant'; then
@@ -376,6 +397,7 @@ main() {
   install_hdhomerun_signal_bridge
   deploy_mountain_project_feed
   deploy_hvac_prices
+  deploy_alloy
   restart_homeassistant_if_running
   add_roku_integrations
   log "deploy complete"

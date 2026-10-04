@@ -1,0 +1,104 @@
+# Internet exposure: what the public hosts behind NPM (frigate, ha, media, opensprinkler) are
+# getting from the internet. Alloy on this Pi classifies NPM's access logs into Loki on minipc
+# (alloy/README.md); these sensors summarise the last 24 h for the Network panel's exposure card,
+# and Grafana's Internet Exposure alert rules call the webhook below for anything high-signal.
+# Full detail: Grafana dashboard npm-exposure (http://10.0.0.6:3000/d/npm-exposure).
+
+rest:
+  # One request for every 24 h number the card needs. Each series carries m=<metric>
+  # (and site= for per-host counts); a metric with nothing to count is simply absent.
+  - resource: http://10.0.0.6:3100/loki/api/v1/query
+    params:
+      query: >-
+        label_replace(sum by (site) (count_over_time({job="npm"}[24h])), "m", "requests", "", "")
+        or label_replace(sum by (site) (count_over_time({job="npm", actor="attacker"}[24h])), "m", "probes", "", "")
+        or label_replace(sum(count_over_time({job="npm", category=~"ssrf|vite_fileread|traversal|secrets|wordpress|php|backup_dump|admin_panel|iot_exploit", outcome="ok"}[24h])), "m", "got_through", "", "")
+        or label_replace(sum(count_over_time({job="npm", actor="unrecognized"}[24h])), "m", "unrecognized", "", "")
+        or label_replace(count(sum by (client_ip) (count_over_time({job="npm", actor="attacker", country!="unknown"}[24h]))), "m", "attacker_ips", "", "")
+        or label_replace(sum(count_over_time({job="npm", status=~"4.."} | method="POST" | uri=~"/api/login|/auth/token" [24h])), "m", "failed_signins", "", "")
+    scan_interval: 300
+    timeout: 30
+    sensor:
+      - name: Internet exposure
+        unique_id: internet_exposure_24h
+        icon: mdi:shield-search
+        # State: attack probes in the last 24 h (all hosts). Breakdown in attributes.result.
+        availability: "{{ value_json is defined and value_json.status == 'success' }}"
+        value_template: >-
+          {{ value_json.data.result | selectattr('metric.m', 'eq', 'probes')
+             | map(attribute='value') | map('last') | map('int') | sum }}
+        unit_of_measurement: probes
+        state_class: measurement
+        json_attributes_path: "$.data"
+        json_attributes:
+          - result
+
+  # Most recent successful Frigate login (HA's own /auth/token calls are mostly the companion
+  # app refreshing its token, so they'd drown out real sign-ins).
+  - resource: http://10.0.0.6:3100/loki/api/v1/query_range
+    params:
+      query: '{job="npm", site="frigate", actor="authenticated"} | method="POST" | uri="/api/login"'
+      limit: 1
+      since: 720h
+      direction: backward
+    scan_interval: 300
+    timeout: 30
+    sensor:
+      - name: Internet exposure last sign-in
+        unique_id: internet_exposure_last_sign_in
+        icon: mdi:login
+        device_class: timestamp
+        availability: "{{ value_json is defined and value_json.status == 'success' }}"
+        value_template: >-
+          {% set r = value_json.data.result %}
+          {{ ((r[0]['values'][0][0] | int) / 1e9) | timestamp_custom('%Y-%m-%dT%H:%M:%S+00:00', false)
+             if r else none }}
+        json_attributes_path: "$.data.result[0].stream"
+        json_attributes:
+          - site
+          - client_family
+          - country
+          - asn_org
+
+automation:
+  - id: internet_exposure_alert
+    alias: "Internet exposure: Grafana alert to phones"
+    description: >-
+      Grafana's Internet Exposure rules (minipc o11y/grafana/provisioning/alerting/npm-exposure.yaml)
+      POST here for high-signal events only: an attack got real content back, OpenSprinkler used
+      with a foreign password, a sign-in from a new device/country, or repeated failed sign-ins.
+      Grafana's HA_EXPOSURE_WEBHOOK_URL secret holds the matching URL.
+    mode: queued
+    triggers:
+      - trigger: webhook
+        webhook_id: !secret npm_exposure_webhook_id
+        allowed_methods: [POST]
+        local_only: true
+    conditions:
+      - condition: template
+        value_template: "{{ trigger.json is defined and trigger.json.status == 'firing' }}"
+    actions:
+      - variables:
+          message: >-
+            {{ trigger.json.alerts | selectattr('status', 'eq', 'firing')
+               | map(attribute='annotations') | map(attribute='summary') | unique | join('\n') }}
+          # Companion app notify entities are named notify.<device>; same pattern as the doorbell.
+          mobile_notifiers: >-
+            {{ integration_entities('mobile_app')
+               | select('match', '^notify\\.')
+               | map('replace', 'notify.', 'notify.mobile_app_', 1)
+               | list }}
+      - repeat:
+          for_each: "{{ mobile_notifiers }}"
+          sequence:
+            - action: "{{ repeat.item }}"
+              data:
+                title: Internet exposure
+                message: "{{ message }}"
+                data:
+                  tag: internet-exposure
+                  channel: Security
+                  importance: high
+                  priority: high
+                  clickAction: /network
+                  url: /network

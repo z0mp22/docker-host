@@ -16,6 +16,7 @@ Push to `main` → GitHub Actions deploys to `/docker` on the Pi via a self-host
 | pihole-exporter | 9617 | `pihole-exporter/` |
 | npm-exporter | 9113 | `npm-exporter/` |
 | npm-metrics-exporter | 9114 | `npm-metrics-exporter/` |
+| alloy (NPM logs → Loki on minipc) | 12345 (metrics) | `alloy/` — see [alloy/README.md](alloy/README.md) |
 | unifi-poller | 9130 | `unifi-poller/` (optional) |
 | garmin-coaching-report | — (Mon 09:00 MT cron) | `garmin-coaching-report/` |
 
@@ -43,6 +44,7 @@ Set `PULL_IMAGES=1` to pull latest images (optional; off by default to avoid mic
 |------|---------|
 | `/docker/.env` | Pi-hole `WEBPASSWORD` in main compose |
 | `/docker/pihole-exporter/.env` | Pi-hole API password for exporter |
+| `/docker/alloy/.env` | `OS_PW_SHA256` owner-password fingerprint (`alloy/scripts/set-owner-pw.sh`) |
 | `/docker/unifi-poller/up.conf` | UniFi controller credentials |
 | `/docker/homeassistant/secrets.yaml` | HA integrations; `github_coaching_report_token` (fine-grained PAT, "Bearer github_pat_…") for the coaching-report dashboard buttons |
 | `/docker/garmin-coaching-report/.env` | Garmin, Anthropic, Gmail credentials; `ANTHROPIC_MODEL` (keep `claude-sonnet-4-6`), `MAX_WINDOW_DAYS` |
@@ -105,6 +107,7 @@ docker-host/
 ├── pihole-exporter/
 ├── npm-exporter/
 ├── npm-metrics-exporter/
+├── alloy/                 # NPM access logs -> Loki (Internet Exposure dashboard)
 ├── unifi-poller/
 ├── garmin-coaching-report/  # weekly coaching report (cron batch)
 └── mountain-project-feed/   # nightly Mountain Project "What's New" (cron batch)

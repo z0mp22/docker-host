@@ -1,0 +1,23 @@
+services:
+  alloy:
+    image: grafana/alloy:v1.20.1
+    container_name: alloy
+    restart: unless-stopped
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy/data
+      - --disable-reporting
+      - /etc/alloy/config.alloy
+    env_file: .env
+    environment:
+      LOKI_URL: http://10.0.0.6:3100/loki/api/v1/push
+    ports:
+      - "12345:12345"   # /metrics for Prometheus job "alloy" (minipc)
+    mem_limit: 384m
+    volumes:
+      - ./config.alloy:/etc/alloy/config.alloy:ro
+      - /docker/npm/data/logs:/npm-logs:ro
+      - ./data:/var/lib/alloy/data
+      - ./geo:/geo:ro
+      - ./backfill:/backfill:ro

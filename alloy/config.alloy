@@ -1,0 +1,257 @@
+// NPM access logs -> Loki (minipc), classified for the Grafana "Internet Exposure" dashboard.
+//
+// Every line gets these Loki labels (all low-cardinality):
+//   job=npm, site, status, category, outcome, actor, os_auth, country (+ backfill on history)
+// and this structured metadata: uri, client_ip, ua, client_family, method, length, upstream, asn_org.
+//
+// Secrets never reach Loki: OpenSprinkler sends its password hash as ?pw=, so the pipeline only
+// records whether it was the owner's (salted SHA-256 compared to OS_PW_SHA256 from .env), then
+// redacts pw/npw/cpw/token/password values from both the stored line and the uri field.
+//
+// Classification rules are covered by tests/run.sh; change them there first.
+
+local.file_match "npm_live" {
+  path_targets = [{
+    "__path__" = "/npm-logs/proxy-host-*_access.log",
+    "job"      = "npm",
+  }]
+  sync_period = "15s"
+}
+
+// One-shot history import: scripts/backfill.sh decompresses rotated logs here. Each file gets
+// its own backfill label so its stream stays in time order (Loki rejects out-of-order writes).
+local.file_match "npm_backfill" {
+  path_targets = [{
+    "__path__" = "/backfill/*.log",
+    "job"      = "npm",
+  }]
+  sync_period = "15s"
+}
+
+loki.source.file "npm_live" {
+  targets    = local.file_match.npm_live.targets
+  forward_to = [loki.process.npm.receiver]
+}
+
+loki.source.file "npm_backfill" {
+  targets    = local.file_match.npm_backfill.targets
+  forward_to = [loki.relabel.backfill.receiver]
+}
+
+loki.relabel "backfill" {
+  forward_to = [loki.process.npm.receiver]
+
+  rule {
+    source_labels = ["filename"]
+    regex         = ".*/(.+)\\.log"
+    target_label  = "backfill"
+  }
+}
+
+loki.process "npm" {
+  forward_to = [loki.write.minipc.receiver]
+
+  // 1. Parse NPM's "proxy" log_format (conf.d/include/log.conf).
+  stage.regex {
+    expression = `^\[(?P<time>[^\]]+)\] (?P<cache>\S+) (?P<upstream>\S+) (?P<status>\d{3}) - (?P<method>\S+) (?P<scheme>\S+) (?P<domain>\S+) "(?P<uri>.*?)" \[Client (?P<client_ip>[^\]]+)\] \[Length (?P<length>\d+)\] \[Gzip [^\]]*\] \[Sent-to [^\]]*\] "(?P<ua>.*?)" "(?P<referer>.*?)"$`
+  }
+
+  stage.timestamp {
+    source = "time"
+    format = "02/Jan/2006:15:04:05 -0700"
+  }
+
+  stage.regex {
+    source     = "domain"
+    expression = `^(?P<site>[^.]+)`
+  }
+
+  stage.regex {
+    source     = "uri"
+    expression = `^(?P<path>[^?]*)`
+  }
+
+  // 2. OpenSprinkler password fingerprint, then redact every credential-looking value.
+  stage.regex {
+    source     = "uri"
+    expression = `[?&]pw=(?P<pw>[^&]*)`
+  }
+
+  stage.template {
+    source   = "os_auth"
+    template = "{{ if not .pw }}none{{ else if eq \"" + sys.env("OS_PW_SHA256") + "\" \"\" }}unchecked{{ else if eq (Sha2Hash .pw \"npm-exposure\") \"" + sys.env("OS_PW_SHA256") + "\" }}owner{{ else }}other{{ end }}"
+  }
+
+  stage.template {
+    source   = "pw"
+    template = ""
+  }
+
+  // Also HA webhook ids and HLS stream tokens (path segments) and Plex's X-Plex-Token.
+  stage.replace {
+    expression = `(?i)(?:[?&](?:pw|npw|cpw|opw|token|access_token|refresh_token|x-plex-token|authsig|password|passwd|secret|api_key|apikey|key|code)=|/api/(?:webhook|hls)/)([^&/?" ]+)`
+    replace    = "REDACTED"
+  }
+
+  stage.replace {
+    source     = "uri"
+    expression = `(?i)(?:[?&](?:pw|npw|cpw|opw|token|access_token|refresh_token|x-plex-token|authsig|password|passwd|secret|api_key|apikey|key|code)=|/api/(?:webhook|hls)/)([^&/?" ]+)`
+    replace    = "REDACTED"
+  }
+
+  // 3. What the request was after. First match wins: the apps' own static bundles, then attack
+  //    patterns (whole URI, query included), then each site's real paths.
+  stage.template {
+    source   = "category"
+    template = `{{- $u := ToLower .uri -}}{{- $p := ToLower .path -}}
+{{- if and (regexMatch "^/(assets|static|frontend_latest|frontend_es5|hacsfiles|locales|fonts)/[a-z0-9._/-]+\\.(js|mjs|css|map|woff2?|ttf|png|svg|ico|json|webp|jpg)$" $p) (not (regexMatch "\\.\\." $p)) -}}app
+{{- else if regexMatch "/@fs/|__vite|/@id/|\\?raw\\?|[?&]import&raw" $u -}}vite_fileread
+{{- else if regexMatch "169\\.254\\.|metadata\\.google|100\\.100\\.100\\.200|fd00:ec2|[?&][a-z_]*=(file|gopher|dict|ftp)(:|%3a)|[?&](url|uri|dest|target|proxy|load|fetch|src|path)=https?(:|%3a)" $u -}}ssrf
+{{- else if regexMatch "\\.\\./|\\.\\.%2f|%2e%2e|\\.\\.%25|\\.\\.\\\\|etc/passwd|etc%2fpasswd|win\\.ini|boot\\.ini|/proc/self" $u -}}traversal
+{{- else if regexMatch "/\\.env|/\\.git|/\\.svn|/\\.hg/|/\\.aws|/\\.ssh|id_rsa|id_ed25519|/\\.docker|/\\.npmrc|/\\.pypirc|/\\.kube|/\\.azure|credentials|service-account|gcp-|firebase|secrets?\\.(json|ya?ml|txt|env)|api[_-]?keys?\\.|\\.anthropic|\\.openai|config\\.(json|ya?ml|js|php|bak)|settings\\.py|appsettings|web\\.config|/\\.vscode|\\.ds_store|wp-config|\\.htpasswd|\\.bash_history|\\.terraform|terraform\\.tfstate|\\.env($|\\?)|/env$|_environment|(key|keyfile|sa|google-key|gcloud|token|auth)\\.json|application\\.(properties|ya?ml)|server\\.(key|pem)|\\.boto|docker-compose\\.ya?ml|settings\\.json|serverless\\.ya?ml|local\\.xml|\\.netrc|\\.pgpass|\\.my\\.cnf" $u -}}secrets
+{{- else if regexMatch "/wp-|/wp/|/wordpress|xmlrpc|/blog(/|$|\\?)" $u -}}wordpress
+{{- else if regexMatch "\\.php|phpinfo|livewire|_ignition|/telescope|/vendor/|/laravel|/phpmyadmin|/pma/|/adminer|/phpunit" $u -}}php
+{{- else if regexMatch "\\.(sql|bak|old|backup|dump|zip|tar|tgz|gz|7z|rar|sqlite3?|db|mdb)($|\\?)" $p -}}backup_dump
+{{- else if regexMatch "^/(admin|administrator|manager/html|actuator|jenkins|console|solr|druid|nacos|jmx|geoserver|owa/|ecp/|autodiscover|remote/login|global-protect|sslvpn|dana-na|vpn/|user/login|login\\.(action|jsp|asp|html))" $p -}}admin_panel
+{{- else if regexMatch "/cgi-bin|/hnap1|/boaform|/gponform|/goform|/setup\\.cgi|\\.cgi($|\\?)|/shell($|\\?)|/tmui|/device\\.rsp|/onvif|/isapi|/sdk/|/picsdesc|/currentsetting|/stssys|/mgmt" $p -}}iot_exploit
+{{- else if or (regexMatch "^/(robots\\.txt|sitemap[^/]*\\.xml|humans\\.txt|ads\\.txt|security\\.txt|\\.well-known/|server-status|server-info|version|metrics|health|status|info|swagger|api-docs|openapi|graphql|license\\.txt|readme)" $p) (regexMatch "graphql" $p) -}}recon
+{{- else if and (eq .site "opensprinkler") (regexMatch "^/($|favicon\\.ico$|(j[a-z]|c[a-z]|sp|dp|up|pq|mp|rp|un|su|cu|db|xp)$)" $p) -}}app
+{{- else if and (eq .site "frigate") (regexMatch "^/($|(api|vod|clips|live|ws|exports|recordings|assets|locales|fonts|images|login|logout|review|explore|export|settings|system|config|logs|faces|classification|playground|chat)(/|$)|favicon|manifest|sw\\.js|registersw\\.js|apple-touch|site\\.webmanifest|workbox-)" $p) -}}app
+{{- else if and (eq .site "ha") (regexMatch "^/($|(api|auth|frontend_latest|frontend_es5|static|local|hacsfiles|lovelace|config|developer-tools|history|logbook|map|energy|media-browser|profile|todo|calendar)(/|$)|manifest\\.json|sw-|service_worker|onboarding\\.html|favicon\\.ico$|unknown/node_modules/)|^/[a-z0-9_-]+(/[a-z0-9_-]*)*$" $p) -}}app
+{{- else if and (eq .site "media") (regexMatch "^/($|(library|status|identity|web|photo|video|transcode|hubs|playlists|playqueues|media|clients|servers|system|search|updater|accounts|myplex|security|statistics|activities|butler|livetv|channels|devices|sync|player|resources|:)(/|$)|favicon\\.ico$)" $p) -}}app
+{{- else -}}other
+{{- end -}}`
+  }
+
+  // 4. What the server did with it. "default_page" = the public landing/login page served
+  //    for any path (Frigate's single-page app shell, OpenSprinkler's "/"), i.e. nothing leaked.
+  stage.template {
+    source   = "outcome"
+    template = `{{- $p := ToLower .path -}}
+{{- /* Frigate's nginx routes are case-sensitive; anything else gets the app shell. */ -}}
+{{- $backend := regexMatch "^/(api|vod|clips|exports|recordings|assets)/|^/live/(jsmpeg|mse|webrtc)/|^/ws($|\\?)" .path -}}
+{{- if eq .status "101" -}}upgraded
+{{- else if regexMatch "^2" .status -}}
+  {{- if and (eq .site "frigate") (not $backend) -}}default_page
+  {{- else if and (eq .site "opensprinkler") (eq $p "/") -}}default_page
+  {{- else -}}ok
+  {{- end -}}
+{{- else if eq .status "304" -}}ok
+{{- else if regexMatch "^3" .status -}}redirect
+{{- else if eq .status "401" -}}auth_required
+{{- else if and (eq .status "403") (eq .upstream "-") -}}blocked_proxy
+{{- else if eq .status "403" -}}forbidden
+{{- else if eq .status "404" -}}not_found
+{{- else if regexMatch "^4" .status -}}rejected
+{{- else if regexMatch "^5" .status -}}error
+{{- else -}}other
+{{- end -}}`
+  }
+
+  // 5. Who sent it. Owner password > unrecognized password > exploit pattern (even if it got a
+  //    real answer) > Frigate/HA/Plex session > known scanner/crawler UA > anonymous.
+  stage.template {
+    source   = "actor"
+    template = `{{- $p := ToLower .path -}}
+{{- $ua := ToLower .ua -}}
+{{- $exploit := regexMatch "^(ssrf|traversal|vite_fileread|secrets|wordpress|php|backup_dump|admin_panel|iot_exploit)$" .category -}}
+{{- $frigateAuth := and (eq .site "frigate") (regexMatch "^(ok|upgraded)$" .outcome) (regexMatch "^/(api|vod|clips|exports|recordings)/|^/live/(jsmpeg|mse|webrtc)/|^/ws($|\\?)" .path) (not (regexMatch "^/api/(auth/first_time_login|version)$" .path)) -}}
+{{- /* HA: its REST API needs a token; webhooks always answer 200 and the websocket upgrades before auth. */ -}}
+{{- $haAuth := and (eq .site "ha") (or (and (eq .outcome "ok") (regexMatch "^/api/." $p) (not (regexMatch "^/api/(webhook/|websocket$|onboarding)" $p))) (and (eq .method "POST") (eq $p "/auth/token") (eq .status "200"))) -}}
+{{- /* Plex: everything but the landing page, web app and /identity needs X-Plex-Token. */ -}}
+{{- $plexAuth := and (eq .site "media") (eq .outcome "ok") (not (regexMatch "^/($|web/|identity)" $p)) -}}
+{{- if eq .os_auth "owner" -}}authenticated
+{{- else if eq .os_auth "other" -}}unrecognized
+{{- else if $exploit -}}attacker
+{{- else if or $frigateAuth $haAuth $plexAuth -}}authenticated
+{{- else if regexMatch "censys|paloaltonetworks|xpanse|visionheight|shodan|zgrab|masscan|nmap|nuclei|internet-measurement|leakix|modat|netcraft|bitsight|onyphe|criminalip|binaryedge|stretchoid|recyber|cypex|internetcensus|palo alto|oai-searchbot|gptbot|claudebot|bingbot|googlebot|google-extended|ahrefs|semrush|petalbot|bytespider|amazonbot|amzn-searchbot|applebot|yandex|duckduckbot|facebookexternalhit|twitterbot|grokbot|deepseekbot|kimi-searchbot|perplexitybot|securityresearch|jscrawler|cms-checker" $ua -}}crawler
+{{- else -}}anonymous
+{{- end -}}`
+  }
+
+  // 6. Device family without versions, so "Android · Chrome" stays one device across updates.
+  stage.template {
+    source   = "client_family"
+    template = `{{- $ua := .ua -}}
+{{- $os := "Other" -}}
+{{- if regexMatch "Android" $ua -}}{{- $os = "Android" -}}
+{{- else if regexMatch "iPhone|iPad|iOS" $ua -}}{{- $os = "iOS" -}}
+{{- else if regexMatch "Macintosh|Mac OS X" $ua -}}{{- $os = "Mac" -}}
+{{- else if regexMatch "Windows" $ua -}}{{- $os = "Windows" -}}
+{{- else if regexMatch "CrOS" $ua -}}{{- $os = "ChromeOS" -}}
+{{- else if regexMatch "Linux|X11" $ua -}}{{- $os = "Linux" -}}
+{{- end -}}
+{{- $b := "Other" -}}
+{{- if or (eq $ua "-") (eq $ua "") -}}{{- $b = "No UA" -}}
+{{- else if regexMatch "; wv\\)" $ua -}}{{- $b = "WebView" -}}
+{{- else if regexMatch "Edg/" $ua -}}{{- $b = "Edge" -}}
+{{- else if regexMatch "Firefox/" $ua -}}{{- $b = "Firefox" -}}
+{{- else if regexMatch "Chrome/" $ua -}}{{- $b = "Chrome" -}}
+{{- else if regexMatch "Safari/" $ua -}}{{- $b = "Safari" -}}
+{{- else if regexMatch "(?i)curl|wget|python|go-http|httpx|okhttp|java/|libwww|fasthttp|node-fetch|axios" $ua -}}{{- $b = "Script" -}}
+{{- end -}}
+{{- printf "%s · %s" $os $b -}}`
+  }
+
+  // 7. Where it came from (db-ip lite, refreshed monthly by scripts/update-geoip.sh).
+  stage.geoip {
+    source  = "client_ip"
+    db      = "/geo/dbip-country-lite.mmdb"
+    db_type = "country"
+  }
+
+  stage.geoip {
+    source  = "client_ip"
+    db      = "/geo/dbip-asn-lite.mmdb"
+    db_type = "asn"
+  }
+
+  // Logs from before the real-IP fix only show Cloudflare edges, so their geo would be fake.
+  stage.template {
+    source   = "country"
+    template = `{{- if regexMatch "^(10\\.|192\\.168\\.|172\\.(1[6-9]|2[0-9]|3[01])\\.|127\\.|fd|fe80)" .client_ip -}}LAN
+{{- else if regexMatch "(?i)cloudflare" (default "" .geoip_autonomous_system_organization) -}}unknown
+{{- else -}}{{ default "unknown" .geoip_country_code }}
+{{- end -}}`
+  }
+
+  stage.template {
+    source   = "asn_org"
+    template = `{{- $org := default "" .geoip_autonomous_system_organization -}}{{- if regexMatch "(?i)cloudflare" $org -}}{{- else -}}{{ $org }}{{- end -}}`
+  }
+
+  stage.labels {
+    values = {
+      site     = "",
+      status   = "",
+      category = "",
+      outcome  = "",
+      actor    = "",
+      os_auth  = "",
+      country  = "",
+    }
+  }
+
+  stage.structured_metadata {
+    values = {
+      uri           = "",
+      client_ip     = "",
+      ua            = "",
+      client_family = "",
+      method        = "",
+      length        = "",
+      upstream      = "",
+      asn_org       = "",
+    }
+  }
+
+  stage.label_drop {
+    values = ["filename"]
+  }
+}
+
+loki.write "minipc" {
+  endpoint {
+    url = sys.env("LOKI_URL")
+  }
+}

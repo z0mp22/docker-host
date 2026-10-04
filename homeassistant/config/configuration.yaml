@@ -538,7 +538,7 @@ panel_custom:
     url_path: network
     sidebar_title: Network
     sidebar_icon: mdi:router-wireless
-    module_url: /local/network/network-panel.js?v=1
+    module_url: /local/network/network-panel.js?v=2
     config:
       gateway: a765e99e-5f8c-3c5a-b264-0770b4d1030a
       # UniFi device id -> its stats sensor (see the UniFi rest resources above).
@@ -554,6 +554,10 @@ panel_custom:
         Google: sensor.internet_latency_google
       # Device ids of APs removed on purpose: shown as "Retired", not counted as outages.
       retired: []
+      # Internet exposure card (packages/internet_exposure.yaml; Grafana for the detail).
+      exposure: sensor.internet_exposure
+      exposure_sign_in: sensor.internet_exposure_last_sign_in
+      exposure_dashboard: http://10.0.0.6:3000/d/npm-exposure/internet-exposure
   - name: recordings-panel
     url_path: recordings
     sidebar_title: Recordings
