@@ -83,6 +83,9 @@ services:
       BRIDGE_HOST: 0.0.0.0
       BRIDGE_PORT: 3000
       BRIDGE_SELF_HOST: 127.0.0.1
+      # Base back-off after a failed stream open (doubles per failure, capped at 5 min). The 30 s
+      # default meant one failed ring-photo grab blocked the live view tapped from the alert.
+      STREAM_FAIL_BACKOFF_MS: 5000
     volumes:
       - /docker/eufy-bridge:/app/data
     networks:

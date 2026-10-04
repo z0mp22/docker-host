@@ -529,7 +529,7 @@ panel_custom:
     url_path: cameras
     sidebar_title: Security
     sidebar_icon: mdi:shield-home
-    module_url: /local/security/security-panel.js?v=6
+    module_url: /local/security/security-panel.js?v=7
     config:
       doorbell: *doorbell
       # Frigate camera ids; entities follow Frigate's {id}_{thing} naming.

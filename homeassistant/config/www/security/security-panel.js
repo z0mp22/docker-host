@@ -806,7 +806,7 @@ class SecurityPanel extends HTMLElement {
       lastSeen: DOOR_KINDS[seenKind] && seenKind !== "ring" && Number.isFinite(at(det)) ? { kind: seenKind, at: at(det) } : null,
       battery,
       low: battery !== null && battery < BATTERY_LOW,
-      picture: this._doorPicture(img, ringPic, ringPicAt),
+      ...this._doorPicture(img, ringPic, ringPicAt),
     };
   }
 
@@ -816,8 +816,9 @@ class SecurityPanel extends HTMLElement {
     const eventAt = live(img) ? Date.parse(img.state) : NaN;
     const ringAt = Number(ringPicAt?.attributes?.timestamp) * 1000;
     const ringUrl = live(ringPic) ? ringPic.attributes?.entity_picture : "";
-    if (ringUrl && Number.isFinite(ringAt) && !(eventAt > ringAt)) return `${ringUrl}${ringUrl.includes("?") ? "&" : "?"}_=${ringAt}`;
-    return live(img) ? img.attributes?.entity_picture || "" : "";
+    if (ringUrl && Number.isFinite(ringAt) && !(eventAt > ringAt))
+      return { picture: `${ringUrl}${ringUrl.includes("?") ? "&" : "?"}_=${ringAt}`, pictureAt: ringAt };
+    return { picture: live(img) ? img.attributes?.entity_picture || "" : "", pictureAt: Number.isFinite(eventAt) ? eventAt : null };
   }
 
   _whenText(ms) {
@@ -829,6 +830,9 @@ class SecurityPanel extends HTMLElement {
     const pills = [];
     if (door.ringing) pills.push(`<span class="pill now">${svg("mdiDoorbell")}Rang ${esc(agoText(door.lastRing))}</span>`);
     if (door.low) pills.push(`<span class="pill warn">${svg("mdiBatteryAlert")}${door.battery}%</span>`);
+    // A picture older than the last ring is not who rang, so say when it was taken.
+    if (door.picture && door.pictureAt && door.lastRing && door.pictureAt < door.lastRing - 60e3)
+      pills.push(`<span class="pill">Photo from ${esc(this._fmtTime(door.pictureAt))}${dayLabel(door.pictureAt) === "Today" ? "" : ` ${esc(dayLabel(door.pictureAt))}`}</span>`);
     const ringLine = door.lastRing
       ? `<b>Rang ${esc(this._whenText(door.lastRing))}</b>${door.ringsToday > 1 ? ` <span class="muted">· ${door.ringsToday} rings today</span>` : ""}`
       : door.online
