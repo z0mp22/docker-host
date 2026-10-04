@@ -179,6 +179,10 @@ h1 { margin: 0; font-size: 34px; font-weight: 700; line-height: 1.1; }
 .media { border-radius: 16px; overflow: hidden; background: #000; aspect-ratio: 16 / 9; display: grid; place-items: center; }
 .media video, .media img { width: 100%; height: 100%; object-fit: contain; display: block; }
 .noclip { color: var(--muted); font-size: 15px; }
+.live-media { position: relative; border-radius: 16px; overflow: hidden; background: #000; }
+.live-media video { display: block; width: 100%; aspect-ratio: 16 / 9; max-height: 75vh; object-fit: contain; background: #000; }
+.live-status { position: absolute; inset: 0; display: grid; place-items: center; padding: 20px; text-align: center; color: #d6deea; font-size: 15px; background: rgba(4,8,15,.6); }
+.live-status[hidden] { display: none; }
 .sheet-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
 .btn2 { height: 42px; padding: 0 14px; border-radius: 14px; background: #172234; border: 1px solid var(--line); color: var(--steel); font-weight: 600; font-size: 15px; display: inline-flex; align-items: center; gap: 6px; }
 .btn2:disabled { opacity: .4; }
@@ -263,7 +267,7 @@ class SecurityPanel extends HTMLElement {
     this._main = this.shadowRoot.getElementById("main");
     this._playerEl = this.shadowRoot.getElementById("player");
     this.shadowRoot.addEventListener("click", (e) => this._onClick(e));
-    this._onKey = (e) => e.key === "Escape" && this._player && this._closePlayer();
+    this._onKey = (e) => e.key === "Escape" && (this._player || this._live) && this._closePlayer();
   }
 
   set hass(hass) {
@@ -304,6 +308,7 @@ class SecurityPanel extends HTMLElement {
   }
 
   disconnectedCallback() {
+    this._closePlayer();
     window.removeEventListener("keydown", this._onKey);
     clearInterval(this._tick);
     clearInterval(this._snapTimer);
@@ -504,7 +509,126 @@ class SecurityPanel extends HTMLElement {
 
   _closePlayer() {
     this._player = null;
+    this._stopLive(this._live);
+    this._live = null;
     this._playerEl.innerHTML = "";
+  }
+
+  _moreInfo(entityId) {
+    this.dispatchEvent(new CustomEvent("hass-more-info", { detail: { entityId }, bubbles: true, composed: true }));
+  }
+
+  // Closing the sheet ends the WebRTC session, so a battery doorbell isn't kept awake.
+  _stopLive(live) {
+    if (!live) return;
+    clearTimeout(live.timer);
+    try {
+      live.unsub?.();
+    } catch (_) {
+      /* already gone */
+    }
+    live.unsub = null;
+    live.pc?.close();
+    live.pc = null;
+  }
+
+  // Live video over HA's camera WebRTC API into a muted <video>, so it plays without a tap.
+  async _openLive(entityId) {
+    if (!/^camera\.[a-z0-9_]+$/.test(entityId || "") || !this._hass?.states[entityId]) return;
+    const door = this._door;
+    const isDoor = door?.camera === entityId;
+    const cam = this._cameras.find((c) => (c.camera || `camera.${c.id}`) === entityId);
+    const name = isDoor ? door.name : cam?.name || this._hass.states[entityId].attributes?.friendly_name || entityId;
+    this._closePlayer();
+    const live = (this._live = { entityId, pc: null, unsub: null, timer: null });
+    this._playerEl.innerHTML = `
+      <div class="modal" data-action="close-player">
+        <div class="sheet" role="dialog" aria-label="Live view">
+          <div class="sheet-head">
+            <div><b>${esc(name)}</b><span>Live</span></div>
+            <button class="icon-btn" data-action="close-player" aria-label="Close">${svg("mdiClose")}</button>
+          </div>
+          <div class="live-media"><video muted autoplay playsinline controls></video>
+            <div class="live-status">${isDoor ? "Waking the doorbell…" : "Connecting…"}</div></div>
+          <div class="sheet-foot"><span class="muted">Sound is off until you unmute.</span>
+            <button class="btn2" data-action="more-info" data-entity="${esc(entityId)}">Camera controls</button></div>
+        </div>
+      </div>`;
+    const video = this._playerEl.querySelector("video");
+    video.muted = true;
+    const status = (msg) => {
+      const el = this._live === live && this._playerEl.querySelector(".live-status");
+      if (el) {
+        el.textContent = msg;
+        el.hidden = !msg;
+      }
+    };
+    const fail = (why) => {
+      if (this._live !== live) return;
+      this._stopLive(live);
+      status(`${why} Try Camera controls.`);
+    };
+    video.addEventListener("playing", () => {
+      clearTimeout(live.timer);
+      status("");
+    }, { once: true });
+    live.timer = setTimeout(() => fail("Live video didn't start."), 25000);
+    try {
+      const cfg = await this._hass.callWS({ type: "camera/webrtc/get_client_config", entity_id: entityId });
+      if (this._live !== live) return;
+      const pc = (live.pc = new RTCPeerConnection(cfg.configuration));
+      if (cfg.dataChannel) pc.createDataChannel(cfg.dataChannel);
+      pc.addTransceiver("video", { direction: "recvonly" });
+      pc.addTransceiver("audio", { direction: "recvonly" });
+      const stream = new MediaStream();
+      pc.ontrack = (e) => {
+        stream.addTrack(e.track);
+        video.srcObject = stream;
+      };
+      let session = null;
+      const pending = [];
+      const sendCandidate = (c) =>
+        this._hass.callWS({ type: "camera/webrtc/candidate", entity_id: entityId, session_id: session, candidate: c.toJSON() }).catch(() => {});
+      pc.onicecandidate = (e) => {
+        if (e.candidate) session ? sendCandidate(e.candidate) : pending.push(e.candidate);
+      };
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      const unsub = await this._hass.connection.subscribeMessage(
+        async (m) => {
+          if (this._live !== live || !live.pc) return;
+          try {
+            if (m.type === "session") {
+              session = m.session_id;
+              pending.splice(0).forEach(sendCandidate);
+            } else if (m.type === "answer") await pc.setRemoteDescription({ type: "answer", sdp: m.answer });
+            else if (m.type === "candidate")
+              await pc.addIceCandidate(typeof m.candidate === "string" ? { candidate: m.candidate, sdpMLineIndex: 0 } : m.candidate);
+            else if (m.type === "error") fail(`Live video failed (${m.message || m.code}).`);
+          } catch (err) {
+            fail(`Live video failed (${err.message || err}).`);
+          }
+        },
+        { type: "camera/webrtc/offer", entity_id: entityId, offer: offer.sdp },
+      );
+      if (this._live === live && live.pc) live.unsub = unsub;
+      else unsub();
+    } catch (err) {
+      fail(`Live video failed (${err.message || err}).`);
+    }
+  }
+
+  // /cameras?live=camera.doorbell (e.g. from the doorbell notification) opens that live view once.
+  _maybeAutoLive() {
+    if (this._autoLiveChecked || !this._hass || !this._cfg) return;
+    this._autoLiveChecked = true;
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get("live");
+    if (!id) return;
+    params.delete("live");
+    const qs = params.toString();
+    window.history.replaceState(window.history.state, "", `${window.location.pathname}${qs ? `?${qs}` : ""}`);
+    this._openLive(id);
   }
 
   _renderPlayer() {
@@ -602,8 +726,10 @@ class SecurityPanel extends HTMLElement {
     } else if (action === "close-player") {
       if (e.target === el || el.tagName === "BUTTON") this._closePlayer();
     } else if (action === "live") {
+      this._openLive(el.dataset.entity);
+    } else if (action === "more-info") {
       this._closePlayer();
-      this.dispatchEvent(new CustomEvent("hass-more-info", { detail: { entityId: el.dataset.entity }, bubbles: true, composed: true }));
+      this._moreInfo(el.dataset.entity);
     } else if (action === "range") {
       this._range = el.dataset.range;
       this._render();
@@ -889,6 +1015,7 @@ class SecurityPanel extends HTMLElement {
       this._refreshSnapshots();
     }
     this._hydrate(this._main);
+    this._maybeAutoLive();
   }
 }
 

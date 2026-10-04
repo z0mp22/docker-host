@@ -290,6 +290,6 @@
           message: "Someone's at the front door · {{ rang_at }}"
           data: >-
             {% set d = {'tag': 'doorbell', 'channel': 'Doorbell', 'importance': 'high',
-                        'priority': 'high', 'ttl': 0, 'clickAction': '/cameras', 'url': '/cameras',
+                        'priority': 'high', 'ttl': 0, 'clickAction': '/cameras?live=camera.doorbell', 'url': '/cameras?live=camera.doorbell',
                         'push': {'sound': {'name': 'default'}, 'interruption-level': 'time-sensitive'}} %}
             {{ dict(d, image='/api/image_proxy/image.doorbell_last_event') if fresh_image else d }}
