@@ -62,12 +62,6 @@ lovelace:
       icon: mdi:shield-home
       show_in_sidebar: false
       filename: dashboards/security.yaml
-    lovelace-wildlife:
-      mode: yaml
-      title: Wildlife
-      icon: mdi:bird
-      show_in_sidebar: true
-      filename: dashboards/wildlife.yaml
     lovelace-roku:
       mode: yaml
       title: Roku
@@ -572,6 +566,19 @@ panel_custom:
         - id: bambu
           name: Bambu printer
           security: false
+  - name: wildlife-panel
+    url_path: wildlife
+    sidebar_title: Wildlife
+    sidebar_icon: mdi:paw
+    module_url: /local/wildlife/wildlife-panel.js?v=1
+    config:
+      # One Frigate camera; dogs (ours) and people (Security's job) are left out on purpose.
+      camera: driveway
+      name: Driveway
+      # Everything else the Coral COCO model can name. It has no deer/fox/raccoon class: deer tend
+      # to come through as horse/cow/sheep (shown as "Large animal"), foxes and coyotes as dog.
+      # Frigate must track these on the camera (frigate repo, cameras.Driveway.objects.track).
+      labels: [cat, bird, bear, horse, cow, sheep]
   - name: climbing-panel
     url_path: climbing
     sidebar_title: Climbing

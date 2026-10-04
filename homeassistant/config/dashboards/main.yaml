@@ -33,19 +33,18 @@ views:
               - type: template
                 icon: mdi:paw
                 content: >
-                  {% set animals = ['person', 'cat', 'dog', 'bear'] %}
+                  {# Same set as the Wildlife panel: Driveway animals other than dogs. #}
+                  {% set animals = ['cat', 'bird', 'bear', 'horse', 'cow', 'sheep'] %}
                   {% set ns = namespace(count=0) %}
-                  {% for camera in ['basement', 'garage', 'driveway'] %}
-                    {% for animal in animals %}
-                      {% if is_state('binary_sensor.' ~ camera ~ '_' ~ animal ~ '_occupancy', 'on') %}
-                        {% set ns.count = ns.count + 1 %}
-                      {% endif %}
-                    {% endfor %}
+                  {% for animal in animals %}
+                    {% if is_state('binary_sensor.driveway_' ~ animal ~ '_occupancy', 'on') %}
+                      {% set ns.count = ns.count + 1 %}
+                    {% endif %}
                   {% endfor %}
                   {% if ns.count > 0 %}Wildlife active{% else %}Wildlife quiet{% endif %}
                 tap_action:
                   action: navigate
-                  navigation_path: /lovelace-wildlife/wildlife
+                  navigation_path: /wildlife
 
       - type: vertical-stack
         cards:
