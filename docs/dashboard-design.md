@@ -265,6 +265,10 @@ The phone overflow bug (§3 Layout) was caught at step 3. It would have shipped 
 - [ ] **Check timestamps against reality.** `image.*_person` state is when HA loaded the picture, not when
       someone was seen. The recordings sync's `recorded_at` is sometimes a day off, so use the filename date.
       Derive event times from detection history instead.
+- [ ] **Label computed times for what they are.** Irrigation's "if started now" times sat under a "Last run"
+      label and read as history. OpenSprinkler's `starting_in_days` is a weekday bitmask for weekly programs
+      (127 rendered as "Feb 07"), and repeating start times only appear in its calendar, since the
+      repeat-count entities are disabled by default.
 - [ ] **Separate "can't read the data" from "it's broken"** in status, attention lists and all-clear messages.
 - [ ] **Guard rest/command_line sensors with `availability`**, so an error response becomes unavailable
       instead of a template error every poll.

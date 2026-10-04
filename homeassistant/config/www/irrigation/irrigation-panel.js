@@ -23,7 +23,9 @@ const ICONS = {
 
 const PLAN_ENTITY = "input_text.irrigation_plan";
 const WEATHER_ENTITY = "weather.home";
+const CALENDAR_ENTITY = "calendar.opensprinkler_schedule";
 const HISTORY_DAYS = 10;
+const SCHEDULE_DAYS = 8;
 const RAIN_CONDITIONS = new Set(["rainy", "pouring", "lightning-rainy", "snowy-rainy", "hail"]);
 const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const MAX_MINUTES = 120;
@@ -33,6 +35,24 @@ const svg = (name, cls = "") =>
 const esc = (s) =>
   String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+const times = (n) => (n === 2 ? "twice" : `${n} times`);
+const listJoin = (items) => (items.length < 2 ? items.join("") : `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`);
+const dayKey = (ms) => new Date(ms).setHours(0, 0, 0, 0);
+
+// Splits station intervals into separate runs: within a run, stations follow each other
+// with at most the controller's station delay in between.
+function groupRuns(intervals, delayMs) {
+  const runs = [];
+  for (const iv of [...intervals].sort((a, b) => a.start - b.start)) {
+    const run = runs[runs.length - 1];
+    if (run && iv.start <= run.end + delayMs + 60000) run.end = Math.max(run.end, iv.end);
+    else runs.push({ start: iv.start, end: iv.end });
+  }
+  return runs;
+}
+
+// The runs that share a calendar day with the given run, e.g. both cycles of a program that repeats.
+const sameDay = (runs, ref) => runs.filter((r) => dayKey(r.start) === dayKey(ref.start));
 
 function zoneIcon(name) {
   const n = name.toLowerCase();
@@ -136,7 +156,6 @@ function readModel(states) {
   const on = (id) => states[id]?.state === "on";
   const rainStop = states["sensor.opensprinkler_rain_delay_stop_time"]?.state;
   const pauseEnd = states["sensor.opensprinkler_pause_end_time"]?.state;
-  const lastRun = states["sensor.opensprinkler_last_run"]?.state;
   return {
     controller,
     stations,
@@ -146,7 +165,6 @@ function readModel(states) {
     pauseEnd: pauseEnd && !["unknown", "unavailable"].includes(pauseEnd) ? Date.parse(pauseEnd) : null,
     rainDelay: on("binary_sensor.opensprinkler_rain_delay_active"),
     rainStop: rainStop && !["unknown", "unavailable"].includes(rainStop) ? Date.parse(rainStop) : null,
-    lastRun: lastRun && !["unknown", "unavailable"].includes(lastRun) ? Date.parse(lastRun) : null,
     waterLevel: states["sensor.opensprinkler_water_level"]?.state,
   };
 }
@@ -374,7 +392,7 @@ h2 { margin: 0; font-size: 26px; font-weight: 600; }
   .zic .ic { width: 22px; height: 22px; }
   .badge { width: 17px; height: 17px; font-size: 10px; right: -5px; bottom: -5px; }
   .zn { font-size: 16px; }
-  .zs { font-size: 12.5px; margin-top: 2px; }
+  .zs { font-size: 12.5px; margin-top: 2px; white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
   .stepper { padding: 3px; gap: 0; border-radius: 14px; }
   .stepper button { width: 34px; height: 42px; border-radius: 11px; }
   .stepper .ic { width: 18px; height: 18px; }
@@ -411,6 +429,9 @@ class IrrigationPanel extends HTMLElement {
     this._planRaw = undefined;
     this._planDirty = false;
     this._lastWatered = {};
+    this._lastRuns = [];
+    this._starts = new Map();
+    this._scheduleSig = "";
     this._runSeen = new Map();
     this._forecast = null;
     this._showAllPrograms = false;
@@ -444,7 +465,10 @@ class IrrigationPanel extends HTMLElement {
     loadFont();
     this._ensureSubscriptions();
     this._tick = setInterval(() => this._render(), 5000);
-    this._historyTimer = setInterval(() => this._loadHistory(), 15 * 60 * 1000);
+    this._historyTimer = setInterval(() => {
+      this._loadHistory();
+      this._loadSchedule();
+    }, 15 * 60 * 1000);
     this._scheduleRender();
   }
 
@@ -455,6 +479,7 @@ class IrrigationPanel extends HTMLElement {
     this._unsubForecast = null;
     this._subscribing = false;
     this._historyLoaded = false;
+    this._scheduleSig = "";
   }
 
   _ensureSubscriptions() {
@@ -499,18 +524,74 @@ class IrrigationPanel extends HTMLElement {
         significant_changes_only: false,
       });
       const last = {};
+      const intervals = [];
       for (const [id, rows] of Object.entries(res || {})) {
+        const ons = [];
         rows.forEach((row, i) => {
           if (row.s !== "on") return;
           const next = rows[i + 1];
-          last[id] = { at: (row.lc ?? row.lu) * 1000, end: next ? (next.lc ?? next.lu) * 1000 : null };
+          const start = (row.lc ?? row.lu) * 1000;
+          ons.push({ start, end: next ? (next.lc ?? next.lu) * 1000 : Date.now() });
         });
+        if (!ons.length) continue;
+        intervals.push(...ons);
+        const zoneRuns = groupRuns(ons, 0); // merges brief unavailable blips mid-run
+        const latest = zoneRuns[zoneRuns.length - 1];
+        last[id] = { at: latest.start, count: sameDay(zoneRuns, latest).length };
       }
+      const runs = groupRuns(intervals, (model.controller?.stationDelay || 0) * 1000);
       this._lastWatered = last;
+      this._lastRuns = runs.length ? sameDay(runs, runs[runs.length - 1]) : [];
       this._scheduleRender();
     } catch (_) {
       /* history is decorative; keep the previous values */
     }
+  }
+
+  // Program start times come from the integration's calendar, which expands repeating and
+  // additional start times; the matching entities are disabled by default in the integration.
+  async _loadSchedule() {
+    if (!this._hass?.callApi || !this._hass.states[CALENDAR_ENTITY]) return;
+    const model = readModel(this._hass.states);
+    const start = new Date();
+    const end = new Date(start.getTime() + SCHEDULE_DAYS * 864e5);
+    try {
+      const events = await this._hass.callApi(
+        "GET",
+        `calendars/${CALENDAR_ENTITY}?start=${encodeURIComponent(start.toISOString())}&end=${encodeURIComponent(end.toISOString())}`,
+      );
+      const byProgram = new Map();
+      for (const e of events || []) {
+        const name = String(e.description || "").trim();
+        const s = Date.parse(e.start?.dateTime || e.start);
+        const t = Date.parse(e.end?.dateTime || e.end);
+        if (!name || !Number.isFinite(s)) continue;
+        if (!byProgram.has(name)) byProgram.set(name, []);
+        byProgram.get(name).push({ start: s, end: Number.isFinite(t) ? t : s });
+      }
+      const starts = new Map();
+      for (const [name, intervals] of byProgram) {
+        const runs = groupRuns(intervals, (model.controller?.stationDelay || 0) * 1000);
+        starts.set(name, sameDay(runs, runs[0]).map((r) => r.start));
+      }
+      this._starts = starts;
+      this._scheduleRender();
+    } catch (_) {
+      /* fall back to the program's first start time */
+    }
+  }
+
+  // Reload the calendar when anything that shapes the schedule changes.
+  _syncSchedule(model) {
+    const sig = JSON.stringify([
+      model.controller?.state,
+      model.controller?.stationDelay,
+      model.nextRun?.at,
+      model.programs.map((p) => [p.enabled, p.startTime, p.startType, p.type, p.days0, p.interval, p.totalMinutes]),
+    ]);
+    if (sig === this._scheduleSig) return;
+    this._scheduleSig = sig;
+    this._loadSchedule();
   }
 
   _scheduleRender() {
@@ -646,15 +727,17 @@ class IrrigationPanel extends HTMLElement {
     const diff = Math.round((new Date(d).setHours(0, 0, 0, 0) - new Date(today).setHours(0, 0, 0, 0)) / 864e5);
     if (diff === 0) return "today";
     if (diff === 1) return "tomorrow";
+    if (diff === -1) return "yesterday";
     if (diff > 1 && diff < 7) return d.toLocaleDateString([], { weekday: "short" });
     return d.toLocaleDateString([], { month: "short", day: "numeric" });
   }
 
-  _daysAgo(ms) {
-    const diff = Math.round((new Date().setHours(0, 0, 0, 0) - new Date(ms).setHours(0, 0, 0, 0)) / 864e5);
-    if (diff <= 0) return "Watered today";
-    if (diff === 1) return "Watered yesterday";
-    return `Last watered ${diff} days ago`;
+  _lastWateredText(last) {
+    const diff = Math.round((dayKey(Date.now()) - dayKey(last.at)) / 864e5);
+    if (diff > 1) return `Last watered ${diff} days ago`;
+    const day = diff <= 0 ? "today" : "yesterday";
+    const at = this._fmtTime(last.at);
+    return last.count > 1 ? `Watered ${times(last.count)} ${day} · last at ${at}` : `Watered ${day} at ${at}`;
   }
 
   _clock(hms) {
@@ -677,6 +760,11 @@ class IrrigationPanel extends HTMLElement {
       when = p.interval ? `Every ${plural(p.interval, "day")}` : "Interval";
     } else if (p.type === "Single-run") {
       when = "One time";
+    }
+    const starts = p.enabled ? this._starts.get(p.name) : null;
+    if (starts?.length) {
+      const each = starts.length > 1 ? " each" : "";
+      return `${when} at ${listJoin(starts.map((t) => this._fmtTime(t)))} · ${fmtDuration(p.totalMinutes)}${each}`;
     }
     const at = p.startType && p.startType !== "Midnight" ? p.startType.toLowerCase() : this._clock(p.startTime);
     return `${when} at ${at} · ${fmtDuration(p.totalMinutes)}`;
@@ -706,6 +794,7 @@ class IrrigationPanel extends HTMLElement {
     const model = readModel(this._hass.states);
     this._model = model;
     this._syncPlan(model);
+    this._syncSchedule(model);
     const plan = this._plan;
     const ctrl = model.controller;
     const online = ctrl && !["unavailable", "unknown"].includes(ctrl.state);
@@ -780,7 +869,6 @@ class IrrigationPanel extends HTMLElement {
       </div>`;
 
     // Watering order
-    const lastRunText = model.lastRun ? `Last run ${this._daysAgo(model.lastRun).replace(/^(Last watered|Watered) /, "")}` : "";
     let orderList;
     if (active) {
       orderList = runRows
@@ -800,7 +888,7 @@ class IrrigationPanel extends HTMLElement {
     const delayNote = delayMs && (active ? runRows.length : planRows.length) > 1 ? `<div class="note">${fmtDuration(delayMs / 60000)} pause between zones</div>` : "";
     const order = `
       <div class="card order-card">
-        <div class="card-head"><span class="eyebrow">${active ? "Now watering" : "Watering order"}</span><span class="muted">${esc(lastRunText)}</span></div>
+        <div class="card-head"><span class="eyebrow">${active ? "Now watering" : "Watering order"}</span><span class="muted">${active || !planRows.length ? "" : "If started now"}</span></div>
         ${delayNote}
         ${orderList ? `<ol class="order">${orderList}</ol>` : `<div class="empty">No zones selected.</div>`}
       </div>`;
@@ -813,8 +901,13 @@ class IrrigationPanel extends HTMLElement {
       ctrlOn && model.nextRun && model.nextRun.at > now
         ? `<div class="next">Next: ${esc(model.nextRun.program)} · ${this._fmtDay(model.nextRun.at)} ${this._fmtTime(model.nextRun.at)}</div>`
         : "";
+    const lastRuns = this._lastRuns.filter((r) => r.end <= now);
+    const lastRun = lastRuns.length
+      ? `<div class="next">Last: ${this._fmtDay(lastRuns[0].start)} ${listJoin(lastRuns.map((r) => this._fmtTime(r.start)))}</div>`
+      : "";
     const sched = `
       <div class="card sched-card">
+        ${lastRun}
         ${nextRun}
         ${shown
           .map(
@@ -857,7 +950,7 @@ class IrrigationPanel extends HTMLElement {
         } else if (active && s.end && s.start > now) sub = `Up next · starts ${this._fmtTime(s.start)}`;
         else {
           const last = this._lastWatered[s.entity];
-          sub = last ? this._daysAgo(last.at) : "Not watered recently";
+          sub = last ? this._lastWateredText(last) : "Not watered recently";
         }
         const shownMinutes = active && s.end && s.start ? Math.round((s.end - s.start) / 60000) : minutes;
         const lockSteppers = active || !s.enabled;
