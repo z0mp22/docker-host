@@ -28,6 +28,7 @@ from .garmin_auth import connect_with_tokens
 from .lift_coach import generate_lift_session
 from .lift_collector import build_lift_payload
 from .lift_feedback import append_feedback
+from .lift_fingerboard import assert_fingerboard_safe
 from .lift_safety import assert_session_plan_safe, resolve_banned_exercise_ids
 from .hevy_client import HevyClient
 
@@ -72,6 +73,7 @@ def main() -> int:
         )
         session_type = DEFAULT_SESSION_TYPE
     shoulder_flag = os.environ.get("LIFT_SHOULDER_FLAG", "").strip().lower() in ("1", "true", "yes")
+    finger_flag = os.environ.get("LIFT_FINGER_FLAG", "").strip().lower() in ("1", "true", "yes")
     dry_run = os.environ.get("DRY_RUN", "").strip().lower() in ("1", "true", "yes")
     session_date = date.today()
 
@@ -97,14 +99,25 @@ def main() -> int:
             print(f"[lift-session]   banned: {name} (id={ex_id})", file=sys.stderr)
 
         payload = build_lift_payload(
-            garmin_client, hevy_client, config, catalog, session_type, shoulder_flag, session_date
+            garmin_client, hevy_client, config, catalog, session_type, shoulder_flag, session_date,
+            finger_flag=finger_flag,
         )
+        fb = payload["fingerboard"]
         print(
             f"[lift-session] {session_date.isoformat()} type={session_type} — "
             f"{len(payload['recent_lift_sessions'])} recent Hevy workouts, "
             f"{len(payload['recent_mountain_activity'])} mountain-sports activities this week, "
             f"{len(payload['recent_feedback'])} feedback log entries, "
-            f"shoulder_flag={shoulder_flag}",
+            f"shoulder_flag={shoulder_flag}, finger_flag={finger_flag}",
+            file=sys.stderr,
+        )
+        print(
+            f"[lift-session] fingerboard: phase {fb['phase']} ({fb['phase_name']}), "
+            f"ramp week {fb['ramp_week']}, deload={fb['deload_week']}, "
+            f"{len(fb['plan_exercises'])} BM1000 exercises in catalog, "
+            f"{len(fb['history'])} logged sets in 8 weeks, "
+            f"{fb['board_days_last_7d']} board days in last 7, "
+            f"hours since climb={fb['hours_since_last_climb']}",
             file=sys.stderr,
         )
 
@@ -128,6 +141,7 @@ def main() -> int:
         # violation this raises and nothing below runs -- no partial write,
         # no silent substitution.
         assert_session_plan_safe(plan.exercises, catalog_by_id, banned_ids)
+        assert_fingerboard_safe(plan.exercises, catalog, fb)
 
         routine_id = hevy_client.upsert_session_routine(
             plan, config.hevy_routine_title, session_type

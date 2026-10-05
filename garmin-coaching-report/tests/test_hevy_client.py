@@ -233,6 +233,21 @@ def test_bodyweight_history_in_lb_filtered_and_sorted():
     ]
 
 
+def test_exercise_history_filters_by_start_date():
+    entries = [{"workout_start_time": "2026-10-05T10:53:55Z", "duration_seconds": 60}]
+    client = _client(_resp(json_body={"exercise_history": entries}))
+    assert client.get_exercise_history("tmpl-1", date(2026, 8, 10)) == entries
+    assert _calls(client) == [
+        ("GET", "/v1/exercise_history/tmpl-1", {"start_date": "2026-08-10T00:00:00Z"}, None)
+    ]
+
+
+def test_exercise_history_unexpected_shape_raises():
+    client = _client(_resp(json_body={"oops": []}))
+    with pytest.raises(HevyError):
+        client.get_exercise_history("tmpl-1", date(2026, 8, 10))
+
+
 def test_rpe_to_rir():
     assert rpe_to_rir(8) == 2.0
     assert rpe_to_rir(9.5) == 0.5

@@ -21,6 +21,7 @@ const ICONS = {
 
 const SESSION = "sensor.lift_session_latest";
 const FLAG = "input_boolean.lift_shoulder_flag";
+const FINGER_FLAG = "input_boolean.lift_finger_flag";
 const FEEDBACK = "input_text.lift_feedback";
 const PANEL_STATE = "input_text.coach_panel_state";
 const SLOW_MS = 15 * 60e3;
@@ -39,7 +40,7 @@ const REPORTS = {
   last: { script: "script.coaching_report_run_since_last", label: "since the last report" },
   "7d": { script: "script.coaching_report_run_full_7d", label: "full 7-day window" },
 };
-const QUICK_FEEDBACK = ["Felt easy", "Too heavy", "Knee bugged me", "Shoulder felt good", "Loved the supersets", "Short on time"];
+const QUICK_FEEDBACK = ["Felt easy", "Too heavy", "Knee bugged me", "Shoulder felt good", "Fingers sore next day", "Loved the supersets", "Short on time"];
 const WARN_FLAG = /poor|very low|\blow\b|elevated|fatigue|knee|pain|sore|injur|bugs?\b|flag_active: true/i;
 
 const svg = (name) => `<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="${ICONS[name] || ""}"/></svg>`;
@@ -182,6 +183,7 @@ h3 { margin: 6px 0 0; font-size: 21px; font-weight: 600; }
 .opt.sel { border-color: rgba(167,139,250,.6); background: #181a33; }
 .opt.sel .oic { background: linear-gradient(160deg, #b3a1ff, var(--violet-2)); box-shadow: 0 8px 22px rgba(109,95,240,.35); }
 .modifier { margin-top: 14px; display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-radius: 18px; background: #121a28; border: 1px solid var(--line); }
+.modifier + .modifier { margin-top: 8px; }
 .modifier.on { background: rgba(245,176,65,.08); border-color: rgba(245,176,65,.3); }
 .modifier > .ic { color: var(--amber); }
 .modifier .t { flex: 1; min-width: 0; }
@@ -454,6 +456,9 @@ class CoachPanel extends HTMLElement {
       case "flag":
         this._call("input_boolean", m.flagOn ? "turn_off" : "turn_on", { entity_id: FLAG });
         return;
+      case "finger-flag":
+        this._call("input_boolean", m.fingerFlagOn ? "turn_off" : "turn_on", { entity_id: FINGER_FLAG });
+        return;
       case "generate": {
         const t = typeInfo(this._selectedType(m));
         if (m.fresh && !window.confirm(`Replace today's session in Hevy with a new ${t.label} session?`)) return;
@@ -604,6 +609,7 @@ class CoachPanel extends HTMLElement {
       exerciseCount: a.exercise_count,
       routineId: a.routine_id,
       flagOn: st[FLAG]?.state === "on",
+      fingerFlagOn: st[FINGER_FLAG]?.state === "on",
       panel: this._panelState(),
     };
   }
@@ -683,6 +689,11 @@ class CoachPanel extends HTMLElement {
         ${svg("mdiShieldAlertOutline")}
         <div class="t"><b>Shoulder flag</b><div>${m.flagOn ? "On · coach keeps load off the shoulder" : "Off · turn on if the shoulder is acting up"}</div></div>
         <button class="toggle ${m.flagOn ? "on" : ""}" data-action="flag" aria-pressed="${m.flagOn}" aria-label="Shoulder flag"></button>
+      </div>
+      <div class="modifier ${m.fingerFlagOn ? "on" : ""}">
+        ${svg("mdiAlertOutline")}
+        <div class="t"><b>Finger flag</b><div>${m.fingerFlagOn ? "On · no fingerboard until you turn it off" : "Off · turn on if a finger or elbow is tweaky"}</div></div>
+        <button class="toggle ${m.fingerFlagOn ? "on" : ""}" data-action="finger-flag" aria-pressed="${m.fingerFlagOn}" aria-label="Finger flag"></button>
       </div>
       <button class="cta" data-action="generate" ${busy ? "disabled" : ""}>${busy ? `${svg("mdiRefresh")} Generating…` : `${svg(sel.icon)} ${job?.state === "failed" ? "Try again" : `Generate ${sel.label}`}`}</button>
       ${alert}

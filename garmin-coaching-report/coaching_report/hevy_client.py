@@ -213,6 +213,17 @@ class HevyClient:
         workouts = sorted(data["workouts"], key=lambda w: w.get("start_time") or "")
         return workouts[-limit:]
 
+    def get_exercise_history(self, template_id: str, since: date) -> list[dict[str, Any]]:
+        """Every logged set of one exercise since `since` (one row per set)."""
+        data = self._request(
+            "GET",
+            f"/v1/exercise_history/{template_id}",
+            params={"start_date": f"{since.isoformat()}T00:00:00Z"},
+        )
+        if "exercise_history" not in data:
+            raise HevyError("GET /v1/exercise_history returned an unexpected shape")
+        return data["exercise_history"]
+
     def get_bodyweight_history(self, since: date) -> list[dict[str, Any]]:
         rows = self._paged("/v1/body_measurements", "body_measurements", page_size=10)
         out = [

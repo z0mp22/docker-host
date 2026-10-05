@@ -5,14 +5,16 @@ mountain-sports activity (reusing collector.py's existing, unmodified
 functions), recent Hevy lifting history (joined back to what was prescribed)
 + body-weight trend, the persistent
 athlete-feedback log (lift_feedback.py -- standing likes/dislikes/health
-flags/notes over time, not just this call), and the session type + HA
-shoulder flag passed in from lift_main.py.
+flags/notes over time, not just this call), the fingerboard ramp's phase
+and hang history (lift_fingerboard.py), and the session type + HA shoulder
+and finger flags passed in from lift_main.py.
 """
 
 from __future__ import annotations
 
 import json
 from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 from pathlib import Path
 from typing import Any
 
@@ -22,6 +24,7 @@ from .collector import collect_history_summaries, collect_recent_health
 from .compression import compress_week, strip_large_fields
 from .config import AppConfig
 from .emailer import PRESCRIPTIONS_LOG
+from .lift_fingerboard import build_context as build_fingerboard_context
 from .lift_feedback import load_recent_feedback
 from .timezone_util import athlete_tz_name
 from .hevy_client import HevyClient, parse_ts, kg_to_lb, rpe_to_rir
@@ -35,6 +38,7 @@ def build_lift_payload(
     session_type: str,
     shoulder_flag: bool,
     session_date: date | None = None,
+    finger_flag: bool = False,
 ) -> dict[str, Any]:
     session_date = session_date or date.today()
 
@@ -78,6 +82,15 @@ def build_lift_payload(
     ]
     bodyweight_history = hevy_client.get_bodyweight_history(since=session_date - timedelta(weeks=8))
     recent_feedback = load_recent_feedback(config.report_output_dir)
+    fingerboard = build_fingerboard_context(
+        hevy_client,
+        catalog,
+        config.report_output_dir,
+        session_date,
+        recent_mountain_activity,
+        finger_flag,
+        now=datetime.now(ZoneInfo(tz)).replace(tzinfo=None),
+    )
 
     return {
         "session_date": session_date.isoformat(),
@@ -89,8 +102,10 @@ def build_lift_payload(
         "bodyweight_history": bodyweight_history,
         "recent_feedback": recent_feedback,
         "exercise_catalog": catalog,
+        "fingerboard": fingerboard,
         "flags": {
             "shoulder_flag_active": shoulder_flag,
+            "finger_flag_active": finger_flag,
         },
     }
 

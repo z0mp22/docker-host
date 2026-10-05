@@ -6,6 +6,7 @@ name: Run Lift Session
 #   session_type=heavy_1h|light_30m|shoulder_pt -> which of the three the
 #     athlete asked for (see prompts/lift_system.md)
 #   shoulder_flag=true -> the athlete has flagged the shoulder/soreness this session
+#   finger_flag=true -> fingers/elbows are tweaky: no fingerboard work at all
 #   feedback_only=true + feedback_text="..." -> append to the persistent
 #     feedback log only; no Garmin/Hevy/Claude call at all
 #   dry_run=true -> resolve the payload + print the safety-guard's
@@ -20,6 +21,10 @@ on:
         options: [heavy_1h, light_30m, shoulder_pt]
       shoulder_flag:
         description: "Shoulder/soreness flag active"
+        type: boolean
+        default: false
+      finger_flag:
+        description: "Finger flag active (no fingerboard)"
         type: boolean
         default: false
       feedback_only:
@@ -46,8 +51,9 @@ jobs:
         run: |
           export LIFT_SESSION_TYPE="${{ inputs.session_type }}"
           if [ "${{ inputs.shoulder_flag }}" = "true" ]; then export LIFT_SHOULDER_FLAG=true; fi
+          if [ "${{ inputs.finger_flag }}" = "true" ]; then export LIFT_FINGER_FLAG=true; fi
           if [ "${{ inputs.feedback_only }}" = "true" ]; then export LIFT_FEEDBACK_ONLY=true; fi
           if [ -n "${{ inputs.feedback_text }}" ]; then export LIFT_FEEDBACK_TEXT="${{ inputs.feedback_text }}"; fi
           if [ "${{ inputs.dry_run }}" = "true" ]; then export DRY_RUN=true; fi
-          echo "lift-session: TYPE=${LIFT_SESSION_TYPE} SHOULDER_FLAG=${LIFT_SHOULDER_FLAG:-<unset>} FEEDBACK_ONLY=${LIFT_FEEDBACK_ONLY:-<unset>} DRY_RUN=${DRY_RUN:-<unset>}"
+          echo "lift-session: TYPE=${LIFT_SESSION_TYPE} SHOULDER_FLAG=${LIFT_SHOULDER_FLAG:-<unset>} FINGER_FLAG=${LIFT_FINGER_FLAG:-<unset>} FEEDBACK_ONLY=${LIFT_FEEDBACK_ONLY:-<unset>} DRY_RUN=${DRY_RUN:-<unset>}"
           bash /docker/garmin-coaching-report/scripts/run-lift-session.sh

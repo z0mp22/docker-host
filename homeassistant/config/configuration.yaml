@@ -106,7 +106,7 @@ rest_command:
     # workflow_dispatch wants JSON *strings* for every input regardless of the
     # declared YAML type -- proven necessary by the since/dry_run wiring above.
     payload: >-
-      {"ref":"main","inputs":{"session_type":"heavy_1h","shoulder_flag":"{{ 'true' if is_state('input_boolean.lift_shoulder_flag','on') else 'false' }}","dry_run":"false"}}
+      {"ref":"main","inputs":{"session_type":"heavy_1h","shoulder_flag":"{{ 'true' if is_state('input_boolean.lift_shoulder_flag','on') else 'false' }}","finger_flag":"{{ 'true' if is_state('input_boolean.lift_finger_flag','on') else 'false' }}","dry_run":"false"}}
     timeout: 30
   lift_session_dispatch_light:
     url: "https://api.github.com/repos/z0mp22/docker-host/actions/workflows/run-lift-session.yml/dispatches"
@@ -118,7 +118,7 @@ rest_command:
       User-Agent: "home-assistant-coaching-report"
     content_type: "application/json"
     payload: >-
-      {"ref":"main","inputs":{"session_type":"light_30m","shoulder_flag":"{{ 'true' if is_state('input_boolean.lift_shoulder_flag','on') else 'false' }}","dry_run":"false"}}
+      {"ref":"main","inputs":{"session_type":"light_30m","shoulder_flag":"{{ 'true' if is_state('input_boolean.lift_shoulder_flag','on') else 'false' }}","finger_flag":"{{ 'true' if is_state('input_boolean.lift_finger_flag','on') else 'false' }}","dry_run":"false"}}
     timeout: 30
   lift_session_dispatch_pt:
     url: "https://api.github.com/repos/z0mp22/docker-host/actions/workflows/run-lift-session.yml/dispatches"
@@ -130,7 +130,7 @@ rest_command:
       User-Agent: "home-assistant-coaching-report"
     content_type: "application/json"
     payload: >-
-      {"ref":"main","inputs":{"session_type":"shoulder_pt","shoulder_flag":"{{ 'true' if is_state('input_boolean.lift_shoulder_flag','on') else 'false' }}","dry_run":"false"}}
+      {"ref":"main","inputs":{"session_type":"shoulder_pt","shoulder_flag":"{{ 'true' if is_state('input_boolean.lift_shoulder_flag','on') else 'false' }}","finger_flag":"{{ 'true' if is_state('input_boolean.lift_finger_flag','on') else 'false' }}","dry_run":"false"}}
     timeout: 30
   # Feedback-only dispatch: appends to the persistent coaching-feedback log
   # (see coaching_report/lift_feedback.py) -- no Claude call, no Hevy write.
@@ -357,6 +357,11 @@ input_boolean:
   lift_shoulder_flag:
     name: "Lift: shoulder flag active"
     icon: mdi:alert
+  # Same multi-day, manually cleared semantics as the shoulder flag: while on,
+  # the lift coach prescribes no fingerboard work (lift_fingerboard.py).
+  lift_finger_flag:
+    name: "Lift: finger flag active"
+    icon: mdi:hand-back-right-off-outline
 
 input_text:
   lift_feedback:
@@ -491,7 +496,7 @@ panel_custom:
     url_path: coach
     sidebar_title: Coaching
     sidebar_icon: mdi:dumbbell
-    module_url: /local/coach/coach-panel.js?v=2
+    module_url: /local/coach/coach-panel.js?v=3
   - name: network-panel
     url_path: network
     sidebar_title: Network

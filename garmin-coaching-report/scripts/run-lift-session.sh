@@ -17,6 +17,7 @@ fi
 args=(run --rm --env-file /docker/garmin-coaching-report/.env --network docker_default --entrypoint python)
 if [ -n "${LIFT_SESSION_TYPE:-}" ];  then args+=(-e "LIFT_SESSION_TYPE=${LIFT_SESSION_TYPE}"); fi
 if [ -n "${LIFT_SHOULDER_FLAG:-}" ]; then args+=(-e "LIFT_SHOULDER_FLAG=${LIFT_SHOULDER_FLAG}"); fi
+if [ -n "${LIFT_FINGER_FLAG:-}" ];   then args+=(-e "LIFT_FINGER_FLAG=${LIFT_FINGER_FLAG}"); fi
 if [ -n "${LIFT_FEEDBACK_ONLY:-}" ]; then args+=(-e "LIFT_FEEDBACK_ONLY=${LIFT_FEEDBACK_ONLY}"); fi
 if [ -n "${LIFT_FEEDBACK_TEXT:-}" ]; then args+=(-e "LIFT_FEEDBACK_TEXT=${LIFT_FEEDBACK_TEXT}"); fi
 if [ -n "${DRY_RUN:-}" ];            then args+=(-e "DRY_RUN=${DRY_RUN}"); fi

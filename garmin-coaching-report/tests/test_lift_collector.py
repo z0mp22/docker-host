@@ -40,6 +40,7 @@ def _fake_hevy_client(workouts=()):
     hevy = MagicMock()
     hevy.get_recent_workouts.return_value = list(workouts)
     hevy.get_bodyweight_history.return_value = []
+    hevy.get_exercise_history.return_value = []
     return hevy
 
 
@@ -92,7 +93,7 @@ def test_session_type_passed_through(tmp_path):
         session_date=date(2026, 9, 19),
     )
     assert payload["session_type"] == "shoulder_pt"
-    assert payload["flags"] == {"shoulder_flag_active": True}
+    assert payload["flags"] == {"shoulder_flag_active": True, "finger_flag_active": False}
 
 
 def test_recent_feedback_included_from_the_persistent_log(tmp_path):
