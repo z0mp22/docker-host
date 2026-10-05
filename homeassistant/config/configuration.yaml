@@ -384,7 +384,7 @@ panel_custom:
     url_path: house
     sidebar_title: Home
     sidebar_icon: mdi:home
-    module_url: /local/home/home-panel.js?v=4
+    module_url: /local/home/home-panel.js?v=5
     config:
       person: person.cody
       # Eufy T8210 via the eufy-sdk integration (eufy-bridge container). The HomeBase shows up as

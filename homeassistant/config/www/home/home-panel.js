@@ -72,6 +72,10 @@ const esc = (s) =>
   String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 const live = (st) => !!st && !["unavailable", "unknown"].includes(st.state);
+// A light that reports any color mode beyond plain on/off can be dimmed.
+const dimmable = (st) => (st?.attributes?.supported_color_modes || []).some((m) => m !== "onoff");
+// HA brightness is 0–255; show it as 1–100 % while on (a lit bulb is never "0 %").
+const brightPct = (st) => (st?.state === "on" ? Math.max(1, Math.round(((st.attributes.brightness ?? 255) / 255) * 100)) : 0);
 const num = (v) => {
   const n = parseFloat(v);
   return Number.isFinite(n) ? n : null;
@@ -187,7 +191,15 @@ h1 { margin: 2px 0 0; font-size: 34px; font-weight: 700; line-height: 1.1; }
 .sw b { font-size: 16px; font-weight: 600; display: block; overflow-wrap: anywhere; }
 .sw span { font-size: 13px; color: var(--muted); }
 .sw.on span { color: #f7d49a; }
-.sw:disabled { opacity: .45; }
+.sw:disabled, .sw.na { opacity: .45; }
+.sw.dim { padding: 0; gap: 0; }
+.sw-tap { display: flex; flex-direction: column; gap: 12px; flex: 1; min-width: 0; padding: 14px 14px 10px; border-radius: inherit; }
+.dimmer { -webkit-appearance: none; appearance: none; display: block; margin: 0 14px 14px; height: 30px; border-radius: 10px; cursor: pointer; touch-action: pan-y;
+  background: linear-gradient(90deg, #f5c451 var(--pct), #243246 var(--pct)); }
+.dimmer:disabled { cursor: default; }
+.dimmer:focus-visible, .sw-tap:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.dimmer::-webkit-slider-thumb { -webkit-appearance: none; width: 6px; height: 22px; border-radius: 3px; background: #fff; box-shadow: 0 0 0 2px rgba(8,13,23,.35); }
+.dimmer::-moz-range-thumb { width: 6px; height: 22px; border: 0; border-radius: 3px; background: #fff; box-shadow: 0 0 0 2px rgba(8,13,23,.35); }
 
 /* Weather */
 .a-weather { padding: 0; overflow: hidden; display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
@@ -359,6 +371,8 @@ h1 { margin: 2px 0 0; font-size: 34px; font-weight: 700; line-height: 1.1; }
   .card { border-radius: 22px; padding: 16px 14px; }
   .switches { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
   .sw { padding: 12px; min-height: 92px; border-radius: 16px; }
+  .sw-tap { padding: 12px 12px 8px; }
+  .dimmer { margin: 0 12px 12px; height: 34px; }
   .sw b { font-size: 15px; }
   .wx-main { padding: 18px 16px; }
   .wx-now { gap: 12px; }
@@ -395,7 +409,18 @@ class HomePanel extends HTMLElement {
     this._wildlife = [];
     this._toast = "";
     this._showAllAttn = false;
+    this._dim = {};
     this.shadowRoot.addEventListener("click", (e) => this._onClick(e));
+    this.shadowRoot.addEventListener("input", (e) => this._onDimInput(e));
+    this.shadowRoot.addEventListener("change", (e) => this._onDimChange(e));
+    // A release that didn't move the slider fires no change event; stop holding renders anyway.
+    const endSlide = () => setTimeout(() => {
+      if (!this._sliding) return;
+      this._sliding = false;
+      this._scheduleRender();
+    });
+    this.shadowRoot.addEventListener("pointerup", endSlide);
+    this.shadowRoot.addEventListener("pointercancel", endSlide);
   }
 
   set hass(hass) {
@@ -620,6 +645,34 @@ class HomePanel extends HTMLElement {
       } catch (err) {
         this._showToast(`Couldn't toggle ${id}: ${err.message || err}`);
       }
+    }
+  }
+
+  // While dragging, update the tile in place; a full re-render would snap the slider back.
+  _onDimInput(e) {
+    const el = e.target;
+    if (!el.matches?.("input.dimmer")) return;
+    this._sliding = true;
+    el.style.setProperty("--pct", `${el.value}%`);
+    const label = el.closest(".sw")?.querySelector(".sw-tap span");
+    if (label) label.textContent = +el.value ? `On · ${el.value}%` : "Off";
+  }
+
+  async _onDimChange(e) {
+    const el = e.target;
+    if (!el.matches?.("input.dimmer") || !this._hass) return;
+    this._sliding = false;
+    const id = el.dataset.entity;
+    const pct = +el.value;
+    // Hold the chosen level until HA reports it, so the slider doesn't flick back meanwhile.
+    this._dim[id] = { pct, at: Date.now() };
+    this._scheduleRender();
+    try {
+      if (pct) await this._hass.callService("light", "turn_on", { entity_id: id, brightness_pct: pct });
+      else await this._hass.callService("light", "turn_off", { entity_id: id });
+    } catch (err) {
+      delete this._dim[id];
+      this._showToast(`Couldn't dim ${id}: ${err.message || err}`);
     }
   }
 
@@ -1045,7 +1098,7 @@ class HomePanel extends HTMLElement {
   }
 
   _render() {
-    if (!this._hass) return;
+    if (!this._hass || this._sliding) return;
     const c = this._c;
     const st = this._hass.states;
     const attn = [];
@@ -1103,8 +1156,20 @@ class HomePanel extends HTMLElement {
           const s = st[l.entity];
           const on = s?.state === "on";
           const ok = live(s);
+          const icon = svg(SWITCH_ICONS.includes(l.icon) ? l.icon : "mdiLightbulb");
+          if (l.entity.startsWith("light.") && dimmable(s)) {
+            let pct = brightPct(s);
+            const held = this._dim[l.entity];
+            if (held && pct !== held.pct && Date.now() - held.at < 5000) pct = held.pct;
+            else delete this._dim[l.entity];
+            const state = ok ? (pct ? `On · ${pct}%` : "Off") : "Unavailable";
+            return `<div class="sw dim ${pct ? "on" : ""} ${ok ? "" : "na"}">
+              <button class="sw-tap" data-action="toggle" data-entity="${esc(l.entity)}" aria-pressed="${on}" ${ok ? "" : "disabled"}>
+                <div class="sic">${icon}</div><div><b>${esc(l.name)}</b><span>${state}</span></div></button>
+              <input class="dimmer" type="range" min="0" max="100" step="1" value="${pct}" style="--pct:${pct}%" data-entity="${esc(l.entity)}" aria-label="${esc(l.name)} brightness" ${ok ? "" : "disabled"}></div>`;
+          }
           return `<button class="sw ${on ? "on" : ""}" data-action="toggle" data-entity="${esc(l.entity)}" aria-pressed="${on}" ${ok ? "" : "disabled"}>
-            <div class="sic">${svg(SWITCH_ICONS.includes(l.icon) ? l.icon : "mdiLightbulb")}</div><div><b>${esc(l.name)}</b><span>${ok ? (on ? "On" : "Off") : "Unavailable"}</span></div></button>`;
+            <div class="sic">${icon}</div><div><b>${esc(l.name)}</b><span>${ok ? (on ? "On" : "Off") : "Unavailable"}</span></div></button>`;
         })
         .join("")}</div>
     </section>`;
