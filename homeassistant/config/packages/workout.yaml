@@ -1,0 +1,44 @@
+# Basement workout: one tap sets the basement up so it's ready by the time Cody walks down.
+# Lights to 80%, and the Roku opens Spotify straight into the workout playlist (the TV wakes over
+# HDMI-CEC). The button is on the TV panel (/tv, Basement room); the script also works from the
+# companion app or a home-screen shortcut.
+#
+# The playlist starts through a Roku ECP deep link into the Spotify app (22297), tested live on the
+# basement Roku on 2026-10-05: it starts the playlist from the home screen and from inside Spotify,
+# about 5 s after the request. Two details matter:
+# - The content id has to be URL-encoded (spotify%3Aplaylist%3A...); with literal colons the Roku
+#   answers 404.
+# - The param is contentId. HA's roku.play_media sends contentID, which hasn't been tested with
+#   Spotify, so this calls ECP directly with the exact request that worked.
+# No Spotify account link or developer app is involved.
+
+rest_command:
+  basement_roku_workout_playlist:
+    url: "http://10.0.0.188:8060/launch/22297?contentId=spotify%3Aplaylist%3A3DwsyvJJdqUFu9hk73jwkA&mediaType=playlist"
+    method: post
+    # Without this, HA's URL handling (yarl) decodes %3A back to ":" and the Roku answers 404.
+    skip_url_encoding: true
+    timeout: 10
+
+script:
+  basement_workout:
+    alias: "Basement: workout"
+    description: Basement lights to 80% and the workout playlist on the basement Roku.
+    icon: mdi:dumbbell
+    mode: single
+    sequence:
+      # A light problem shouldn't stop the music.
+      - action: light.turn_on
+        continue_on_error: true
+        target:
+          entity_id: light.basement
+        data:
+          brightness_pct: 80
+      - action: rest_command.basement_roku_workout_playlist
+        response_variable: roku
+      - if:
+          - condition: template
+            value_template: "{{ roku.status != 200 }}"
+        then:
+          - stop: "The basement Roku didn't start Spotify"
+            error: true
