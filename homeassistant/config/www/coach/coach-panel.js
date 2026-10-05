@@ -12,6 +12,7 @@ const ICONS = {
   mdiDumbbell: "M20.57,14.86L22,13.43L20.57,12L17,15.57L8.43,7L12,3.43L10.57,2L9.14,3.43L7.71,2L5.57,4.14L4.14,2.71L2.71,4.14L4.14,5.57L2,7.71L3.43,9.14L2,10.57L3.43,12L7,8.43L15.57,17L12,20.57L13.43,22L14.86,20.57L16.29,22L18.43,19.86L19.86,21.29L21.29,19.86L19.86,18.43L22,16.29L20.57,14.86Z",
   mdiLightningBolt: "M11 15H6L13 1V9H18L11 23V15Z",
   mdiMenu: "M3,6H21V8H3V6M3,11H21V13H3V11M3,16H21V18H3V16Z",
+  mdiPlay: "M8,5.14V19.14L19,12.14L8,5.14Z",
   mdiRefresh: "M17.65,6.35C16.2,4.9 14.21,4 12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20C15.73,20 18.84,17.45 19.73,14H17.65C16.83,16.33 14.61,18 12,18A6,6 0 0,1 6,12A6,6 0 0,1 12,6C13.66,6 15.14,6.69 16.22,7.78L13,11H20V4L17.65,6.35Z",
   mdiSend: "M2,21L23,12L2,3V10L17,12L2,14V21Z",
   mdiShieldAlertOutline: "M21,11C21,16.55 17.16,21.74 12,23C6.84,21.74 3,16.55 3,11V5L12,1L21,5V11M12,21C15.75,20 19,15.54 19,11.22V6.3L12,3.18L5,6.3V11.22C5,15.54 8.25,20 12,21M11,7H13V13H11V7M11,15H13V17H11V15Z",
@@ -25,6 +26,9 @@ const PANEL_STATE = "input_text.coach_panel_state";
 const SLOW_MS = 15 * 60e3;
 const EXPIRE_MS = 60 * 60e3;
 const REPORT_BUSY_MS = 10 * 60e3;
+// Basement set-up (packages/workout.yaml): lights to 80% + workout playlist on the basement Roku.
+const WORKOUT = { script: "script.basement_workout", light: "light.basement", roku: "media_player.basement_roku" };
+const WORKOUT_DONE_MS = 8000;
 
 const TYPES = [
   { id: "heavy_1h", label: "1h Heavy", desc: "Full session", icon: "mdiWeightLifter", script: "script.lift_session_run_heavy" },
@@ -127,10 +131,10 @@ h1 { margin: 0; font-size: 34px; font-weight: 700; line-height: 1.1; }
 .icon-btn { width: 48px; height: 48px; border-radius: 16px; display: grid; place-items: center; background: var(--card-2); border: 1px solid var(--line); flex: none; }
 
 .grid { display: grid; gap: 22px; align-items: start; grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr);
-  grid-template-areas: "session gen" "session feedback" "session report"; grid-template-rows: auto auto 1fr; }
-.grid.gen-first { grid-template-columns: minmax(0, 1fr) minmax(0, 1.45fr); grid-template-areas: "gen session" "feedback session" "report session"; }
+  grid-template-areas: "session workout" "session gen" "session feedback" "session report"; grid-template-rows: auto auto auto 1fr; }
+.grid.gen-first { grid-template-columns: minmax(0, 1fr) minmax(0, 1.45fr); grid-template-areas: "workout session" "gen session" "feedback session" "report session"; }
 .card { background: linear-gradient(180deg, var(--card-2), var(--card)); border: 1px solid var(--line); border-radius: 30px; padding: 26px 28px; min-width: 0; }
-.a-session { grid-area: session; } .a-gen { grid-area: gen; } .a-feedback { grid-area: feedback; } .a-report { grid-area: report; }
+.a-workout { grid-area: workout; } .a-session { grid-area: session; } .a-gen { grid-area: gen; } .a-feedback { grid-area: feedback; } .a-report { grid-area: report; }
 .eyebrow { font-size: 13px; letter-spacing: .12em; font-weight: 600; color: var(--muted); text-transform: uppercase; }
 h2 { margin: 6px 0 0; font-size: 26px; font-weight: 600; line-height: 1.2; }
 h3 { margin: 6px 0 0; font-size: 21px; font-weight: 600; }
@@ -217,11 +221,18 @@ textarea::placeholder { color: #5d6b80; }
 .disclose { margin-top: 12px; font-size: 14px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
 .disclose .ic { width: 18px; height: 18px; transition: transform .2s; }
 .disclose.open .ic { transform: rotate(180deg); }
+.wk { display: flex; align-items: center; gap: 18px; }
+.wk-t { flex: 1; min-width: 0; }
+.wk .sub { font-size: 15px; }
+.cta.wk-btn { margin-top: 0; width: auto; flex: none; padding: 0 26px; }
+.cta.wk-btn.quiet { background: #172234; border: 1px solid var(--line); box-shadow: none; color: var(--accent); }
+.cta.wk-btn.quiet:disabled { color: #56607a; }
+.cta.wk-btn.done { background: linear-gradient(180deg, #2fa866, #1d7a46); box-shadow: 0 10px 30px rgba(34,197,94,.3), inset 0 1px 0 rgba(255,255,255,.25); color: #fff; border: 0; }
 .toast { position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%); padding: 14px 20px; border-radius: 14px; background: #3a1d24; border: 1px solid rgba(240,97,109,.5); color: #ffd3d7; z-index: 10; max-width: 90vw; }
 
 @container (max-width: 980px) {
-  .grid { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; grid-template-areas: "session" "gen" "feedback" "report"; }
-  .grid.gen-first { grid-template-columns: minmax(0, 1fr); grid-template-areas: "gen" "session" "feedback" "report"; }
+  .grid { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; grid-template-areas: "workout" "session" "gen" "feedback" "report"; }
+  .grid.gen-first { grid-template-columns: minmax(0, 1fr); grid-template-areas: "workout" "gen" "session" "feedback" "report"; }
 }
 @container (max-width: 640px) {
   .app { padding: 14px 14px 24px; }
@@ -252,6 +263,9 @@ textarea::placeholder { color: #5d6b80; }
   textarea { font-size: 16px; min-height: 50px; padding: 13px 14px; }
   .send { width: 50px; height: 50px; border-radius: 16px; }
   .report-row { flex-wrap: wrap; }
+  .wk { flex-wrap: wrap; gap: 12px; }
+  .wk .sub { font-size: 13.5px; }
+  .cta.wk-btn { width: 100%; }
   .btn2 { width: 100%; }
 }
 `;
@@ -267,6 +281,7 @@ class CoachPanel extends HTMLElement {
     this._type = null;
     this._fb = null;
     this._toast = "";
+    this._workout = null; // { phase: "busy" | "done", at }
     this.shadowRoot.addEventListener("click", (e) => this._onClick(e));
   }
 
@@ -333,6 +348,7 @@ class CoachPanel extends HTMLElement {
       <div class="app">
         <header class="top" data-region="header"></header>
         <main class="grid">
+          <section class="card a-workout" data-region="workout"></section>
           <section class="card a-gen" data-region="gen"></section>
           <section class="card a-session" data-region="session"></section>
           <section class="card a-feedback">
@@ -457,6 +473,9 @@ class CoachPanel extends HTMLElement {
         this._render();
         return;
       }
+      case "workout":
+        this._runWorkout();
+        return;
       case "more-reports":
         this._moreReports = !this._moreReports;
         this._render();
@@ -491,6 +510,58 @@ class CoachPanel extends HTMLElement {
       default:
         return;
     }
+  }
+
+  // Calls the script itself (not script.turn_on) so a failure comes back here as a toast.
+  async _runWorkout() {
+    if (this._workout?.phase === "busy") return;
+    navigator.vibrate?.(8);
+    this._workout = { phase: "busy" };
+    this._render();
+    try {
+      await this._hass.callService("script", WORKOUT.script.slice("script.".length));
+      this._workout = { phase: "done", at: Date.now() };
+    } catch (err) {
+      this._workout = null;
+      this._showToast(`Workout didn't start: ${err.message || err}`);
+    }
+    this._render();
+    setTimeout(() => this._render(), WORKOUT_DONE_MS + 100);
+  }
+
+  // What the basement is doing right now, from the light and the Roku themselves.
+  // Primary when today's session is ready (working out is the next step); otherwise Generate is.
+  _renderWorkout(m) {
+    const st = this._hass.states;
+    const light = st[WORKOUT.light];
+    const roku = st[WORKOUT.roku];
+    const dead = (e) => !e || ["unavailable", "unknown"].includes(e.state);
+    const rokuDead = dead(roku);
+    let lightText = "light not responding";
+    if (!dead(light)) {
+      const b = Number(light.attributes?.brightness);
+      lightText = light.state !== "on" ? "lights off" : b ? `lights ${Math.round((b / 255) * 100)}%` : "lights on";
+    }
+    let tvText;
+    const app = roku?.attributes?.app_name || "";
+    if (rokuDead) tvText = "Roku not responding";
+    else if (["off", "standby"].includes(roku.state)) tvText = "TV off";
+    else if (roku.state === "playing") tvText = `${app || "Roku"} playing`;
+    else if (app && !/^(home|roku( dynamic menu)?)$/i.test(app)) tvText = `${app} open`;
+    else tvText = "TV on";
+    const w = this._workout;
+    const busy = w?.phase === "busy";
+    const done = w?.phase === "done" && Date.now() - w.at < WORKOUT_DONE_MS;
+    const label = busy ? `${svg("mdiRefresh")} Starting…` : done ? `${svg("mdiCheck")} Started` : `${svg("mdiPlay")} Start workout`;
+    this._set(
+      "workout",
+      `<div class="wk">
+        <div class="wk-t"><div class="eyebrow">Basement</div><h3>Lights 80% · workout playlist</h3>
+          <div class="sub">Now: ${esc(lightText)} · ${esc(tvText)}</div></div>
+        <button class="cta wk-btn ${done ? "done" : m.fresh ? "" : "quiet"}" data-action="workout" ${busy || rokuDead ? "disabled" : ""}>${label}</button>
+      </div>
+      ${rokuDead ? `<div class="alert warn">${svg("mdiAlertOutline")}<span>Home Assistant can't reach the basement Roku, so the playlist can't start. Check that it's plugged in and on Wi-Fi.</span></div>` : ""}`,
+    );
   }
 
   _selectedType(m) {
@@ -560,6 +631,7 @@ class CoachPanel extends HTMLElement {
     this._grid.classList.toggle("gen-first", !m.fresh || !!busy);
 
     this._renderHeader(m, job, busy);
+    this._renderWorkout(m);
     this._renderGen(m, job, busy);
     this._renderSession(m, job, busy);
     this._renderFeedbackStatus();

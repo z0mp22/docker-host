@@ -44,8 +44,6 @@ const ICONS = {
   mdiPauseCircleOutline: "M13,16V8H15V16H13M9,16V8H11V16H9M12,2A10,10 0 0,1 22,12A10,10 0 0,1 12,22A10,10 0 0,1 2,12A10,10 0 0,1 12,2M12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20A8,8 0 0,0 20,12A8,8 0 0,0 12,4Z",
   mdiClockOutline: "M12,20A8,8 0 0,0 20,12A8,8 0 0,0 12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20M12,2A10,10 0 0,1 22,12A10,10 0 0,1 12,22C6.47,22 2,17.5 2,12A10,10 0 0,1 12,2M12.5,7V12.25L17,14.92L16.25,16.15L11,13V7H12.5Z",
   mdiPlayPause: "M3,5V19L11,12M13,19H16V5H13M18,5V19H21V5",
-  mdiDumbbell: "M20.57,14.86L22,13.43L20.57,12L17,15.57L8.43,7L12,3.43L10.57,2L9.14,3.43L7.71,2L5.57,4.14L4.14,2.71L2.71,4.14L4.14,5.57L2,7.71L3.43,9.14L2,10.57L3.43,12L7,8.43L15.57,17L12,20.57L13.43,22L14.86,20.57L16.29,22L18.43,19.86L19.86,21.29L21.29,19.86L19.86,18.43L22,16.29L20.57,14.86Z",
-  mdiCheck: "M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z",
 };
 
 const PLAYING = new Set(["playing", "paused", "buffering"]);
@@ -55,8 +53,6 @@ const APPS_SHOWN = 12;
 const APPS_SHOWN_IDLE = 20;
 const SEEK_SECONDS = 30;
 const ROOM_KEY = "tv-panel-room";
-// How long a quick start shows "Started" after its script finishes.
-const QUICK_DONE_MS = 8000;
 
 const svg = (name, cls = "") =>
   `<svg class="ic ${cls}" viewBox="0 0 24 24" aria-hidden="true"><path d="${ICONS[name] || ICONS.mdiTelevision}"/></svg>`;
@@ -203,7 +199,7 @@ h1 { margin: 0; font-size: 34px; font-weight: 700; letter-spacing: -.01em; line-
 .grid { display: grid; gap: 22px; grid-template-columns: minmax(0, 1.4fr) minmax(0, 0.9fr); align-items: start; }
 .col { display: flex; flex-direction: column; gap: 22px; min-width: 0; }
 .card { background: linear-gradient(180deg, var(--card-2), var(--card)); border: 1px solid var(--line); border-radius: 30px; padding: 24px 28px; min-width: 0; }
-.rooms { order: 0; } .now, .quick { order: 1; } .remote { order: 2; } .apps { order: 3; } .dvr { order: 4; }
+.rooms { order: 0; } .now { order: 1; } .remote { order: 2; } .apps { order: 3; } .dvr { order: 4; }
 .card-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .eyebrow { font-size: 13px; letter-spacing: .12em; font-weight: 600; color: var(--muted); text-transform: uppercase; }
 .link-btn { color: var(--violet); font-weight: 600; font-size: 15px; padding: 6px 2px; display: inline-flex; align-items: center; gap: 4px; }
@@ -225,24 +221,6 @@ h1 { margin: 0; font-size: 34px; font-weight: 700; letter-spacing: -.01em; line-
 .room-t span { display: block; font-size: 14.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
 .room.media .room-t span { color: #d6cbff; }
 .room.dead .room-t span { color: #f7d49a; }
-
-/* Quick start */
-.quick-list { display: grid; gap: 12px; margin-top: 14px; }
-.qbtn { display: flex; align-items: center; gap: 16px; width: 100%; padding: 14px 18px; border-radius: 22px; text-align: left; color: #fff;
-  background: linear-gradient(180deg, #9f7aea, var(--violet-2)); box-shadow: 0 10px 30px rgba(109,40,217,.4), inset 0 1px 0 rgba(255,255,255,.3); transition: transform .12s; }
-.qbtn:not(:disabled):active { transform: scale(.98); }
-.qbtn .qic { width: 52px; height: 52px; border-radius: 16px; display: grid; place-items: center; flex: none; background: rgba(255,255,255,.16); }
-.qbtn .qic .ic { width: 28px; height: 28px; }
-.qbtn .qt { min-width: 0; flex: 1; }
-.qbtn b { display: block; font-size: 20px; font-weight: 600; }
-.qbtn .qt span { display: block; font-size: 14.5px; color: #e6dcff; margin-top: 2px; }
-.qbtn .qs { font-size: 14px; font-weight: 600; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; }
-.qbtn .qs .ic { width: 18px; height: 18px; }
-.qbtn.done { background: linear-gradient(180deg, #2fa866, #1d7a46); box-shadow: 0 10px 30px rgba(34,197,94,.3), inset 0 1px 0 rgba(255,255,255,.25); }
-.qbtn:disabled { background: #243044; box-shadow: none; color: #6f7d92; }
-.qbtn:disabled .qt span { color: #6f7d92; }
-.qbtn.busy:disabled { background: linear-gradient(180deg, #7d62bd, #55239f); color: #fff; }
-.qbtn.busy:disabled .qt span { color: #e6dcff; }
 
 /* Now playing */
 .now { position: relative; overflow: hidden; padding: 0; }
@@ -390,10 +368,6 @@ h1 { margin: 0; font-size: 34px; font-weight: 700; letter-spacing: -.01em; line-
   .idle-row { gap: 14px; margin-top: 12px; align-items: flex-start; }
   .idle-ic { width: 60px; height: 60px; border-radius: 18px; } .idle-ic .ic { width: 30px; height: 30px; } .idle-ic img { border-radius: 18px; }
   .cta { height: 54px; padding: 0 22px; font-size: 17px; border-radius: 18px; }
-  .qbtn { padding: 12px 14px; gap: 12px; border-radius: 18px; }
-  .qbtn .qic { width: 44px; height: 44px; border-radius: 14px; }
-  .qbtn b { font-size: 17px; }
-  .qbtn .qt span { font-size: 13px; }
   .dpad { width: 216px; height: 216px; }
   .dpad .k { width: 66px; height: 66px; } .dpad .up, .dpad .down { left: 75px; } .dpad .left, .dpad .right { top: 75px; }
   .dpad .ok { left: 63px; top: 63px; width: 90px; height: 90px; }
@@ -416,7 +390,6 @@ class TvPanel extends HTMLElement {
     this._showAllApps = false;
     this._query = "";
     this._toast = "";
-    this._quick = new Map(); // script entity -> { phase: "busy" | "done", at }
     try {
       this._room = localStorage.getItem(ROOM_KEY) || "";
     } catch (_) {
@@ -530,24 +503,6 @@ class TvPanel extends HTMLElement {
     }
   }
 
-  // Quick starts call the script itself (not script.turn_on) so a failure comes back here as a toast.
-  async _runQuick(item) {
-    const id = item?.script || "";
-    if (!id.startsWith("script.") || this._quick.get(id)?.phase === "busy") return;
-    navigator.vibrate?.(8);
-    this._quick.set(id, { phase: "busy" });
-    this._render();
-    try {
-      await this._hass.callService("script", id.slice("script.".length));
-      this._quick.set(id, { phase: "done", at: Date.now() });
-    } catch (err) {
-      this._quick.delete(id);
-      this._showToast(`${item.name || "That"} didn't start: ${err.message || err}`);
-    }
-    this._render();
-    setTimeout(() => this._render(), QUICK_DONE_MS + 100);
-  }
-
   _key(room, command) {
     if (!room?.remote) return;
     navigator.vibrate?.(8);
@@ -603,9 +558,6 @@ class TvPanel extends HTMLElement {
           navigator.vibrate?.(8);
           this._call("media_player", "select_source", { entity_id: room.roku, source: el.dataset.app });
         }
-        return;
-      case "quick":
-        this._runQuick(room?.quick?.[Number(el.dataset.i)]);
         return;
       case "search":
         this._search();
@@ -717,24 +669,6 @@ class TvPanel extends HTMLElement {
           ${seekFwd}
         </div>
       </div></section>`;
-  }
-
-  _quickCard(r) {
-    const items = Array.isArray(r.quick) ? r.quick : [];
-    if (!items.length) return "";
-    const btns = items
-      .map((q, i) => {
-        const st = this._quick.get(q.script);
-        const busy = st?.phase === "busy";
-        const done = st?.phase === "done" && Date.now() - st.at < QUICK_DONE_MS;
-        const detail = !r.online ? "Needs Home Assistant to reach this Roku" : busy ? "Starting…" : q.detail || "";
-        const right = done ? `<span class="qs">${svg("mdiCheck")}Started</span>` : "";
-        return `<button class="qbtn ${busy ? "busy" : ""} ${done ? "done" : ""}" data-action="quick" data-i="${i}" ${r.online && !busy ? "" : "disabled"}>
-          <span class="qic">${svg(q.icon || "mdiPlay")}</span>
-          <span class="qt"><b>${esc(q.name)}</b><span>${esc(detail)}</span></span>${right}</button>`;
-      })
-      .join("");
-    return `<section class="card quick"><div class="card-head"><span class="eyebrow">Quick start · ${esc(r.name)}</span></div><div class="quick-list">${btns}</div></section>`;
   }
 
   _remoteCard(r) {
@@ -865,7 +799,7 @@ class TvPanel extends HTMLElement {
         </header>
         ${rooms.length > 1 ? `<div class="room-row">${roomTiles}</div>` : ""}
         <main class="grid">
-          <div class="col">${this._nowCard(sel)}${this._quickCard(sel)}${this._appsCard(sel)}</div>
+          <div class="col">${this._nowCard(sel)}${this._appsCard(sel)}</div>
           <div class="col">${this._remoteCard(sel)}${this._dvrCard(rec)}</div>
         </main>
         ${this._toast ? `<div class="toast" role="alert">${esc(this._toast)}</div>` : ""}

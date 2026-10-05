@@ -464,7 +464,7 @@ panel_custom:
     url_path: tv
     sidebar_title: TV
     sidebar_icon: mdi:television-play
-    module_url: /local/tv/tv-panel.js?v=2
+    module_url: /local/tv/tv-panel.js?v=3
     config:
       # Each room: the Roku (core roku integration), its remote, and the Plex client on it, which
       # supplies titles, artwork and seeking. Icons: mdiSofa, mdiStairsDown, mdiTelevision.
@@ -474,17 +474,11 @@ panel_custom:
           roku: media_player.z_roku_ultra
           remote: remote.z_roku_ultra
           plex: media_player.plex_plex_for_roku_z_roku_ultra
-        # quick: one-tap set-ups for the room, each a script (packages/workout.yaml).
         - name: Basement
           icon: mdiStairsDown
           roku: media_player.basement_roku
           remote: remote.basement_roku
           plex: media_player.plex_plex_for_roku_basement_roku
-          quick:
-            - name: Workout
-              icon: mdiDumbbell
-              script: script.basement_workout
-              detail: Lights 80% · workout playlist on Spotify
       recordings: sensor.plex_recordings_sync_meta
       links:
         recordings: /recordings
@@ -497,7 +491,7 @@ panel_custom:
     url_path: coach
     sidebar_title: Coaching
     sidebar_icon: mdi:dumbbell
-    module_url: /local/coach/coach-panel.js?v=1
+    module_url: /local/coach/coach-panel.js?v=2
   - name: network-panel
     url_path: network
     sidebar_title: Network

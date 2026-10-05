@@ -1,7 +1,7 @@
 # Basement workout: one tap sets the basement up so it's ready by the time Cody walks down.
 # Lights to 80%, and the Roku opens Spotify straight into the workout playlist (the TV wakes over
-# HDMI-CEC). The button is on the TV panel (/tv, Basement room); the script also works from the
-# companion app or a home-screen shortcut.
+# HDMI-CEC). The button is on the Coaching panel (/coach, Basement card); the script also works
+# from the companion app or a home-screen shortcut.
 #
 # The playlist starts through a Roku ECP deep link into the Spotify app (22297), tested live on the
 # basement Roku on 2026-10-05: it starts the playlist from the home screen and from inside Spotify,
