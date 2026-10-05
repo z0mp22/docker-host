@@ -407,7 +407,7 @@ panel_custom:
       lights:
         - {entity: switch.master_bed_lamp, name: Bedroom lamp, icon: mdiLamp}
         - {entity: switch.front_door_light_shelly_1, name: Front door, icon: mdiCoachLamp}
-        - {entity: switch.front_lights_shelly_1_plus, name: Garage lights, icon: mdiGarageVariant}
+        - {entity: switch.front_lights_shelly_1_plus, name: Front garage lights, icon: mdiGarageVariant}
         - {entity: light.basement, name: Basement, icon: mdiCeilingLight}
         - {entity: switch.office_desk_light, name: Office desk, icon: mdiDeskLamp}
         - {entity: switch.whole_house_fan_switch_1, name: Whole house fan, icon: mdiFan}
