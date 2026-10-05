@@ -384,7 +384,7 @@ panel_custom:
     url_path: house
     sidebar_title: Home
     sidebar_icon: mdi:home
-    module_url: /local/home/home-panel.js?v=5
+    module_url: /local/home/home-panel.js?v=6
     config:
       person: person.cody
       # Eufy T8210 via the eufy-sdk integration (eufy-bridge container). The HomeBase shows up as
@@ -402,14 +402,14 @@ panel_custom:
       climate:
         - {name: Bedroom, temperature: sensor.tp358s_1c99_temperature, humidity: sensor.tp358s_1c99_humidity}
         - {name: Basement, temperature: sensor.tp358s_f429_temperature, humidity: sensor.tp358s_f429_humidity}
-      # Icons: mdiLamp, mdiFloorLamp, mdiDeskLamp, mdiCeilingLight, mdiCoachLamp, mdiOutdoorLamp,
-      # mdiGarageVariant, mdiStringLights, mdiFan, mdiPowerSocketUs (others fall back to a bulb).
+      # Icons: mdiLamp, mdiFloorLamp, mdiDeskLamp, mdiCeilingLight, mdiLightRecessed, mdiCoachLamp,
+      # mdiOutdoorLamp, mdiGarageVariant, mdiStringLights, mdiFan, mdiPowerSocketUs (others fall back to a bulb).
       lights:
         - {entity: switch.master_bed_lamp, name: Bedroom lamp, icon: mdiLamp}
         - {entity: switch.front_door_light_shelly_1, name: Front door, icon: mdiCoachLamp}
         - {entity: switch.front_lights_shelly_1_plus, name: Front garage lights, icon: mdiGarageVariant}
-        - {entity: light.basement, name: Basement, icon: mdiCeilingLight}
-        - {entity: switch.office_desk_light, name: Office desk, icon: mdiDeskLamp}
+        - {entity: light.basement, name: Basement, icon: mdiLightRecessed}
+        - {entity: switch.office_desk_light, name: Office Monitor Light, icon: mdiDeskLamp}
         - {entity: switch.whole_house_fan_switch_1, name: Whole house fan, icon: mdiFan}
       media:
         - {entity: media_player.roku_4800x_a029, name: Living room Roku}

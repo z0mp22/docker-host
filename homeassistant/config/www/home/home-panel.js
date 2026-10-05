@@ -28,6 +28,7 @@ const ICONS = {
   mdiHomeAccount: "M12,3L2,12H5V20H19V12H22L12,3M12,8.75A2.25,2.25 0 0,1 14.25,11A2.25,2.25 0 0,1 12,13.25A2.25,2.25 0 0,1 9.75,11A2.25,2.25 0 0,1 12,8.75M12,15C13.5,15 16.5,15.75 16.5,17.25V18H7.5V17.25C7.5,15.75 10.5,15 12,15Z",
   mdiLamp: "M8,2H16L20,14H4L8,2M11,15H13V20H18V22H6V20H11V15Z",
   mdiLanDisconnect: "M4,1C2.89,1 2,1.89 2,3V7C2,8.11 2.89,9 4,9H1V11H13V9H10C11.11,9 12,8.11 12,7V3C12,1.89 11.11,1 10,1H4M4,3H10V7H4V3M14,13C12.89,13 12,13.89 12,15V19C12,20.11 12.89,21 14,21H11V23H23V21H20C21.11,21 22,20.11 22,19V15C22,13.89 21.11,13 20,13H14M3.88,13.46L2.46,14.88L4.59,17L2.46,19.12L3.88,20.54L6,18.41L8.12,20.54L9.54,19.12L7.41,17L9.54,14.88L8.12,13.46L6,15.59L3.88,13.46M14,15H20V19H14V15Z",
+  mdiLightRecessed: "M12 7C6.5 7 2 9.46 2 12.5S6.5 18 12 18 22 15.54 22 12.5 17.5 7 12 7M16.5 10C16.5 10.4 14.9 11.54 12 11.54S7.5 10.4 7.5 10C7.5 9.91 7.65 9.74 7.9 9.55C9.06 9.21 10.44 9 12 9S14.94 9.21 16.1 9.55C16.35 9.74 16.5 9.91 16.5 10M12 16C7.12 16 4 13.93 4 12.5C4 11.81 4.73 11 6.03 10.29C6.3 11.83 8.87 13.04 12 13.04C15.13 13.04 17.7 11.83 17.97 10.29C19.27 11 20 11.81 20 12.5C20 13.93 16.88 16 12 16Z",
   mdiLightbulb: "M12,2A7,7 0 0,0 5,9C5,11.38 6.19,13.47 8,14.74V17A1,1 0 0,0 9,18H15A1,1 0 0,0 16,17V14.74C17.81,13.47 19,11.38 19,9A7,7 0 0,0 12,2M9,21A1,1 0 0,0 10,22H14A1,1 0 0,0 15,21V20H9V21Z",
   mdiMenu: "M3,6H21V8H3V6M3,11H21V13H3V11M3,16H21V18H3V16Z",
   mdiOutdoorLamp: "M15 22H13C11.9 22 11 21.1 11 20V15H17V20C17 21.1 16.1 22 15 22M7 14H21L15 9.71V6C15 4.39 13.94 2 11 2S7 4.39 7 6C7 6.45 6.81 7 6 7H5V3H3V12H5V9H6C8.2 9 9 7.21 9 6C9 5.67 9.1 4 11 4C12.83 4 13 5.54 13 6V9.71L7 14Z",
@@ -65,7 +66,7 @@ const WEATHER_REFRESH_MS = 30 * 60e3;
 const HISTORY_REFRESH_MS = 5 * 60e3;
 const CALENDAR_REFRESH_MS = 15 * 60e3;
 // Icons a lights/switches entry may name in config (anything else falls back to a bulb).
-const SWITCH_ICONS = ["mdiLightbulb", "mdiLamp", "mdiFloorLamp", "mdiDeskLamp", "mdiCeilingLight", "mdiCoachLamp", "mdiOutdoorLamp", "mdiGarageVariant", "mdiStringLights", "mdiFan", "mdiPowerSocketUs"];
+const SWITCH_ICONS = ["mdiLightbulb", "mdiLamp", "mdiFloorLamp", "mdiDeskLamp", "mdiCeilingLight", "mdiLightRecessed", "mdiCoachLamp", "mdiOutdoorLamp", "mdiGarageVariant", "mdiStringLights", "mdiFan", "mdiPowerSocketUs"];
 
 const svg = (name, cls = "") => `<svg class="ic ${cls}" viewBox="0 0 24 24" aria-hidden="true"><path d="${ICONS[name] || ""}"/></svg>`;
 const esc = (s) =>
