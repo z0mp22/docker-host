@@ -19,8 +19,9 @@ should live inside the lift sessions.
 
 1. **Holds are named by board location, never by depth.** Beastmaker
    doesn't publish depths, and measured numbers disagree. The map in
-   `lift_fingerboard.BOARD_MAP` comes from Beastmaker's hold list matched
-   against its product photo.
+   `lift_fingerboard.BOARD_MAP` follows Cody's numbered Beastmaker 1000
+   chart (#1-#9), checked against Beastmaker's hold list and product photo.
+   The plan uses #3 (Middle Row Outside) and #7 (Bottom Row Outside).
 2. **One custom Hevy exercise per hold and grip** (`weight_duration`, created
    via `POST /v1/exercise_templates`): "BM1000 Middle Row Outside" and
    "BM1000 Bottom Row Outside", each as Half Crimp and Open Hand. They're

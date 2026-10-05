@@ -2,10 +2,10 @@
 athlete's current phase, recent hang history, and the code-level guard.
 
 The athlete trains on a Beastmaker 1000 and wants every hold named by where
-it sits on the board, never by an edge depth -- Beastmaker doesn't publish
-depths and measured numbers disagree between sources. The map below comes
-from Beastmaker's own hold list matched against its product photo
-(beastmaker.co.uk, 2026-10-05). Hevy has no "hold" field, so each hold+grip
+it sits on the board, never by an edge depth. The map below follows the
+numbered Beastmaker 1000 chart the athlete uses (holds #1-#9; jugs and
+slopers are unnumbered), checked against Beastmaker's own hold list and
+product photo (beastmaker.co.uk, 2026-10-05). "chart" is that number. Hevy has no "hold" field, so each hold+grip
 the plan uses is its own custom Hevy exercise (created via
 POST /v1/exercise_templates on 2026-10-05, type weight_duration so added
 weight can be logged later). Exercises are resolved from the live catalog
@@ -40,16 +40,17 @@ STATE_FILE = "fingerboard_state.json"
 # is the hold nearest each end of the board. The board is mirrored, so each
 # entry (except the center pockets) is a left/right pair.
 BOARD_MAP = [
-    {"location": "Top corners (the raised horns)", "hold": "Jugs", "in_plan": "warm-up only"},
-    {"location": "Top edge of the board (rounded lip)", "hold": "Slopers (20 and 35 degree)", "in_plan": "no"},
-    {"location": "Top row, two center pockets", "hold": "Small 4-finger pockets (shallowest on the board)", "in_plan": "no"},
-    {"location": "Middle row, outside", "hold": "Deep 4-finger pocket", "in_plan": "phase 1-3"},
-    {"location": "Middle row, 2nd from outside", "hold": "Deep 2-finger pocket", "in_plan": "no"},
-    {"location": "Middle row, 3rd from outside", "hold": "Deep 3-finger pocket", "in_plan": "no"},
-    {"location": "Middle row, center (single wide pocket)", "hold": "Very deep 4-finger pocket", "in_plan": "no"},
-    {"location": "Bottom row, outside", "hold": "Medium 4-finger pocket", "in_plan": "phase 2-3"},
-    {"location": "Bottom row, 2nd from outside", "hold": "Medium 2-finger pocket", "in_plan": "no"},
-    {"location": "Bottom row, center pair", "hold": "Medium 3-finger pocket", "in_plan": "no"},
+    {"chart": None, "location": "Top corners (the raised horns)", "hold": "Jugs", "in_plan": "warm-up only"},
+    {"chart": None, "location": "Top edge of the board (rounded lip)", "hold": "Slopers", "in_plan": "no"},
+    {"chart": 1, "location": "Top row, outside", "hold": "4-finger edge, the shallowest hold on the board", "in_plan": "no"},
+    {"chart": 2, "location": "Top row, two center holds", "hold": "3-finger edge", "in_plan": "no"},
+    {"chart": 3, "location": "Middle row, outside", "hold": "Deep 4-finger edge", "in_plan": "phase 1-3"},
+    {"chart": 4, "location": "Middle row, 2nd from outside", "hold": "Deep 2-finger pocket", "in_plan": "no"},
+    {"chart": 5, "location": "Middle row, 3rd from outside", "hold": "Deep 3-finger pocket", "in_plan": "no"},
+    {"chart": 6, "location": "Middle row, center (single wide hold)", "hold": "Very deep 4-finger edge (single hold)", "in_plan": "no"},
+    {"chart": 7, "location": "Bottom row, outside", "hold": "Medium 4-finger edge", "in_plan": "phase 2-3"},
+    {"chart": 8, "location": "Bottom row, 2nd from outside", "hold": "2-finger pocket", "in_plan": "no"},
+    {"chart": 9, "location": "Bottom row, center pair", "hold": "3-finger pocket", "in_plan": "no"},
 ]
 
 # Hevy exercise title -> hold key. The only fingerboard exercises the coach
