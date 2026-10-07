@@ -1,6 +1,6 @@
 # ADR 0005: Fingerboard ramp inside the lift coach
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [ADR 0006](0006-lift-coach-variety-home-gym-separate-fingerboard.md) (board work is now its own session)
 - **Date:** 2026-10-05
 - **Deciders:** Cody
 - **Tags:** garmin-coaching-report, lift-session, hevy, climbing

@@ -1,5 +1,9 @@
-"""Fingerboard ramp for the lift coach: the Beastmaker 1000 board map, the
-athlete's current phase, recent hang history, and the code-level guard.
+"""Fingerboard ramp: the Beastmaker 1000 board map, the athlete's current
+phase, recent hang history, and the code-level guard.
+
+Since 2026-10-07 board work is its own session (session_type "fingerboard",
+its own prompt, Hevy routine and Coach panel card) instead of the first block
+of a lift session. Lift sessions never get board exercises.
 
 The athlete trains on a Beastmaker 1000 and wants every hold named by where
 it sits on the board, never by an edge depth. The map below follows the
@@ -110,6 +114,26 @@ def resolve_off_plan_finger_ids(catalog: list[dict[str, Any]]) -> dict[str, str]
         for ex in catalog
         if ex["name"] not in PLAN_EXERCISES and _name_words(ex["name"]) & _FINGER_WORDS
     }
+
+
+def without_board_exercises(catalog: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The catalog minus every finger-board exercise, for lift sessions."""
+    return [
+        ex for ex in catalog
+        if ex["name"] not in PLAN_EXERCISES and not _name_words(ex["name"]) & _FINGER_WORDS
+    ]
+
+
+def fingerboard_session_catalog(catalog: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """What a fingerboard session may use: the plan's board exercises plus
+    forearm work (wrist curls, reverse curls, wrist roller) for the antagonist
+    and wrist-health block. Nothing else."""
+    from .lift_equipment import home_gym_catalog
+
+    home, _ = home_gym_catalog(without_board_exercises(catalog))
+    return [ex for ex in catalog if ex["name"] in PLAN_EXERCISES] + [
+        ex for ex in home if ex.get("muscle") == "forearms"
+    ]
 
 
 # --- State -------------------------------------------------------------------

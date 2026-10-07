@@ -38,10 +38,16 @@ set -e
 # file publish, just triggered here instead of on a cron. Skipped on a dry
 # run or a feedback-only run (neither generates a new session) or on
 # failure (nothing to publish).
+# A fingerboard run publishes to its own sensor so it never replaces the lift
+# session on the Coach panel.
+if [ "${LIFT_SESSION_TYPE:-}" = "fingerboard" ]; then
+  latest=fingerboard_session_latest.json; state=fingerboard_session_state.json
+else
+  latest=lift_session_latest.json; state=lift_session_state.json
+fi
 if [ "${status}" -eq 0 ] && [ -z "${DRY_RUN:-}" ] && [ -z "${LIFT_FEEDBACK_ONLY:-}" ] \
-   && [ -f /docker/garmin-coaching-report/reports/lift_session_latest.json ]; then
-  cp /docker/garmin-coaching-report/reports/lift_session_latest.json \
-     /docker/homeassistant/lift_session_state.json
+   && [ -f "/docker/garmin-coaching-report/reports/${latest}" ]; then
+  cp "/docker/garmin-coaching-report/reports/${latest}" "/docker/homeassistant/${state}"
 fi
 
 exit "${status}"

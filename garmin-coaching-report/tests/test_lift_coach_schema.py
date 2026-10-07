@@ -125,3 +125,33 @@ def test_duration_hold_parses():
     }
     plan = _to_response(SessionPlanSchema.model_validate({**VALID, "exercises": [hold]}))
     assert plan.exercises[0].duration_seconds == 30
+
+
+def test_revision_continues_the_conversation_and_fingerboard_uses_its_own_prompt(monkeypatch):
+    from types import SimpleNamespace
+
+    from coaching_report import lift_coach
+    from coaching_report.lift_coach import SessionPlanResponse, SessionPlanSchema, generate_lift_session
+
+    calls = []
+    parsed = SessionPlanSchema(session_date="2026-10-07", rationale="r", summary_text="s", exercises=[])
+
+    class FakeClient:
+        def __init__(self, api_key):
+            self.messages = SimpleNamespace(parse=self.parse)
+
+        def parse(self, **kwargs):
+            calls.append(kwargs)
+            return SimpleNamespace(stop_reason="end_turn", parsed_output=parsed,
+                                   usage=SimpleNamespace(input_tokens=1, output_tokens=1))
+
+    monkeypatch.setattr(lift_coach.anthropic, "Anthropic", FakeClient)
+    first = SessionPlanResponse(session_date="2026-10-07", rationale="r", summary_text="s")
+    generate_lift_session({"session_type": "heavy_1h"}, "k", "m", 100, revise=(first, ["too many repeats"]))
+    roles = [m["role"] for m in calls[0]["messages"]]
+    assert roles == ["user", "assistant", "user"]
+    assert "too many repeats" in calls[0]["messages"][2]["content"]
+    assert "Lift Session Coach" in calls[0]["system"]
+
+    generate_lift_session({"session_type": "fingerboard"}, "k", "m", 100)
+    assert "Fingerboard Session Coach" in calls[1]["system"]

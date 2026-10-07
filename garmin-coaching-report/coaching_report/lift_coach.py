@@ -11,6 +11,7 @@ as a normal Message since ParsedMessage subclasses it.
 
 from __future__ import annotations
 
+import dataclasses
 import json
 from dataclasses import dataclass, field
 from typing import Any
@@ -19,7 +20,7 @@ import anthropic
 from pydantic import BaseModel, Field, field_validator
 
 from .errors import LiftPlanError
-from .prompts import lift_prompt_version, load_lift_prompt
+from .prompts import fingerboard_prompt_version, lift_prompt_version, load_fingerboard_prompt, load_lift_prompt
 
 # Only RIR targets the athlete can actually log back in Hevy -- Hevy records
 # effort as RPE on a fixed picker (6, 7, 7.5, 8, 8.5, 9, 9.5, 10), so RIR
@@ -104,6 +105,7 @@ def generate_lift_session(
     api_key: str,
     model: str,
     max_output_tokens: int,
+    revise: tuple[SessionPlanResponse, list[str]] | None = None,
 ) -> tuple[SessionPlanResponse, dict[str, Any]]:
     """One Anthropic call, structured JSON output validated against
     SessionPlanSchema. Same stop_reason==max_tokens truncation guard as
@@ -111,13 +113,31 @@ def generate_lift_session(
     so the two pipelines' failures stay distinguishable in alert emails and
     in what fails isolated from what (see run-lift-session.sh's own lock and
     Actions concurrency group).
+
+    A fingerboard session (payload session_type "fingerboard") uses its own
+    prompt. `revise` = (the plan from the first call, lift_review problems):
+    the same conversation continues with that plan as the assistant turn and
+    the problems as the next user turn, so the coach fixes them in context.
     """
     client = anthropic.Anthropic(api_key=api_key)
-    system = load_lift_prompt()
-    pver = lift_prompt_version()
+    if payload.get("session_type") == "fingerboard":
+        system, pver = load_fingerboard_prompt(), fingerboard_prompt_version()
+    else:
+        system, pver = load_lift_prompt(), lift_prompt_version()
 
     user_json = json.dumps(payload, default=str, ensure_ascii=False)
     messages: list[dict[str, Any]] = [{"role": "user", "content": user_json}]
+    if revise is not None:
+        previous, problems = revise
+        messages += [
+            {"role": "assistant", "content": json.dumps(dataclasses.asdict(previous), ensure_ascii=False)},
+            {
+                "role": "user",
+                "content": "Revise this session. It breaks these rules from your brief:\n"
+                + "\n".join(f"- {p}" for p in problems)
+                + "\nReturn the whole corrected session. Update rationale and summary_text to match.",
+            },
+        ]
 
     try:
         response = client.messages.parse(

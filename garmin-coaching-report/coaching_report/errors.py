@@ -45,3 +45,8 @@ class UnsafeExerciseError(HevyError):
 
 class LiftPlanError(CoachingReportError):
     """Claude's structured lift-session response failed schema validation."""
+
+
+class FingerboardBlockedError(CoachingReportError):
+    """A fingerboard session was requested while the board is off (finger
+    flag on, or the weekly board-day limit reached). Nothing is generated."""

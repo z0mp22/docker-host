@@ -42,3 +42,12 @@ def test_lift_prompt_mentions_none_of_the_mountain_report_shared_wording():
     assert lift_text != system_text
     assert lift_text not in system_text
     assert system_text not in lift_text
+
+
+def test_fingerboard_prompt_is_its_own_file_and_leaves_the_others_alone():
+    before = (prompts.prompt_version(), prompts.load_system_prompt(), prompts.load_lift_prompt())
+    text = prompts.load_fingerboard_prompt()
+    prompts.fingerboard_prompt_version()
+    assert (prompts.prompt_version(), prompts.load_system_prompt(), prompts.load_lift_prompt()) == before
+    assert prompts.fingerboard_prompt_path().name == "fingerboard_system.md"
+    assert "Beastmaker" in text and "Beastmaker" not in prompts.load_lift_prompt().split("Fingerboard is a separate session")[0]

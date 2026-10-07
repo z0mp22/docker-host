@@ -39,6 +39,7 @@ def _fake_garmin_client():
 def _fake_hevy_client(workouts=()):
     hevy = MagicMock()
     hevy.get_recent_workouts.return_value = list(workouts)
+    hevy.get_workouts_since.return_value = list(workouts)
     hevy.get_bodyweight_history.return_value = []
     hevy.get_exercise_history.return_value = []
     return hevy
@@ -186,6 +187,7 @@ def test_logged_workout_joined_to_the_prescription_it_was_started_from(tmp_path)
     assert [s["rir"] for s in row["sets"]] == [None, 2.0, 0.5]
     assert row["sets"][0]["set_type"] == "warmup"
     assert hang["prescribed"] is None  # he added it himself
+    assert hang["added_by_athlete"] is True and row["added_by_athlete"] is False
     assert hang["sets"][0]["duration_seconds"] == 40
 
 
@@ -199,6 +201,8 @@ def test_workout_not_started_from_the_coach_routine_has_no_prescription(tmp_path
     (session,) = payload["recent_lift_sessions"]
     assert session["from_coach_prescription"] is False
     assert all(ex["prescribed"] is None for ex in session["exercises"])
+    # Nothing was prescribed, so nothing counts as "added to a coach session".
+    assert not any(ex["added_by_athlete"] for ex in session["exercises"])
 
 
 def test_missing_or_corrupt_prescription_log_is_not_fatal(tmp_path):
@@ -232,3 +236,69 @@ def test_save_lift_outputs_snapshot_round_trips_into_the_join(tmp_path):
 
     latest = json.loads((tmp_path / "lift_session_latest.json").read_text())
     assert latest["routine_id"] == "r-1"
+
+
+def test_variety_context_last_session_muscles_and_athlete_picks(tmp_path):
+    _write_prescriptions(tmp_path, _prescription("2026-09-25T05:00:00-06:00"))
+    catalog = [
+        {"id": "ROW", "name": "Bent Over Row (Barbell)", "muscle": "upper_back", "type": "weight_reps", "equipment": "barbell"},
+        {"id": "HANG", "name": "Dead Hang", "muscle": "upper_back", "type": "duration", "equipment": "none"},
+    ]
+    payload = build_lift_payload(
+        _fake_garmin_client(), _fake_hevy_client([_LOGGED_WORKOUT]), _fake_config(tmp_path),
+        catalog=catalog, session_type="heavy_1h", shoulder_flag=False, session_date=date(2026, 9, 26),
+    )
+    assert payload["last_lift_session"] == {
+        "date": "2026-09-25", "exercises": ["Bent Over Row (Barbell)", "Dead Hang"],
+    }
+    # Warm-ups don't count: 2 working row sets + 1 hang.
+    assert payload["muscle_sets_last_14d"] == {"upper_back": 3}
+    (added,) = payload["athlete_added_exercises"]
+    assert added["exercise_name"] == "Dead Hang" and added["times_added"] == 1
+    assert payload["equipment"]["dumbbells_lb"][-1] == 40.0
+    assert "fingerboard" not in payload and payload["fingerboard_summary"]["phase"] == 1
+
+
+def test_last_lift_session_skips_pt_and_board_sessions():
+    from coaching_report.lift_collector import last_lift_session
+
+    lift = {"prescribed_session_type": "heavy_1h", "exercises": [{"exercise_name": "Deadlift (Barbell)"}]}
+    pt = {"prescribed_session_type": "shoulder_pt", "exercises": [{"exercise_name": "Face Pull"}]}
+    board = {"prescribed_session_type": "fingerboard", "exercises": [{"exercise_name": "BM1000 Middle Row Outside - Half Crimp"}]}
+    own_board = {"prescribed_session_type": None, "exercises": [{"exercise_name": "BM1000 Middle Row Outside - Open Hand"}]}
+    assert last_lift_session([lift, pt, board, own_board]) is lift
+    assert last_lift_session([pt, board]) is None
+
+
+def test_fingerboard_payload_has_board_context_and_a_board_only_catalog(tmp_path):
+    from coaching_report.lift_collector import build_fingerboard_payload
+
+    catalog = [
+        {"id": "MID", "name": "BM1000 Middle Row Outside - Half Crimp", "muscle": "forearms", "type": "weight_duration", "equipment": "other"},
+        {"id": "HB", "name": "Hangboard", "muscle": "forearms", "type": "duration", "equipment": "other"},
+        {"id": "RWC", "name": "Reverse Wrist Curl (Dumbbell)", "muscle": "forearms", "type": "weight_reps", "equipment": "dumbbell"},
+        {"id": "DL", "name": "Deadlift (Barbell)", "muscle": "glutes", "type": "weight_reps", "equipment": "barbell"},
+    ]
+    payload = build_fingerboard_payload(
+        _fake_garmin_client(), _fake_hevy_client(), _fake_config(tmp_path), catalog,
+        shoulder_flag=False, finger_flag=False, session_date=date(2026, 10, 7),
+    )
+    assert payload["session_type"] == "fingerboard"
+    assert [ex["id"] for ex in payload["exercise_catalog"]] == ["MID", "RWC"]
+    assert payload["fingerboard"]["limits"]["board_allowed_today"] is True
+
+
+def test_fingerboard_outputs_go_to_their_own_latest_file(tmp_path):
+    from coaching_report.emailer import save_lift_outputs
+    from coaching_report.lift_coach import ExercisePrescription, SessionPlanResponse
+
+    plan = SessionPlanResponse(
+        session_date="2026-10-07", rationale="r", summary_text="s",
+        exercises=[ExercisePrescription("MID", "BM1000 Middle Row Outside - Half Crimp", 1, None, 3, None, 60, None, 4.0, 120, None)],
+    )
+    save_lift_outputs(_fake_config(tmp_path), date(2026, 10, 7), plan, {"model": "m"}, "r-fb", "fingerboard",
+                      extra_meta={"fingerboard": {"phase": 1}})
+    latest = json.loads((tmp_path / "fingerboard_session_latest.json").read_text())
+    assert latest["fingerboard"] == {"phase": 1} and latest["routine_id"] == "r-fb"
+    assert not (tmp_path / "lift_session_latest.json").exists()
+    assert (tmp_path / "fingerboard-session-2026-10-07.md").exists()

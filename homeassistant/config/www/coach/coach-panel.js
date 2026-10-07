@@ -9,6 +9,7 @@ const ICONS = {
   mdiChartLine: "M16,11.78L20.24,4.45L21.97,5.45L16.74,14.5L10.23,10.75L5.46,19H22V21H2V3H4V17.54L9.5,8L16,11.78Z",
   mdiCheck: "M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z",
   mdiChevronDown: "M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z",
+  mdiHandBackRightOutline: "M21 7C21 5.62 19.88 4.5 18.5 4.5C18.33 4.5 18.16 4.5 18 4.55V4C18 2.62 16.88 1.5 15.5 1.5C15.27 1.5 15.04 1.53 14.83 1.59C14.46 .66 13.56 0 12.5 0C11.27 0 10.25 .89 10.04 2.06C9.87 2 9.69 2 9.5 2C8.12 2 7 3.12 7 4.5V10.39C6.66 10.08 6.24 9.85 5.78 9.73L5 9.5C4.18 9.29 3.31 9.61 2.82 10.35C2.44 10.92 2.42 11.66 2.67 12.3L5.23 18.73C6.5 21.91 9.57 24 13 24C17.42 24 21 20.42 21 16V7M19 16C19 19.31 16.31 22 13 22C10.39 22 8.05 20.41 7.09 18L4.5 11.45L5 11.59C5.5 11.71 5.85 12.05 6 12.5L7 15H9V4.5C9 4.22 9.22 4 9.5 4S10 4.22 10 4.5V12H12V2.5C12 2.22 12.22 2 12.5 2S13 2.22 13 2.5V12H15V4C15 3.72 15.22 3.5 15.5 3.5S16 3.72 16 4V12H18V7C18 6.72 18.22 6.5 18.5 6.5S19 6.72 19 7V16Z",
   mdiDumbbell: "M20.57,14.86L22,13.43L20.57,12L17,15.57L8.43,7L12,3.43L10.57,2L9.14,3.43L7.71,2L5.57,4.14L4.14,2.71L2.71,4.14L4.14,5.57L2,7.71L3.43,9.14L2,10.57L3.43,12L7,8.43L15.57,17L12,20.57L13.43,22L14.86,20.57L16.29,22L18.43,19.86L19.86,21.29L21.29,19.86L19.86,18.43L22,16.29L20.57,14.86Z",
   mdiLightningBolt: "M11 15H6L13 1V9H18L11 23V15Z",
   mdiMenu: "M3,6H21V8H3V6M3,11H21V13H3V11M3,16H21V18H3V16Z",
@@ -22,6 +23,8 @@ const ICONS = {
 const SESSION = "sensor.lift_session_latest";
 const FLAG = "input_boolean.lift_shoulder_flag";
 const FINGER_FLAG = "input_boolean.lift_finger_flag";
+// Fingerboard is its own session (own Hevy routine, own sensor) since 2026-10-07.
+const BOARD = { sensor: "sensor.fingerboard_session_latest", script: "script.lift_session_run_fingerboard", note: "fingerboard_session_dispatch" };
 const FEEDBACK = "input_text.lift_feedback";
 const PANEL_STATE = "input_text.coach_panel_state";
 const SLOW_MS = 15 * 60e3;
@@ -132,10 +135,10 @@ h1 { margin: 0; font-size: 34px; font-weight: 700; line-height: 1.1; }
 .icon-btn { width: 48px; height: 48px; border-radius: 16px; display: grid; place-items: center; background: var(--card-2); border: 1px solid var(--line); flex: none; }
 
 .grid { display: grid; gap: 22px; align-items: start; grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr);
-  grid-template-areas: "session workout" "session gen" "session feedback" "session report"; grid-template-rows: auto auto auto 1fr; }
-.grid.gen-first { grid-template-columns: minmax(0, 1fr) minmax(0, 1.45fr); grid-template-areas: "workout session" "gen session" "feedback session" "report session"; }
+  grid-template-areas: "session workout" "session gen" "session board" "session feedback" "session report"; grid-template-rows: auto auto auto auto 1fr; }
+.grid.gen-first { grid-template-columns: minmax(0, 1fr) minmax(0, 1.45fr); grid-template-areas: "workout session" "gen session" "board session" "feedback session" "report session"; }
 .card { background: linear-gradient(180deg, var(--card-2), var(--card)); border: 1px solid var(--line); border-radius: 30px; padding: 26px 28px; min-width: 0; }
-.a-workout { grid-area: workout; } .a-session { grid-area: session; } .a-gen { grid-area: gen; } .a-feedback { grid-area: feedback; } .a-report { grid-area: report; }
+.a-workout { grid-area: workout; } .a-board { grid-area: board; } .a-session { grid-area: session; } .a-gen { grid-area: gen; } .a-feedback { grid-area: feedback; } .a-report { grid-area: report; }
 .eyebrow { font-size: 13px; letter-spacing: .12em; font-weight: 600; color: var(--muted); text-transform: uppercase; }
 h2 { margin: 6px 0 0; font-size: 26px; font-weight: 600; line-height: 1.2; }
 h3 { margin: 6px 0 0; font-size: 21px; font-weight: 600; }
@@ -230,11 +233,17 @@ textarea::placeholder { color: #5d6b80; }
 .cta.wk-btn.quiet { background: #172234; border: 1px solid var(--line); box-shadow: none; color: var(--accent); }
 .cta.wk-btn.quiet:disabled { color: #56607a; }
 .cta.wk-btn.done { background: linear-gradient(180deg, #2fa866, #1d7a46); box-shadow: 0 10px 30px rgba(34,197,94,.3), inset 0 1px 0 rgba(255,255,255,.25); color: #fff; border: 0; }
+.bd-list { margin-top: 14px; display: flex; flex-direction: column; gap: 2px; }
+.bd-ex { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; font-size: 16px; }
+.bd-ex + .bd-ex { border-top: 1px dashed rgba(148,170,200,.14); }
+.bd-ex span:last-child { color: #c7b8ff; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.cta.bd-btn { background: #172234; border: 1px solid var(--line); box-shadow: none; color: var(--accent); height: 56px; font-size: 18px; }
+.cta.bd-btn:disabled { color: #56607a; }
 .toast { position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%); padding: 14px 20px; border-radius: 14px; background: #3a1d24; border: 1px solid rgba(240,97,109,.5); color: #ffd3d7; z-index: 10; max-width: 90vw; }
 
 @container (max-width: 980px) {
-  .grid { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; grid-template-areas: "workout" "session" "gen" "feedback" "report"; }
-  .grid.gen-first { grid-template-columns: minmax(0, 1fr); grid-template-areas: "workout" "gen" "session" "feedback" "report"; }
+  .grid { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; grid-template-areas: "workout" "session" "gen" "board" "feedback" "report"; }
+  .grid.gen-first { grid-template-columns: minmax(0, 1fr); grid-template-areas: "workout" "gen" "session" "board" "feedback" "report"; }
 }
 @container (max-width: 640px) {
   .app { padding: 14px 14px 24px; }
@@ -352,6 +361,7 @@ class CoachPanel extends HTMLElement {
         <main class="grid">
           <section class="card a-workout" data-region="workout"></section>
           <section class="card a-gen" data-region="gen"></section>
+          <section class="card a-board" data-region="board"></section>
           <section class="card a-session" data-region="session"></section>
           <section class="card a-feedback">
             <div class="eyebrow">Coach feedback</div>
@@ -464,6 +474,12 @@ class CoachPanel extends HTMLElement {
         if (m.fresh && !window.confirm(`Replace today's session in Hevy with a new ${t.label} session?`)) return;
         await this._writePanelState({ l: { t: t.id, at: Math.floor(Date.now() / 1000) } });
         this._call("script", "turn_on", { entity_id: t.script });
+        this._render();
+        return;
+      }
+      case "board": {
+        await this._writePanelState({ b: { at: Math.floor(Date.now() / 1000) } });
+        this._call("script", "turn_on", { entity_id: BOARD.script });
         this._render();
         return;
       }
@@ -610,8 +626,44 @@ class CoachPanel extends HTMLElement {
       routineId: a.routine_id,
       flagOn: st[FLAG]?.state === "on",
       fingerFlagOn: st[FINGER_FLAG]?.state === "on",
+      board: this._readBoard(st[BOARD.sensor]?.attributes || {}, today),
       panel: this._panelState(),
     };
+  }
+
+  _readBoard(a, today) {
+    const date = a.session_date || null;
+    let ageDays = null;
+    if (date) {
+      const [y, mo, d] = date.split("-").map(Number);
+      ageDays = Math.round((new Date().setHours(0, 0, 0, 0) - new Date(y, mo - 1, d).getTime()) / 864e5);
+    }
+    return {
+      has: !!date,
+      date,
+      ageDays,
+      fresh: date === today,
+      generatedAt: a.generated_at ? Date.parse(a.generated_at) : 0,
+      summary: a.summary_text || "",
+      flags: Array.isArray(a.flags_considered) ? a.flags_considered : [],
+      routineId: a.routine_id,
+      fb: a.fingerboard || null,
+    };
+  }
+
+  // Same lifecycle as _liftJob, for the board request (panel state key "b").
+  _boardJob(m) {
+    const req = m.panel.b;
+    if (!req?.at) return null;
+    const at = req.at * 1000;
+    if (m.board.generatedAt >= at) return null;
+    const age = Date.now() - at;
+    const result = this._dispatchResult(BOARD.note, at);
+    if (result && !result.ok) return { state: "failed", at, result };
+    if (age > 24 * 3600e3) return null;
+    if (age > EXPIRE_MS) return { state: "expired", at };
+    if (!result) return { state: age > SLOW_MS ? "slow" : age > 60e3 ? "queued" : "sending", at };
+    return { state: age > SLOW_MS ? "slow" : "queued", at };
   }
 
   _liftJob(m) {
@@ -639,6 +691,7 @@ class CoachPanel extends HTMLElement {
     this._renderHeader(m, job, busy);
     this._renderWorkout(m);
     this._renderGen(m, job, busy);
+    this._renderBoard(m);
     this._renderSession(m, job, busy);
     this._renderFeedbackStatus();
     this._renderReport(m);
@@ -690,12 +743,54 @@ class CoachPanel extends HTMLElement {
         <div class="t"><b>Shoulder flag</b><div>${m.flagOn ? "On · coach keeps load off the shoulder" : "Off · turn on if the shoulder is acting up"}</div></div>
         <button class="toggle ${m.flagOn ? "on" : ""}" data-action="flag" aria-pressed="${m.flagOn}" aria-label="Shoulder flag"></button>
       </div>
+      <button class="cta" data-action="generate" ${busy ? "disabled" : ""}>${busy ? `${svg("mdiRefresh")} Generating…` : `${svg(sel.icon)} ${job?.state === "failed" ? "Try again" : `Generate ${sel.label}`}`}</button>
+      ${alert}
+      <div class="hint">${esc(hint)}</div>`,
+    );
+  }
+
+  _renderBoard(m) {
+    const b = m.board;
+    const job = this._boardJob(m);
+    const busy = job && ["sending", "queued", "slow"].includes(job.state);
+    const fb = b.fb;
+    const title = fb ? `Phase ${fb.phase} · ${fb.phase_name}` : "Beastmaker 1000";
+    const facts = [];
+    if (fb?.ramp_week) facts.push(`ramp week ${fb.ramp_week}${fb.deload_week ? " (deload)" : ""}`);
+    if (fb && fb.board_days_last_7d != null) facts.push(`${plural(fb.board_days_last_7d, "board day")} in the last 7 before it`);
+    let list = "";
+    if (b.has) {
+      const items = parseSummary(b.summary).items.filter((i) => i.kind === "ex");
+      const when = b.fresh ? "Today" : `${new Date(`${b.date}T12:00:00`).toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })} · ${b.ageDays === 1 ? "yesterday" : `${b.ageDays} days ago`}`;
+      list = `<div class="pills"><span class="pill ${b.fresh ? "fresh" : "stale"}">${esc(when)}</span></div>
+        ${items.length ? `<div class="bd-list">${items.map((e) => `<div class="bd-ex"><span>${esc(e.name)}</span><span>${esc(e.reps || "")}</span></div>`).join("")}</div>` : `<div class="raw">${esc(stripMd(b.summary))}</div>`}
+        ${b.routineId ? `<div class="hevy">${svg("mdiCheck")} Saved to Hevy as “Next Fingerboard Session”</div>` : ""}`;
+    } else {
+      list = `<div class="empty">No board session yet. Generate one for a separate 20–30 minute board day.</div>`;
+    }
+    const gate = b.flags.find((f) => /gate looks met/i.test(f));
+    let alert = gate ? `<div class="alert ok">${svg("mdiCheck")}<span>${esc(gate)}. Tell Claude to advance the phase.</span></div>` : "";
+    let hint = m.fingerFlagOn ? "Finger flag is on · turn it off when the fingers feel normal" : "Writes to “Next Fingerboard Session” in Hevy";
+    if (job?.state === "sending") hint = "Sending to GitHub…";
+    else if (job?.state === "queued") hint = `Queued ${this._ago(job.at)} · you'll get a push when it's ready`;
+    else if (job?.state === "slow")
+      alert = `<div class="alert warn">${svg("mdiAlertOutline")}<span>Still no board session ${this._ago(job.at).replace(" ago", "")} after the request. The “Run Lift Session” workflow may have failed, or the board is off today (an email says why).</span></div>`;
+    else if (job?.state === "failed")
+      alert = `<div class="alert err">${svg("mdiAlertOutline")}<span><b>${esc(job.result.title)}.</b> ${esc(job.result.message)}</span></div>`;
+    else if (job?.state === "expired")
+      alert = `<div class="alert warn">${svg("mdiAlertOutline")}<span>The board request at ${this._fmtTime(job.at)} never produced a session. Check the email or the “Run Lift Session” workflow on GitHub.</span></div>`;
+    this._set(
+      "board",
+      `<div class="eyebrow">Fingerboard</div>
+      <h3>${esc(title)}</h3>
+      ${facts.length ? `<div class="sub">${esc(facts.join(" · "))}</div>` : ""}
+      ${list}
       <div class="modifier ${m.fingerFlagOn ? "on" : ""}">
         ${svg("mdiAlertOutline")}
-        <div class="t"><b>Finger flag</b><div>${m.fingerFlagOn ? "On · no fingerboard until you turn it off" : "Off · turn on if a finger or elbow is tweaky"}</div></div>
+        <div class="t"><b>Finger flag</b><div>${m.fingerFlagOn ? "On · no board sessions or dead hangs" : "Off · turn on if a finger or elbow is tweaky"}</div></div>
         <button class="toggle ${m.fingerFlagOn ? "on" : ""}" data-action="finger-flag" aria-pressed="${m.fingerFlagOn}" aria-label="Finger flag"></button>
       </div>
-      <button class="cta" data-action="generate" ${busy ? "disabled" : ""}>${busy ? `${svg("mdiRefresh")} Generating…` : `${svg(sel.icon)} ${job?.state === "failed" ? "Try again" : `Generate ${sel.label}`}`}</button>
+      <button class="cta bd-btn" data-action="board" ${busy || m.fingerFlagOn ? "disabled" : ""}>${busy ? `${svg("mdiRefresh")} Generating…` : `${svg("mdiHandBackRightOutline")} ${job?.state === "failed" ? "Try again" : b.fresh ? "Regenerate board session" : "Generate board session"}`}</button>
       ${alert}
       <div class="hint">${esc(hint)}</div>`,
     );

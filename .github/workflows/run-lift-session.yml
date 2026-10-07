@@ -3,8 +3,9 @@ name: Run Lift Session
 # On-demand trigger for one autoregulated lifting session, written to the
 # "Next Lift Session" routine in Hevy. Session-by-session, not a weekly batch -- no
 # cron here, fired at variable timing from Home Assistant (or manually).
-#   session_type=heavy_1h|light_30m|shoulder_pt -> which of the three the
-#     athlete asked for (see prompts/lift_system.md)
+#   session_type=heavy_1h|light_30m|shoulder_pt -> which lift session the
+#     athlete asked for (see prompts/lift_system.md); fingerboard -> a board-only
+#     session written to "Next Fingerboard Session" (prompts/fingerboard_system.md)
 #   shoulder_flag=true -> the athlete has flagged the shoulder/soreness this session
 #   finger_flag=true -> fingers/elbows are tweaky: no fingerboard work at all
 #   feedback_only=true + feedback_text="..." -> append to the persistent
@@ -18,7 +19,7 @@ on:
         description: "Session type"
         type: choice
         default: heavy_1h
-        options: [heavy_1h, light_30m, shoulder_pt]
+        options: [heavy_1h, light_30m, shoulder_pt, fingerboard]
       shoulder_flag:
         description: "Shoulder/soreness flag active"
         type: boolean

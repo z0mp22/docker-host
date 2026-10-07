@@ -242,6 +242,30 @@
         {{ state_attr('sensor.lift_session_latest', 'rationale')
            or 'New lift session generated.' }}
   mode: single
+- id: '1791100000001'
+  alias: Fingerboard session generated
+  description: >
+    Push once a fingerboard session has been generated (same pattern as Lift
+    session generated, on its own sensor).
+  triggers:
+  - trigger: state
+    entity_id: sensor.fingerboard_session_latest
+    attribute: generated_at
+  conditions:
+  - condition: template
+    value_template: >-
+      {{ trigger.to_state is not none
+         and trigger.to_state.attributes.get('generated_at') not in [None, '']
+         and trigger.from_state is not none
+         and trigger.from_state.state not in ['unavailable', 'unknown'] }}
+  actions:
+  - action: script.notify_mobile_recording
+    data:
+      title: Fingerboard session ready
+      message: >-
+        {{ state_attr('sensor.fingerboard_session_latest', 'rationale')
+           or 'New fingerboard session generated.' }}
+  mode: single
 - id: '1791000000001'
   alias: Doorbell rang
   description: >-

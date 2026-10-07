@@ -34,6 +34,7 @@ class AppConfig:
     fatsecret_token_path: str
     hevy_api_key: str
     hevy_routine_title: str
+    hevy_fingerboard_routine_title: str
     lift_history_sessions: int
 
 
@@ -83,5 +84,7 @@ def load_app_config() -> AppConfig:
         hevy_api_key=os.environ.get("HEVY_API_KEY", "").strip(),
         hevy_routine_title=os.environ.get("HEVY_ROUTINE_TITLE", "").strip()
         or "Next Lift Session",
+        hevy_fingerboard_routine_title=os.environ.get("HEVY_FINGERBOARD_ROUTINE_TITLE", "").strip()
+        or "Next Fingerboard Session",
         lift_history_sessions=int(os.environ.get("LIFT_HISTORY_SESSIONS", "6")),
     )

@@ -132,6 +132,20 @@ rest_command:
     payload: >-
       {"ref":"main","inputs":{"session_type":"shoulder_pt","shoulder_flag":"{{ 'true' if is_state('input_boolean.lift_shoulder_flag','on') else 'false' }}","finger_flag":"{{ 'true' if is_state('input_boolean.lift_finger_flag','on') else 'false' }}","dry_run":"false"}}
     timeout: 30
+  # Board-only session (prompts/fingerboard_system.md) -> "Next Fingerboard
+  # Session" in Hevy. Same workflow, its own session_type.
+  lift_session_dispatch_fingerboard:
+    url: "https://api.github.com/repos/z0mp22/docker-host/actions/workflows/run-lift-session.yml/dispatches"
+    method: post
+    headers:
+      Authorization: !secret github_coaching_report_token
+      Accept: "application/vnd.github+json"
+      X-GitHub-Api-Version: "2022-11-28"
+      User-Agent: "home-assistant-coaching-report"
+    content_type: "application/json"
+    payload: >-
+      {"ref":"main","inputs":{"session_type":"fingerboard","shoulder_flag":"{{ 'true' if is_state('input_boolean.lift_shoulder_flag','on') else 'false' }}","finger_flag":"{{ 'true' if is_state('input_boolean.lift_finger_flag','on') else 'false' }}","dry_run":"false"}}
+    timeout: 30
   # Feedback-only dispatch: appends to the persistent coaching-feedback log
   # (see coaching_report/lift_feedback.py) -- no Claude call, no Hevy write.
   lift_feedback_dispatch:
@@ -358,7 +372,7 @@ input_boolean:
     name: "Lift: shoulder flag active"
     icon: mdi:alert
   # Same multi-day, manually cleared semantics as the shoulder flag: while on,
-  # the lift coach prescribes no fingerboard work (lift_fingerboard.py).
+  # no fingerboard session is generated and lift sessions skip dead hangs.
   lift_finger_flag:
     name: "Lift: finger flag active"
     icon: mdi:hand-back-right-off-outline
@@ -496,7 +510,7 @@ panel_custom:
     url_path: coach
     sidebar_title: Coaching
     sidebar_icon: mdi:dumbbell
-    module_url: /local/coach/coach-panel.js?v=3
+    module_url: /local/coach/coach-panel.js?v=4
   - name: network-panel
     url_path: network
     sidebar_title: Network

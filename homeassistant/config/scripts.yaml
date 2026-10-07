@@ -157,6 +157,32 @@ lift_session_run_pt:
             {{ dispatch.content if dispatch.content else 'No response body.' }}
           {% endif %}
 
+lift_session_run_fingerboard:
+  alias: "Fingerboard session"
+  icon: mdi:hand-back-right-outline
+  mode: single
+  sequence:
+    - action: rest_command.lift_session_dispatch_fingerboard
+      response_variable: dispatch
+      continue_on_error: true
+    - action: persistent_notification.create
+      data:
+        notification_id: fingerboard_session_dispatch
+        title: >-
+          {{ 'Fingerboard session queued'
+             if (dispatch is defined and dispatch.status == 204)
+             else 'Fingerboard session dispatch FAILED' }}
+        message: >-
+          {% if dispatch is not defined %}
+            Could not reach the GitHub API (network error). Nothing was dispatched.
+          {% elif dispatch.status == 204 %}
+            GitHub Actions accepted the run. "Next Fingerboard Session" in Hevy updates in a
+            few minutes -- you'll get a push once it's ready.
+          {% else %}
+            GitHub rejected the request — HTTP {{ dispatch.status }}.
+            {{ dispatch.content if dispatch.content else 'No response body.' }}
+          {% endif %}
+
 lift_feedback_submit:
   alias: "Lift: submit coach feedback"
   icon: mdi:comment-check-outline

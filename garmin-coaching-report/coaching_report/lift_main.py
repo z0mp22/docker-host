@@ -21,18 +21,22 @@ from .errors import (
     AuthExpiredError,
     CoachingReportError,
     EmailError,
+    FingerboardBlockedError,
+    LiftPlanError,
     UnknownExerciseError,
     UnsafeExerciseError,
 )
 from .garmin_auth import connect_with_tokens
 from .lift_coach import generate_lift_session
-from .lift_collector import build_lift_payload
+from .lift_collector import build_fingerboard_payload, build_lift_payload, last_lift_session
+from .lift_equipment import home_gym_catalog, snap_free_weights
 from .lift_feedback import append_feedback
-from .lift_fingerboard import assert_fingerboard_safe
+from .lift_fingerboard import assert_fingerboard_safe, without_board_exercises
+from .lift_review import review_plan
 from .lift_safety import assert_session_plan_safe, resolve_banned_exercise_ids
 from .hevy_client import HevyClient
 
-SESSION_TYPES = ("heavy_1h", "light_30m", "shoulder_pt")
+SESSION_TYPES = ("heavy_1h", "light_30m", "shoulder_pt", "fingerboard")
 DEFAULT_SESSION_TYPE = "heavy_1h"
 
 
@@ -86,38 +90,45 @@ def main() -> int:
 
     try:
         hevy_client = HevyClient(config.hevy_api_key)
-        catalog = hevy_client.get_exercise_catalog()
-        catalog_by_id = {ex["id"]: ex for ex in catalog}
-        banned_ids = resolve_banned_exercise_ids(catalog)
+        full_catalog = hevy_client.get_exercise_catalog()
+        banned_ids = resolve_banned_exercise_ids(full_catalog)
 
         print(
-            f"[lift-session] catalog: {len(catalog)} strength exercises, "
+            f"[lift-session] catalog: {len(full_catalog)} strength exercises, "
             f"{len(banned_ids)} banned by the safety guard",
             file=sys.stderr,
         )
         for ex_id, name in sorted(banned_ids.items(), key=lambda kv: kv[1]):
             print(f"[lift-session]   banned: {name} (id={ex_id})", file=sys.stderr)
 
-        payload = build_lift_payload(
-            garmin_client, hevy_client, config, catalog, session_type, shoulder_flag, session_date,
-            finger_flag=finger_flag,
+        if session_type == "fingerboard":
+            return _run_fingerboard(
+                config, garmin_client, hevy_client, full_catalog, banned_ids,
+                shoulder_flag, finger_flag, session_date, dry_run,
+            )
+
+        lift_catalog, dropped = home_gym_catalog(without_board_exercises(full_catalog))
+        catalog_by_id = {ex["id"]: ex for ex in lift_catalog}
+        print(
+            f"[lift-session] home gym: {len(lift_catalog)} exercises usable, {len(dropped)} dropped "
+            f"({sum(1 for r in dropped.values() if r == 'single-leg')} single-leg)",
+            file=sys.stderr,
         )
-        fb = payload["fingerboard"]
+
+        payload = build_lift_payload(
+            garmin_client, hevy_client, config, lift_catalog, session_type, shoulder_flag, session_date,
+            finger_flag=finger_flag, full_catalog=full_catalog,
+        )
+        last = last_lift_session(payload["recent_lift_sessions"])
+        last_ids = [ex["exercise_id"] for ex in last["exercises"]] if last else []
         print(
             f"[lift-session] {session_date.isoformat()} type={session_type} — "
             f"{len(payload['recent_lift_sessions'])} recent Hevy workouts, "
             f"{len(payload['recent_mountain_activity'])} mountain-sports activities this week, "
             f"{len(payload['recent_feedback'])} feedback log entries, "
+            f"{len(payload['athlete_added_exercises'])} athlete-added exercises, "
+            f"last lift session {last['date'] if last else 'none'}, "
             f"shoulder_flag={shoulder_flag}, finger_flag={finger_flag}",
-            file=sys.stderr,
-        )
-        print(
-            f"[lift-session] fingerboard: phase {fb['phase']} ({fb['phase_name']}), "
-            f"ramp week {fb['ramp_week']}, deload={fb['deload_week']}, "
-            f"{len(fb['plan_exercises'])} BM1000 exercises in catalog, "
-            f"{len(fb['history'])} logged sets in 8 weeks, "
-            f"{fb['board_days_last_7d']} board days in last 7, "
-            f"hours since climb={fb['hours_since_last_climb']}",
             file=sys.stderr,
         )
 
@@ -129,19 +140,30 @@ def main() -> int:
             )
             return 0
 
-        plan, model_meta = generate_lift_session(
-            payload,
-            api_key=config.anthropic_api_key,
-            model=config.anthropic_model,
-            max_output_tokens=config.max_output_tokens,
-        )
-
+        plan, model_meta = _generate(config, payload)
         # Defense-in-depth: re-check Claude's actual output against the live
         # catalog and the denylist, strictly before any Hevy write. On a
         # violation this raises and nothing below runs -- no partial write,
         # no silent substitution.
         assert_session_plan_safe(plan.exercises, catalog_by_id, banned_ids)
-        assert_fingerboard_safe(plan.exercises, catalog, fb)
+
+        problems = review_plan(plan.exercises, session_type, catalog_by_id, last_ids)
+        if problems:
+            for p in problems:
+                print(f"[lift-session] review: {p}", file=sys.stderr)
+            plan, meta2 = _generate(config, payload, revise=(plan, problems))
+            assert_session_plan_safe(plan.exercises, catalog_by_id, banned_ids)
+            model_meta = {
+                **meta2,
+                "input_tokens": model_meta["input_tokens"] + meta2["input_tokens"],
+                "output_tokens": model_meta["output_tokens"] + meta2["output_tokens"],
+                "revised_for": problems,
+            }
+            for change in snap_free_weights(plan.exercises, catalog_by_id):
+                plan.flags_considered.append(f"Load adjusted after generation: {change}")
+            for p in review_plan(plan.exercises, session_type, catalog_by_id, last_ids):
+                print(f"[lift-session] review still failing after revision: {p}", file=sys.stderr)
+                plan.flags_considered.append(f"Coach check not met: {p}")
 
         routine_id = hevy_client.upsert_session_routine(
             plan, config.hevy_routine_title, session_type
@@ -158,6 +180,10 @@ def main() -> int:
         )
         return 0
 
+    except FingerboardBlockedError as exc:
+        print(f"[lift-session] {exc}", file=sys.stderr)
+        _try_alert(config, f"Fingerboard session not generated\n\n{exc}")
+        return 1
     except (UnsafeExerciseError, UnknownExerciseError) as exc:
         print(f"[lift-session] {exc}", file=sys.stderr)
         _try_alert(config, f"Lift Session — Unsafe Exercise Blocked\n\n{exc}")
@@ -176,6 +202,73 @@ def main() -> int:
         traceback.print_exc(file=sys.stderr)
         _try_alert(config, f"Lift session failed unexpectedly:\n\n{exc}")
         return 1
+
+
+def _generate(config, payload, revise=None):
+    return generate_lift_session(
+        payload,
+        api_key=config.anthropic_api_key,
+        model=config.anthropic_model,
+        max_output_tokens=config.max_output_tokens,
+        revise=revise,
+    )
+
+
+def _run_fingerboard(
+    config, garmin_client, hevy_client, full_catalog, banned_ids,
+    shoulder_flag, finger_flag, session_date, dry_run,
+) -> int:
+    """A board-only session, written to its own Hevy routine. Raises
+    FingerboardBlockedError (no Claude call at all) when the board is off
+    today: finger flag on, or already two board days this week."""
+    payload = build_fingerboard_payload(
+        garmin_client, hevy_client, config, full_catalog, shoulder_flag, finger_flag, session_date
+    )
+    fb = payload["fingerboard"]
+    print(
+        f"[lift-session] fingerboard: phase {fb['phase']} ({fb['phase_name']}), "
+        f"ramp week {fb['ramp_week']}, deload={fb['deload_week']}, "
+        f"{len(fb['plan_exercises'])} BM1000 exercises in catalog, "
+        f"{len(fb['history'])} logged sets in 8 weeks, "
+        f"{fb['board_days_last_7d']} board days in last 7, "
+        f"hours since climb={fb['hours_since_last_climb']}, "
+        f"{len(payload['exercise_catalog'])} exercises usable",
+        file=sys.stderr,
+    )
+    if not fb["limits"]["board_allowed_today"]:
+        raise FingerboardBlockedError(
+            f"The board is off today: {fb['limits']['blocked_reason']}. Nothing was written to Hevy."
+        )
+    if dry_run:
+        print("[lift-session] DRY_RUN: fingerboard payload validated; skipping Claude call and Hevy write",
+              file=sys.stderr)
+        return 0
+
+    plan, model_meta = _generate(config, payload)
+    catalog_by_id = {ex["id"]: ex for ex in payload["exercise_catalog"]}
+    assert_session_plan_safe(plan.exercises, catalog_by_id, banned_ids)
+    assert_fingerboard_safe(plan.exercises, full_catalog, fb)
+    plan_ids = {ex["id"] for ex in fb["plan_exercises"]}
+    if not any(ex.exercise_id in plan_ids for ex in plan.exercises):
+        raise LiftPlanError("Fingerboard session came back with no board exercise")
+    for change in snap_free_weights(plan.exercises, catalog_by_id):
+        plan.flags_considered.append(f"Load adjusted after generation: {change}")
+
+    routine_id = hevy_client.upsert_session_routine(
+        plan, config.hevy_fingerboard_routine_title, "fingerboard"
+    )
+    save_lift_outputs(
+        config, session_date, plan, model_meta, routine_id, "fingerboard",
+        extra_meta={"fingerboard": {k: fb[k] for k in (
+            "phase", "phase_name", "phase_started", "weeks_in_phase", "ramp_week",
+            "deload_week", "board_days_last_7d",
+        )}},
+    )
+    print(
+        f"[lift-session] wrote Hevy routine {config.hevy_fingerboard_routine_title!r} id={routine_id}",
+        file=sys.stderr,
+    )
+    return 0
 
 
 def _try_alert(config, body: str) -> None:

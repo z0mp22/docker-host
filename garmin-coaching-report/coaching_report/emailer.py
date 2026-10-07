@@ -175,6 +175,7 @@ def save_lift_outputs(
     model_meta: dict[str, Any],
     routine_id: str | None,
     session_type: str | None = None,
+    extra_meta: dict[str, Any] | None = None,
 ) -> Path:
     """Write the lift-session markdown summary + metadata JSON, refresh the
     fixed-name lift_session_latest.json that run-lift-session.sh copies to the
@@ -187,7 +188,11 @@ def save_lift_outputs(
     coach prescribed-vs-actual."""
     config.report_output_dir.mkdir(parents=True, exist_ok=True)
     stamp = session_date.isoformat()
-    base = config.report_output_dir / f"lift-session-{stamp}"
+    # Fingerboard sessions get their own files and their own HA sensor
+    # (fingerboard_session_latest.json), so a board session never replaces
+    # the lift session shown on the Coach panel.
+    prefix = "fingerboard-session" if session_type == "fingerboard" else "lift-session"
+    base = config.report_output_dir / f"{prefix}-{stamp}"
 
     md_path = base.with_suffix(".md")
     md_path.write_text(plan.summary_text, encoding="utf-8")
@@ -202,13 +207,14 @@ def save_lift_outputs(
         "session_type": session_type,
         "routine_id": routine_id,
         **model_meta,
+        **(extra_meta or {}),
     }
     meta_path = base.with_suffix(".meta.json")
     meta_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
 
     # Fixed filename (not date-stamped) so the HA sensor always reads the most
     # recent session without needing to know today's date.
-    latest_path = config.report_output_dir / "lift_session_latest.json"
+    latest_path = config.report_output_dir / f"{prefix.replace('-', '_')}_latest.json"
     latest_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
 
     prescription = {
