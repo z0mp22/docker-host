@@ -857,8 +857,14 @@ automation:
             {%- else -%}Trees: skip watering today{%- endif -%}
           message: >-
             {{ state_attr('sensor.trees_watering_decision', 'reason') }}{% if water %} {{ state_attr('sensor.trees_watering_decision', 'how_much') }} {{ state_attr('sensor.trees_watering_decision', 'when') }}{% endif %}
+          # Companion app notify entities are named notify.<device>, so filtering for "mobile_app"
+          # found nothing and the reminder (with its "I watered" action) never reached the phone.
+          # Same mapping as the doorbell alert.
           notifiers: >-
-            {{ states.notify | selectattr('entity_id', 'search', 'mobile_app') | map(attribute='entity_id') | list }}
+            {{ integration_entities('mobile_app')
+               | select('match', '^notify\\.')
+               | map('replace', 'notify.', 'notify.mobile_app_', 1)
+               | list }}
       - choose:
           - conditions: "{{ notifiers | count > 0 }}"
             sequence:

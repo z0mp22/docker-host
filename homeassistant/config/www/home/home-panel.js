@@ -265,6 +265,8 @@ h1 { margin: 2px 0 0; font-size: 34px; font-weight: 700; line-height: 1.1; }
 .room .now b { font-size: 40px; font-weight: 700; letter-spacing: -.02em; }
 .room .now span { font-size: 15px; color: #c3cedd; }
 .delta { font-size: 13.5px; color: var(--muted); }
+.room.stale .now b { color: var(--muted); }
+.room .now .stale-note { color: #f5b14c; }
 .trend { margin-top: 12px; }
 .trend svg { display: block; width: 100%; height: 120px; overflow: visible; }
 .trend .l-temp { fill: none; stroke: var(--gold); stroke-width: 2.5; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
@@ -349,6 +351,7 @@ h1 { margin: 2px 0 0; font-size: 34px; font-weight: 700; line-height: 1.1; }
 .allgood .ic { color: var(--green); }
 .link { margin-top: 10px; color: var(--gold); font-weight: 600; font-size: 15px; }
 .toast { position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%); padding: 14px 20px; border-radius: 14px; background: #3a1d24; border: 1px solid rgba(240,97,109,.5); color: #ffd3d7; z-index: 10; max-width: 90vw; }
+.toast.ok { background: #16322a; border-color: rgba(76,201,140,.5); color: #c9f2dc; }
 
 @container (max-width: 1150px) {
   .switches { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -609,8 +612,9 @@ class HomePanel extends HTMLElement {
     window.dispatchEvent(new CustomEvent("location-changed", { detail: { replace: false } }));
   }
 
-  _showToast(msg) {
+  _showToast(msg, ok = false) {
     this._toast = msg;
+    this._toastOk = ok;
     this._render();
     clearTimeout(this._toastTimer);
     this._toastTimer = setTimeout(() => {
@@ -633,6 +637,7 @@ class HomePanel extends HTMLElement {
       const t = this._c.trees || {};
       try {
         await this._hass.callService("script", "turn_on", { entity_id: t.mark_watered || "script.trees_mark_watered" });
+        this._showToast(`Watering logged at ${this._fmtTime(Date.now())}.`, true);
       } catch (err) {
         this._showToast(`Couldn't log watering: ${err.message || err}`);
       }
@@ -688,6 +693,13 @@ class HomePanel extends HTMLElement {
 
   _fmtHour(ms) {
     return new Date(ms).toLocaleTimeString([], { hour: "numeric", hour12: this._hour12() }).replace(/\s/g, "").toLowerCase();
+  }
+
+  // "today at 7:48 AM", "yesterday at 12:20 PM", "Mon, Oct 5 at 9:00 AM"
+  _pastLabel(ms) {
+    const diff = Math.round((startOfDay(Date.now()) - startOfDay(ms)) / 864e5);
+    const day = diff === 0 ? "today" : diff === 1 ? "yesterday" : new Date(ms).toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
+    return `${day} at ${this._fmtTime(ms)}`;
   }
 
   _when(ms) {
@@ -815,8 +827,21 @@ class HomePanel extends HTMLElement {
     return { level: "green", state: "Internet OK", sub: `${Math.round(best)} ms${devices ? ` · ${devices.filter((d) => d.state === "ONLINE").length} devices up` : " · Wi-Fi details unavailable"}` };
   }
 
+  // Thermometers with no advert for 20+ min (packages/bluetooth_health.yaml): entity_id -> since (ms).
+  _staleThermometers() {
+    const id = this._c.thermometer_health;
+    const list = (id && this._hass.states[id]?.attributes?.stale) || [];
+    return new Map(list.map((x) => [x.entity_id, x.since ? Date.parse(x.since) : NaN]));
+  }
+
   _general(attn) {
     const st = this._hass.states;
+    const stale = this._staleThermometers();
+    const rooms = this._c.climate.filter((r) => stale.has(r.temperature));
+    if (rooms.length) {
+      const since = Math.min(...rooms.map((r) => stale.get(r.temperature)).filter(Number.isFinite));
+      attn.push({ level: "amber", icon: "mdiThermometer", title: `${rooms.map((r) => r.name).join(" & ")} thermometer${rooms.length > 1 ? "s" : ""} offline`, text: `${Number.isFinite(since) ? `No reading since ${this._pastLabel(since)}. ` : ""}Bluetooth self-heal is retrying.` });
+    }
     const updates = Object.values(st).filter((s) => s.entity_id?.startsWith("update.") && s.state === "on");
     if (updates.length)
       attn.push({ level: "info", icon: "mdiUpdate", title: `${plural(updates.length, "update")} available`, text: updates.map((u) => (u.attributes.friendly_name || u.entity_id).replace(/ (Firmware|update)$/i, "")).join(", "), go: "/config/updates" });
@@ -959,6 +984,8 @@ class HomePanel extends HTMLElement {
     const st = this._hass.states;
     const week = this._range === "7d";
     const since = Date.now() - (week ? 7 * 864e5 : 864e5);
+    const staleSince = this._staleThermometers().get(room.temperature);
+    const stale = staleSince !== undefined;
     const tNow = live(st[room.temperature]) ? num(st[room.temperature].state) : null;
     const hNow = room.humidity && live(st[room.humidity]) ? num(st[room.humidity].state) : null;
     const series = (id) => {
@@ -967,7 +994,8 @@ class HomePanel extends HTMLElement {
       const before = all.filter((p) => p[0] < since).pop();
       const inside = all.filter((p) => p[0] >= since);
       const pts = before ? [[since, before[1]], ...inside] : inside;
-      if (pts.length) pts.push([Date.now(), pts[pts.length - 1][1]]);
+      // A quiet thermometer has no "now"; don't draw its last value forward as if it were current.
+      if (pts.length && !stale) pts.push([Date.now(), pts[pts.length - 1][1]]);
       return thin(pts);
     };
     const tp = series(room.temperature);
@@ -999,9 +1027,10 @@ class HomePanel extends HTMLElement {
     const seg = withSwitch
       ? `<span class="seg"><button data-action="range" data-range="24h" class="${week ? "" : "on"}">24 h</button><button data-action="range" data-range="7d" class="${week ? "on" : ""}">7 days</button></span>`
       : "";
-    return `<section class="card room">
+    const note = stale ? `<span class="delta stale-note">${esc(Number.isFinite(staleSince) ? `No reading since ${this._pastLabel(staleSince)}` : "No recent reading")}</span>` : `<span class="delta">${esc(delta)}</span>`;
+    return `<section class="card room${stale ? " stale" : ""}">
       <div class="head"><span class="eyebrow">${esc(room.name)}</span>${seg}</div>
-      <div class="now"><b>${tNow === null ? "—" : `${tNow.toFixed(1)}°`}</b>${hNow !== null ? `<span>${Math.round(hNow)}% humidity</span>` : ""}<span class="delta">${esc(delta)}</span></div>
+      <div class="now"><b>${tNow === null ? "—" : `${tNow.toFixed(1)}°`}</b>${hNow !== null && !stale ? `<span>${Math.round(hNow)}% humidity</span>` : ""}${note}</div>
       ${chart}
     </section>`;
   }
@@ -1225,7 +1254,7 @@ class HomePanel extends HTMLElement {
       <style>${CSS}</style>
       <div class="app ${urgent.length ? "urgent" : ""}">
         ${header}${lights}${this._weatherCard(weather)}${tileHtml}${this._treesCard()}${this._outdoorCard()}${climate}${agendaHtml}${attnHtml}
-        ${this._toast ? `<div class="toast" role="alert">${esc(this._toast)}</div>` : ""}
+        ${this._toast ? `<div class="toast${this._toastOk ? " ok" : ""}" role="${this._toastOk ? "status" : "alert"}">${esc(this._toast)}</div>` : ""}
       </div>`;
     if (html !== this._html) {
       this._html = html;

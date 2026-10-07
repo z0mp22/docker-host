@@ -375,6 +375,17 @@ install_hdhomerun_signal_bridge() {
   bash /usr/local/bin/hdhomerun-mqtt-bridge.sh || log "WARN: hdhomerun signal bridge initial run failed"
 }
 
+install_bluetooth_watchdog() {
+  log "installing bluetooth watchdog"
+  install_file "${REPO_ROOT}/scripts/ensure-bluetooth.sh" \
+    "/usr/local/bin/ensure-bluetooth.sh" 755
+  install_file "${REPO_ROOT}/scripts/bluetooth-watchdog.sh" \
+    "/usr/local/bin/bluetooth-watchdog.sh" 755
+  install_file "${REPO_ROOT}/cron/bluetooth-watchdog" \
+    "/etc/cron.d/bluetooth-watchdog" 644
+  sudo /usr/local/bin/bluetooth-watchdog.sh || log "WARN: bluetooth watchdog initial run failed"
+}
+
 main() {
   require_docker
   ensure_networks
@@ -395,6 +406,7 @@ main() {
   repair_homeassistant_config_entries
   install_plex_mqtt_bridge
   install_hdhomerun_signal_bridge
+  install_bluetooth_watchdog
   deploy_mountain_project_feed
   deploy_hvac_prices
   deploy_alloy

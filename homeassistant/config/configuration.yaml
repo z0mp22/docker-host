@@ -403,7 +403,7 @@ panel_custom:
     url_path: house
     sidebar_title: Home
     sidebar_icon: mdi:home
-    module_url: /local/home/home-panel.js?v=6
+    module_url: /local/home/home-panel.js?v=7
     config:
       person: person.cody
       # Eufy T8210 via the eufy-sdk integration (eufy-bridge container). The HomeBase shows up as
@@ -418,6 +418,8 @@ panel_custom:
         ring_picture: camera.doorbell_ring
         ring_picture_at: input_datetime.doorbell_ring_picture
       weather: weather.home
+      # Greys out a room whose thermometer has gone quiet (packages/bluetooth_health.yaml).
+      thermometer_health: binary_sensor.bluetooth_thermometers_stale
       climate:
         - {name: Bedroom, temperature: sensor.tp358s_1c99_temperature, humidity: sensor.tp358s_1c99_humidity}
         - {name: Basement, temperature: sensor.tp358s_f429_temperature, humidity: sensor.tp358s_f429_humidity}

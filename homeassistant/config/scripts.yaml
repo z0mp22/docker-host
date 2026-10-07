@@ -16,10 +16,12 @@ notify_mobile_recording:
         text:
   sequence:
     - variables:
+        # Companion app notify entities are named notify.<device>; the action is
+        # notify.mobile_app_<device>. Same mapping as the doorbell alert.
         mobile_notifiers: >-
-          {{ states.notify
-             | selectattr('entity_id', 'search', 'mobile_app')
-             | map(attribute='entity_id')
+          {{ integration_entities('mobile_app')
+             | select('match', '^notify\\.')
+             | map('replace', 'notify.', 'notify.mobile_app_', 1)
              | list }}
     - choose:
         - conditions:

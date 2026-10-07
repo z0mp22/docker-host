@@ -1,0 +1,150 @@
+# Bluetooth thermometer health + self-heal (Bedroom / Basement ThermoPro TP358S).
+#
+# The thermometers only reach HA through the Pi's BlueZ stack, which can fail in two layers:
+#   - Host: bluetoothd stops delivering adverts (2026-10-06: its D-Bus connection hit the
+#     match-rule limit after a lightdm crash loop). scripts/bluetooth-watchdog.sh on the host
+#     restarts bluetoothd for that; HA can't see or fix it from inside the container.
+#   - HA: after bluetoothd restarts, HA's scanner doesn't always reattach and stays silent
+#     without logging anything (seen 2026-10-07). Reloading the bluetooth config entry fixes it.
+# This package detects "no adverts" from HA's side, reloads the scanner when every thermometer
+# is quiet (one quiet sensor is more likely a battery or range problem, so that only notifies),
+# and tells the phone if a thermometer stays offline for an hour.
+#
+# The Home panel reads binary_sensor.bluetooth_thermometers_stale to grey out stale readings
+# instead of showing a restored or frozen value as current.
+
+template:
+  - binary_sensor:
+      - name: Bluetooth thermometers stale
+        unique_id: bluetooth_thermometers_stale
+        device_class: problem
+        icon: mdi:thermometer-off
+        # Main signal: HA marks a passive BLE sensor unavailable after 15 min with no advert at all
+        # (that's how the 2026-10-06 outage showed up). last_reported is only a backstop: HA skips
+        # identical adverts, so a healthy thermometer can go 20-30 min without a new report.
+        state: >-
+          {% set ns = namespace(n=0) %}
+          {% for id in ['sensor.tp358s_1c99_temperature', 'sensor.tp358s_f429_temperature'] %}
+            {% set s = states[id] %}
+            {% if s is none or s.state in ['unavailable', 'unknown'] or (now() - s.last_reported).total_seconds() > 3600 %}
+              {% set ns.n = ns.n + 1 %}
+            {% endif %}
+          {% endfor %}
+          {{ ns.n > 0 }}
+        attributes:
+          # [{entity_id, name, since}] for each quiet thermometer; since = last advert (or when
+          # it went unavailable), ISO timestamp.
+          stale: >-
+            {% set ns = namespace(out=[]) %}
+            {% for id in ['sensor.tp358s_1c99_temperature', 'sensor.tp358s_f429_temperature'] %}
+              {% set s = states[id] %}
+              {% if s is none %}
+                {% set ns.out = ns.out + [{'entity_id': id, 'name': id, 'since': none}] %}
+              {% elif s.state in ['unavailable', 'unknown'] or (now() - s.last_reported).total_seconds() > 3600 %}
+                {% set since = s.last_changed if s.state in ['unavailable', 'unknown'] else s.last_reported %}
+                {% set ns.out = ns.out + [{'entity_id': id, 'name': s.name | replace(' Thermometer', '') | replace(' Temperature', '') | replace(' temperature', ''), 'since': since.isoformat()}] %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.out }}
+          all_stale: >-
+            {% set ns = namespace(n=0) %}
+            {% for id in ['sensor.tp358s_1c99_temperature', 'sensor.tp358s_f429_temperature'] %}
+              {% set s = states[id] %}
+              {% if s is none or s.state in ['unavailable', 'unknown'] or (now() - s.last_reported).total_seconds() > 3600 %}
+                {% set ns.n = ns.n + 1 %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.n == 2 }}
+
+automation:
+  - id: bluetooth_thermometers_reload_scanner
+    alias: "Bluetooth thermometers: reload the scanner when they all go quiet"
+    description: >-
+      Every thermometer unavailable (no advert for 15 min, +5 min here) means the Bluetooth path
+      is down, not a sensor. Reload
+      HA's bluetooth adapter entry; retry every 30 min while it stays down.
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.bluetooth_thermometers_stale
+        to: "on"
+        for: "00:05:00"
+      - trigger: time_pattern
+        minutes: "/30"
+    conditions:
+      - condition: state
+        entity_id: binary_sensor.bluetooth_thermometers_stale
+        state: "on"
+        for: "00:05:00"
+      - condition: template
+        value_template: "{{ state_attr('binary_sensor.bluetooth_thermometers_stale', 'all_stale') | bool(false) }}"
+    actions:
+      - action: homeassistant.reload_config_entry
+        data:
+          # The hci0 adapter's bluetooth config entry (Settings > Devices > Bluetooth). If the
+          # integration is ever re-added, update this id.
+          entry_id: 01JDNHAXQGE2KKRRK2Q78AJ4WK
+      - action: logbook.log
+        data:
+          name: Bluetooth thermometers
+          message: reloaded the Bluetooth scanner because no thermometer has sent an advert for 20 min
+          entity_id: binary_sensor.bluetooth_thermometers_stale
+    mode: single
+
+  - id: bluetooth_thermometers_offline_alert
+    alias: "Bluetooth thermometers: tell me when one stays offline"
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.bluetooth_thermometers_stale
+        to: "on"
+        for: "01:00:00"
+      - trigger: state
+        entity_id: binary_sensor.bluetooth_thermometers_stale
+        from: "on"
+        to: "off"
+    actions:
+      - variables:
+          stale: "{{ state_attr('binary_sensor.bluetooth_thermometers_stale', 'stale') or [] }}"
+          names: "{{ stale | map(attribute='name') | join(' and ') }}"
+          message: >-
+            {{ names }} {{ 'has' if stale | count == 1 else 'have' }} sent nothing for over an hour.
+            {%- if stale | count > 1 %} HA keeps reloading its Bluetooth scanner and the Pi's
+            bluetooth-watchdog checks bluetoothd every 5 min; if this doesn't clear, see
+            /var/log/bluetooth-watchdog.log on docker-host.
+            {%- else %} The other thermometer is fine, so check this one's battery and distance
+            from the Pi.{%- endif %}
+          mobile_notifiers: >-
+            {{ integration_entities('mobile_app')
+               | select('match', '^notify\\.')
+               | map('replace', 'notify.', 'notify.mobile_app_', 1)
+               | list }}
+      - choose:
+          - conditions: "{{ trigger.to_state.state == 'on' }}"
+            sequence:
+              - action: persistent_notification.create
+                data:
+                  notification_id: bluetooth_thermometers
+                  title: Thermometers offline
+                  message: "{{ message }}"
+              - repeat:
+                  for_each: "{{ mobile_notifiers }}"
+                  sequence:
+                    - action: "{{ repeat.item }}"
+                      data:
+                        title: Thermometers offline
+                        message: "{{ message }}"
+                        data:
+                          tag: bluetooth-thermometers
+                          channel: House
+        default:
+          - action: persistent_notification.dismiss
+            data:
+              notification_id: bluetooth_thermometers
+          - repeat:
+              for_each: "{{ mobile_notifiers }}"
+              sequence:
+                - action: "{{ repeat.item }}"
+                  data:
+                    message: clear_notification
+                    data:
+                      tag: bluetooth-thermometers
+    mode: queued
