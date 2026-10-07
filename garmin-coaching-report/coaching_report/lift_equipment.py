@@ -11,8 +11,11 @@ athlete listed on 2026-10-07:
 - Barbell (assumed 45 lb), EZ bar, landmine mount.
 - Plates: 2 x 45, 4 x 25, 2 x 10, 4 x 5, 2 x 2.5 lb (235 lb in all, shared
   by the barbell, the landmine and the cable pins).
-- Dumbbells 5-40 lb in 5 lb steps. Kettlebells 35 and 45 lb. Bands.
-- No bench, so nothing that needs one.
+- Dumbbells 5-40 lb in 5 lb steps. Kettlebells 35 and 45 lb.
+- Adjustable bench (flat to incline). Bench *pressing* stays banned by
+  lift_safety for the shoulder; the bench is for curls, rows, hip thrusts.
+- Bands for shoulder PT and for pull-up assistance (pull-ups are still
+  band-assisted). No lifting straps, ab wheel or rings.
 
 The athlete also said no single-leg work of any kind. Single-leg and
 not-at-home exercises are removed from the catalog the coach sees, so
@@ -45,8 +48,9 @@ HOME_GYM = {
     "plate_total_lb": PLATE_TOTAL_LB,
     "dumbbells_lb": list(DUMBBELLS_LB),
     "kettlebells_lb": list(KETTLEBELLS_LB),
-    "bands": True,
-    "bench": False,
+    "bench": "adjustable, flat to incline; never used for pressing (shoulder)",
+    "bands": "PT bands and pull-up assistance bands (pull-ups are currently band-assisted)",
+    "not_owned": ["lifting straps", "ab wheel", "gymnastic rings / suspension trainer"],
 }
 
 # Phrases (matched against the lowercased name) for kit the basement doesn't
@@ -56,10 +60,9 @@ _NOT_AT_HOME = (
     "machine", "smith", "pec deck", "parallel bars", "trap bar", "hyperextension",
     "glute ham raise", "seated calf raise", "iso-lateral", "vertical traction",
     "torso rotation", "wall ball", "ball slams", "box jump", "(assisted)",
-    "ring pull up", "ring push up", "ring dips", "chest supported", "seal row",
-    "preacher", "incline bench", "incline chest", "incline row", "seated incline",
-    "decline", "spider curl", "hip thrust", "pullover", "jm press", "bench",
-    "hack squat", "belt squat", "pendulum squat", "squat row", "sissy squat",
+    "ring pull up", "ring push up", "ring dips", "chest supported t bar", "ab wheel",
+    "preacher", "incline bench", "decline", "pullover", "jm press", "bench press",
+    "bench dip", "hack squat", "belt squat", "pendulum squat", "squat row", "sissy squat",
     "kipping", "muscle up",
 )
 _NOT_AT_HOME_EQUIPMENT = {"suspension"}

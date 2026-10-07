@@ -253,6 +253,8 @@ def test_variety_context_last_session_muscles_and_athlete_picks(tmp_path):
     }
     # Warm-ups don't count: 2 working row sets + 1 hang.
     assert payload["muscle_sets_last_14d"] == {"upper_back": 3}
+    assert payload["muscle_last_trained"] == {"upper_back": "2026-09-25"}
+    assert payload["season_focus"].startswith("Climbing and MTB season")
     (added,) = payload["athlete_added_exercises"]
     assert added["exercise_name"] == "Dead Hang" and added["times_added"] == 1
     assert payload["equipment"]["dumbbells_lb"][-1] == 40.0
@@ -302,3 +304,12 @@ def test_fingerboard_outputs_go_to_their_own_latest_file(tmp_path):
     assert latest["fingerboard"] == {"phase": 1} and latest["routine_id"] == "r-fb"
     assert not (tmp_path / "lift_session_latest.json").exists()
     assert (tmp_path / "fingerboard-session-2026-10-07.md").exists()
+
+
+def test_season_focus_switches_to_snowboard_legs_in_november():
+    from coaching_report.lift_collector import season_focus
+
+    assert season_focus(date(2026, 10, 31)).startswith("Climbing and MTB season")
+    assert season_focus(date(2026, 11, 1)).startswith("Snow season")
+    assert season_focus(date(2027, 3, 31)).startswith("Snow season")
+    assert season_focus(date(2027, 4, 1)).startswith("Climbing and MTB season")

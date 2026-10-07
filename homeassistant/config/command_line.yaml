@@ -149,6 +149,7 @@
       - routine_id
       - session_type
       - model
+      - priorities
 
 # Fingerboard session: same shape as Lift Session Latest plus a `fingerboard`
 # attribute (phase, ramp week, deload). run-lift-session.sh copies

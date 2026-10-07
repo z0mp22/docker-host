@@ -200,6 +200,7 @@ def save_lift_outputs(
     meta = {
         "session_date": stamp,
         "generated_at": datetime.now().astimezone().isoformat(),
+        "priorities": plan.priorities,
         "rationale": plan.rationale,
         "summary_text": plan.summary_text,
         "exercise_count": len(plan.exercises),

@@ -14,7 +14,7 @@ from __future__ import annotations
 import dataclasses
 import json
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Literal
 
 import anthropic
 from pydantic import BaseModel, Field, field_validator
@@ -29,6 +29,10 @@ from .prompts import fingerboard_prompt_version, lift_prompt_version, load_finge
 # instruction backed by a hard code check" posture as lift_safety.py.
 VALID_RIR_TARGETS = {None, 0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 4.0}
 
+# What each exercise is for. The coach picks the most effective exercise per
+# goal and says why (ADR 0006), so every prescription names its goal.
+Goal = Literal["climbing", "mtb", "snowboard", "physique", "core", "shoulder_health", "warmup"]
+
 
 class ExercisePrescriptionSchema(BaseModel):
     exercise_id: str
@@ -42,6 +46,8 @@ class ExercisePrescriptionSchema(BaseModel):
     rir_target: float | None = None
     rest_seconds: int | None = None
     notes: str | None = None
+    goal: Goal
+    why: str
 
     @field_validator("rir_target")
     @classmethod
@@ -56,6 +62,7 @@ class ExercisePrescriptionSchema(BaseModel):
 
 class SessionPlanSchema(BaseModel):
     session_date: str
+    priorities: list[str]
     rationale: str
     flags_considered: list[str] = Field(default_factory=list)
     exercises: list[ExercisePrescriptionSchema]
@@ -79,6 +86,8 @@ class ExercisePrescription:
     rir_target: float | None
     rest_seconds: int | None
     notes: str | None
+    goal: str | None = None
+    why: str | None = None
 
 
 @dataclass
@@ -88,6 +97,7 @@ class SessionPlanResponse:
     summary_text: str
     flags_considered: list[str] = field(default_factory=list)
     exercises: list[ExercisePrescription] = field(default_factory=list)
+    priorities: list[str] = field(default_factory=list)
 
 
 def _to_response(schema: SessionPlanSchema) -> SessionPlanResponse:
@@ -96,6 +106,7 @@ def _to_response(schema: SessionPlanSchema) -> SessionPlanResponse:
         rationale=schema.rationale,
         summary_text=schema.summary_text,
         flags_considered=list(schema.flags_considered),
+        priorities=list(schema.priorities),
         exercises=[ExercisePrescription(**ex.model_dump()) for ex in schema.exercises],
     )
 

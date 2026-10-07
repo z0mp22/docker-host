@@ -55,4 +55,5 @@ Output
 - rationale: 2–4 sentences: what phase and ramp week this is, what you changed since the last board session (and the one variable you moved, if any), and how recent climbing and recovery shaped it.
 - flags_considered: anything in the payload that changed your decision.
 - summary_text: a short markdown block, the session's focus in one line, then a numbered list with each exercise, sets × time, feet assist or added weight, and rest, readable at a glance on a phone.
-- exercises: the structured prescription.
+- priorities: one or two entries such as "climbing: phase 1 tissue prep, week 2".
+- exercises: the structured prescription. Each exercise has `goal` ("climbing" for board work and forearm antagonists) and `why`: one sentence on why it's in today's session and what changed since the last board session.

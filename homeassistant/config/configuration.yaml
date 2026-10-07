@@ -510,7 +510,7 @@ panel_custom:
     url_path: coach
     sidebar_title: Coaching
     sidebar_icon: mdi:dumbbell
-    module_url: /local/coach/coach-panel.js?v=4
+    module_url: /local/coach/coach-panel.js?v=5
   - name: network-panel
     url_path: network
     sidebar_title: Network

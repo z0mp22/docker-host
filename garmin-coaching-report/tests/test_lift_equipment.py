@@ -20,6 +20,10 @@ CATALOG = [
     {"id": "SLR", "name": "Single Leg Romanian Deadlift (Dumbbell)", "type": "weight_reps", "equipment": "dumbbell", "muscle": "hamstrings"},
     {"id": "PRE", "name": "Preacher Curl (Dumbbell)", "type": "weight_reps", "equipment": "dumbbell", "muscle": "biceps"},
     {"id": "TRX", "name": "Low Row (Suspension)", "type": "weight_reps", "equipment": "suspension", "muscle": "upper_back"},
+    {"id": "INC", "name": "Seated Incline Curl (Dumbbell)", "type": "weight_reps", "equipment": "dumbbell", "muscle": "biceps"},
+    {"id": "HT", "name": "Hip Thrust (Barbell)", "type": "weight_reps", "equipment": "barbell", "muscle": "glutes"},
+    {"id": "SLHT", "name": "Single Leg Hip Thrust (Dumbbell)", "type": "weight_reps", "equipment": "dumbbell", "muscle": "glutes"},
+    {"id": "AW", "name": "Ab Wheel", "type": "reps_only", "equipment": "other", "muscle": "abdominals"},
 ]
 BY_ID = {e["id"]: e for e in CATALOG}
 
@@ -30,7 +34,9 @@ def _ex(ex_id, weight, superset=None):
 
 def test_catalog_keeps_home_kit_and_drops_machines_benches_and_single_leg():
     kept, dropped = home_gym_catalog(CATALOG)
-    assert {e["id"] for e in kept} == {"DL", "HC", "ROW", "PU", "KB"}
+    assert {e["id"] for e in kept} == {"DL", "HC", "ROW", "PU", "KB", "INC", "HT"}  # bench work is fine
+    assert dropped["Single Leg Hip Thrust (Dumbbell)"] == "single-leg"
+    assert dropped["Ab Wheel"] == "not in the home gym"
     assert dropped["Bulgarian Split Squat (Dumbbell)"] == "single-leg"
     assert dropped["Single Leg Romanian Deadlift (Dumbbell)"] == "single-leg"
     assert dropped["Leg Press (Machine)"] == "not in the home gym"

@@ -165,6 +165,11 @@ h3 { margin: 6px 0 0; font-size: 21px; font-weight: 600; }
 .why { margin-top: 22px; padding: 18px 20px; border-radius: 20px; background: #111a29; border: 1px solid var(--line); }
 .why p { margin: 8px 0 0; font-size: 16px; line-height: 1.55; color: #c3cedd; overflow-wrap: anywhere; }
 .link { margin-top: 10px; color: var(--violet); font-weight: 600; font-size: 15px; }
+.prio { margin: 10px 0 0; padding: 0; list-style: none; counter-reset: p; display: flex; flex-direction: column; gap: 8px; }
+.prio li { counter-increment: p; display: flex; gap: 10px; font-size: 15.5px; line-height: 1.45; color: #c3cedd; overflow-wrap: anywhere; }
+.prio li::before { content: counter(p); flex: none; width: 24px; height: 24px; border-radius: 8px; display: grid; place-items: center; font-size: 13px; font-weight: 700; color: #fff;
+  background: linear-gradient(160deg, #b3a1ff, var(--violet-2)); }
+.prio b { color: var(--text); font-weight: 600; text-transform: capitalize; }
 .flags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .flag { font-size: 13.5px; padding: 7px 11px; border-radius: 10px; background: #1a2436; color: #b8c4d4; border: 1px solid var(--line); overflow-wrap: anywhere; }
 .flag.warn { background: rgba(245,176,65,.10); color: #f7c77a; border-color: rgba(245,176,65,.25); }
@@ -621,6 +626,7 @@ class CoachPanel extends HTMLElement {
       sessionType: a.session_type || null,
       summary: a.summary_text || "",
       rationale: a.rationale || "",
+      priorities: Array.isArray(a.priorities) ? a.priorities : [],
       flags: Array.isArray(a.flags_considered) ? a.flags_considered : [],
       exerciseCount: a.exercise_count,
       routineId: a.routine_id,
@@ -869,9 +875,19 @@ class CoachPanel extends HTMLElement {
       </div>
       ${body}
       ${
-        m.rationale || m.flags.length
+        m.rationale || m.flags.length || m.priorities.length
           ? `<div class="why">
         <div class="eyebrow">Why this session</div>
+        ${
+          m.priorities.length
+            ? `<ol class="prio">${m.priorities
+                .map((p) => {
+                  const [goal, ...rest] = String(p).split(":");
+                  return rest.length ? `<li><span><b>${esc(goal.replace(/_/g, " ").trim())}</b> · ${esc(rest.join(":").trim())}</span></li>` : `<li><span>${esc(p)}</span></li>`;
+                })
+                .join("")}</ol>`
+            : ""
+        }
         ${m.rationale ? `<p>${esc(why)}</p>` : ""}
         ${m.flags.length ? `<div class="flags">${flags.map((f) => `<span class="flag ${WARN_FLAG.test(f) ? "warn" : ""}">${esc(flagText(f))}</span>`).join("")}</div>` : ""}
         ${longWhy || hiddenFlags ? `<button class="link" data-action="expand">${this._expanded ? "Show less" : `Read full reasoning${hiddenFlags ? ` · ${plural(hiddenFlags, "more factor")}` : ""}`}</button>` : ""}

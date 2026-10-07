@@ -120,7 +120,6 @@ def main() -> int:
             finger_flag=finger_flag, full_catalog=full_catalog,
         )
         last = last_lift_session(payload["recent_lift_sessions"])
-        last_ids = [ex["exercise_id"] for ex in last["exercises"]] if last else []
         print(
             f"[lift-session] {session_date.isoformat()} type={session_type} — "
             f"{len(payload['recent_lift_sessions'])} recent Hevy workouts, "
@@ -147,7 +146,7 @@ def main() -> int:
         # no silent substitution.
         assert_session_plan_safe(plan.exercises, catalog_by_id, banned_ids)
 
-        problems = review_plan(plan.exercises, session_type, catalog_by_id, last_ids)
+        problems = review_plan(plan.exercises, session_type, catalog_by_id, plan.priorities, payload["recent_lift_sessions"])
         if problems:
             for p in problems:
                 print(f"[lift-session] review: {p}", file=sys.stderr)
@@ -161,7 +160,7 @@ def main() -> int:
             }
             for change in snap_free_weights(plan.exercises, catalog_by_id):
                 plan.flags_considered.append(f"Load adjusted after generation: {change}")
-            for p in review_plan(plan.exercises, session_type, catalog_by_id, last_ids):
+            for p in review_plan(plan.exercises, session_type, catalog_by_id, plan.priorities, payload["recent_lift_sessions"]):
                 print(f"[lift-session] review still failing after revision: {p}", file=sys.stderr)
                 plan.flags_considered.append(f"Coach check not met: {p}")
 

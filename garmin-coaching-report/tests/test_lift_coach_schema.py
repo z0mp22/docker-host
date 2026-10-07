@@ -12,6 +12,7 @@ from coaching_report.lift_coach import SessionPlanSchema, _to_response
 
 VALID = {
     "session_date": "2026-09-19",
+    "priorities": ["climbing: pulling strength is the fall priority"],
     "rationale": "Pulling volume progressed cleanly last session; shoulder flagged this week so no pressing.",
     "flags_considered": ["shoulder_flag_active"],
     "summary_text": "# Pull day\n- Barbell Row 3x8 @ 135 lb",
@@ -25,6 +26,8 @@ VALID = {
             "weight_lb": 135.0,
             "rir_target": 2.0,
             "rest_seconds": 90,
+            "goal": "climbing",
+            "why": "Heaviest horizontal pull he can progress; held from last session because it is still moving up.",
         }
     ],
 }
@@ -134,7 +137,7 @@ def test_revision_continues_the_conversation_and_fingerboard_uses_its_own_prompt
     from coaching_report.lift_coach import SessionPlanResponse, SessionPlanSchema, generate_lift_session
 
     calls = []
-    parsed = SessionPlanSchema(session_date="2026-10-07", rationale="r", summary_text="s", exercises=[])
+    parsed = SessionPlanSchema(session_date="2026-10-07", priorities=[], rationale="r", summary_text="s", exercises=[])
 
     class FakeClient:
         def __init__(self, api_key):
@@ -155,3 +158,15 @@ def test_revision_continues_the_conversation_and_fingerboard_uses_its_own_prompt
 
     generate_lift_session({"session_type": "fingerboard"}, "k", "m", 100)
     assert "Fingerboard Session Coach" in calls[1]["system"]
+
+
+def test_every_exercise_names_its_goal_and_why():
+    ex = dict(VALID["exercises"][0])
+    del ex["why"]
+    with pytest.raises(ValidationError):
+        SessionPlanSchema.model_validate({**VALID, "exercises": [ex]})
+    with pytest.raises(ValidationError):
+        SessionPlanSchema.model_validate({**VALID, "exercises": [{**VALID["exercises"][0], "goal": "vanity"}]})
+    plan = _to_response(SessionPlanSchema.model_validate(VALID))
+    assert plan.priorities == ["climbing: pulling strength is the fall priority"]
+    assert plan.exercises[0].goal == "climbing" and plan.exercises[0].why

@@ -9,10 +9,11 @@ flags/notes over time, not just this call), the fingerboard ramp's phase
 and hang history (lift_fingerboard.py), and the session type + HA shoulder
 and finger flags passed in from lift_main.py.
 
-Since 2026-10-07 the lift payload also carries what the coach needs to vary
-sessions instead of repeating the last one: the home-gym inventory, the
-exercises of the last lift session, working sets per muscle over 14 days,
-and the exercises the athlete added to coach sessions on his own. The
+Since 2026-10-07 the lift payload also carries what the coach needs to pick
+the most effective exercise per goal (ADR 0006): the season's focus, the
+home-gym inventory, the last lift session, when each muscle was last trained
+and how many sets it got in 14 days, and the exercises the athlete added to
+coach sessions on his own. The
 fingerboard is a separate session with its own payload
 (build_fingerboard_payload); the lift payload only gets a short summary.
 """
@@ -42,6 +43,20 @@ from .hevy_client import HevyClient, parse_ts, kg_to_lb, rpe_to_rir
 HISTORY_DAYS = 21
 COVERAGE_DAYS = 14
 LIFT_SESSION_TYPES = ("heavy_1h", "light_30m")
+
+
+def season_focus(session_date: date) -> str:
+    """The athlete's seasonal priority (his call, 2026-10-07), computed here so
+    the coach never has to reason about the calendar."""
+    if session_date.month in (11, 12, 1, 2, 3):
+        return (
+            "Snow season: snowboard leg endurance rises (bilateral, higher reps, short rests); "
+            "climbing pulling strength maintained; physique constant, arms every session."
+        )
+    return (
+        "Climbing and MTB season: climbing pulling strength (band-assisted pull-ups, lock-offs) "
+        "and physique lead, arms every session; legs maintained for MTB."
+    )
 
 
 def _athlete_context(config: AppConfig) -> dict[str, Any]:
@@ -130,6 +145,7 @@ def build_lift_payload(
         "session_date": session_date.isoformat(),
         "session_weekday": session_date.strftime("%A"),
         "session_type": session_type,
+        "season_focus": season_focus(session_date),
         "athlete_context": athlete_context,
         "equipment": HOME_GYM,
         "recent_recovery": recent_recovery,
@@ -140,6 +156,7 @@ def build_lift_payload(
             "exercises": [ex["exercise_name"] for ex in last_lift["exercises"]],
         },
         "muscle_sets_last_14d": muscle_sets(recent_lift_sessions, session_date - timedelta(days=COVERAGE_DAYS)),
+        "muscle_last_trained": muscle_last_trained(recent_lift_sessions),
         "athlete_added_exercises": athlete_added_exercises(recent_lift_sessions),
         "bodyweight_history": bodyweight_history,
         "recent_feedback": recent_feedback,
@@ -221,6 +238,17 @@ def muscle_sets(sessions: list[dict[str, Any]], since: date) -> dict[str, int]:
             if n:
                 out[muscle] = out.get(muscle, 0) + n
     return dict(sorted(out.items(), key=lambda kv: -kv[1]))
+
+
+def muscle_last_trained(sessions: list[dict[str, Any]]) -> dict[str, str]:
+    """{primary muscle: date of its last working set}, most recent first."""
+    out: dict[str, str] = {}
+    for s in sessions:
+        for ex in s["exercises"]:
+            if s["date"] and any(st["set_type"] != "warmup" for st in ex["sets"]):
+                muscle = ex.get("muscle") or "unknown"
+                out[muscle] = max(out.get(muscle, ""), s["date"])
+    return dict(sorted(out.items(), key=lambda kv: kv[1], reverse=True))
 
 
 def athlete_added_exercises(sessions: list[dict[str, Any]]) -> list[dict[str, Any]]:
