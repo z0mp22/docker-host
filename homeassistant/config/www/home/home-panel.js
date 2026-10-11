@@ -580,10 +580,11 @@ class HomePanel extends HTMLElement {
   async _loadPresence() {
     const ids = (this._c.people || []).map((p) => p.entity).filter(Boolean);
     if (!this._hass || !ids.length) return;
+    const start = Date.now() - PRESENCE_DAYS * 864e5;
     try {
       const res = await this._hass.callWS({
         type: "history/history_during_period",
-        start_time: new Date(Date.now() - PRESENCE_DAYS * 864e5).toISOString(),
+        start_time: new Date(start).toISOString(),
         entity_ids: ids,
         minimal_response: true,
         no_attributes: true,
@@ -592,6 +593,7 @@ class HomePanel extends HTMLElement {
       const out = {};
       for (const [id, rows] of Object.entries(res || {})) out[id] = rows.map((r) => [(r.lc ?? r.lu) * 1000, r.s]);
       this._presHist = out;
+      this._presStart = start;
       this._scheduleRender();
     } catch (_) {
       /* chips still show home/away without "since" */
@@ -599,13 +601,16 @@ class HomePanel extends HTMLElement {
   }
 
   // When the current home/away run started, skipping restart and outage blips (unavailable/unknown).
-  // null when it's older than the history window.
+  // null when it's older than the history window; undefined when the entity's history starts inside
+  // the window (e.g. a newly added sensor), so when the run began isn't known.
   _since(st) {
-    const rows = (this._presHist[st.entity_id] || []).filter((r) => r[1] !== "unavailable" && r[1] !== "unknown");
+    const raw = this._presHist[st.entity_id] || [];
+    const rows = raw.filter((r) => r[1] !== "unavailable" && r[1] !== "unknown");
     if (!rows.length || rows[rows.length - 1][1] !== st.state) return Date.parse(st.last_changed);
     let i = rows.length - 1;
     while (i > 0 && rows[i - 1][1] === st.state) i--;
-    return i === 0 ? null : rows[i][0];
+    if (i > 0) return rows[i][0];
+    return raw[0][0] <= this._presStart + 60e3 ? null : undefined;
   }
 
   // "3:01 PM", "yesterday 8:12 PM", "Fri 7:30 AM"
@@ -626,8 +631,8 @@ class HomePanel extends HTMLElement {
         const home = s.state === "home" || s.state === "on";
         const where = home ? "Home" : s.state === "not_home" || s.state === "off" ? "Away" : nice(s.state);
         const since = this._since(s);
-        const tail = since === null ? ` for ${PRESENCE_DAYS}+ days` : ` since ${this._sinceLabel(since)}`;
-        return `<span class="chip who ${home ? "home" : "away"}">${svg(home ? "mdiHomeAccount" : "mdiAccountArrowRight")}${name} · ${esc(where)}<span class="since">${esc(tail)}</span></span>`;
+        const tail = since === undefined ? "" : since === null ? ` for ${PRESENCE_DAYS}+ days` : ` since ${this._sinceLabel(since)}`;
+        return `<span class="chip who ${home ? "home" : "away"}">${svg(home ? "mdiHomeAccount" : "mdiAccountArrowRight")}${name} · ${esc(where)}${tail ? `<span class="since">${esc(tail)}</span>` : ""}</span>`;
       })
       .join("");
   }

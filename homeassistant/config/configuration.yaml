@@ -405,7 +405,7 @@ panel_custom:
     url_path: house
     sidebar_title: Home
     sidebar_icon: mdi:home
-    module_url: /local/home/home-panel.js?v=8
+    module_url: /local/home/home-panel.js?v=9
     config:
       person: person.cody
       # Header "who's home" chips: a person.* (phone app GPS) or a presence binary_sensor
