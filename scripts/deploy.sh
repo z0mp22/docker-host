@@ -100,17 +100,6 @@ preserve_env_file() {
   fi
 }
 
-preserve_up_conf() {
-  if [ ! -f "${DEPLOY_ROOT}/unifi-poller/up.conf" ]; then
-    if [ -f "${REPO_ROOT}/unifi-poller/up.conf.example" ]; then
-      cp "${REPO_ROOT}/unifi-poller/up.conf.example" "${DEPLOY_ROOT}/unifi-poller/up.conf"
-      log "created up.conf from example — set UniFi credentials on host"
-    else
-      die "missing ${DEPLOY_ROOT}/unifi-poller/up.conf"
-    fi
-  fi
-}
-
 is_compose_managed() {
   local name="$1"
   docker inspect "${name}" --format '{{index .Config.Labels "com.docker.compose.project"}}' 2>/dev/null | grep -q .
@@ -133,8 +122,22 @@ migrate_legacy_main_stack() {
   done
 }
 
+# unifi-poller was retired 2026-10-11: it had produced no data since 2026-09-20
+# and its 15s login retries kept the UDM account locked out. The Network panel
+# reads the Integration API with an API key instead. Removes what's left on the host.
+retire_unifi_poller() {
+  if docker ps -a --format '{{.Names}}' | grep -qx unifi-poller; then
+    log "removing retired unifi-poller"
+    docker rm -f unifi-poller
+  fi
+  docker image rm golift/unifi-poller:latest >/dev/null 2>&1 || true
+  if [ -d "${DEPLOY_ROOT}/unifi-poller" ]; then
+    sudo rm -rf "${DEPLOY_ROOT}/unifi-poller"
+  fi
+}
+
 migrate_legacy_exporters() {
-  for name in node-exporter pihole-exporter npm-exporter npm-metrics-exporter unifi-poller; do
+  for name in node-exporter pihole-exporter npm-exporter npm-metrics-exporter; do
     remove_legacy_container "${name}"
   done
 }
@@ -213,15 +216,6 @@ deploy_exporters() {
 
   log "deploying npm-metrics-exporter"
   (cd "${DEPLOY_ROOT}/npm-metrics-exporter" && docker compose up -d --build)
-
-  log "deploying unifi-poller"
-  (
-    cd "${DEPLOY_ROOT}/unifi-poller"
-    docker compose down 2>/dev/null || true
-    docker rm -f unifi-poller 2>/dev/null || true
-    [ "${PULL_IMAGES:-0}" = "1" ] && docker compose pull
-    docker compose up -d
-  )
 
   deploy_garmin_coaching_report
 }
@@ -392,16 +386,16 @@ main() {
   sync_homeassistant
   sync_mosquitto
   sync_npm_custom
-  for svc in node-exporter pihole-exporter npm-exporter npm-metrics-exporter unifi-poller garmin-coaching-report; do
+  for svc in node-exporter pihole-exporter npm-exporter npm-metrics-exporter garmin-coaching-report; do
     sync_exporter_stack "${svc}"
   done
   preserve_env_file "pihole-exporter"
-  preserve_up_conf
   cleanup_compose_artifacts
   migrate_legacy_main_stack
   deploy_main_stack
   reload_npm
   migrate_legacy_exporters
+  retire_unifi_poller
   deploy_exporters
   repair_homeassistant_config_entries
   install_plex_mqtt_bridge
