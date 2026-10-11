@@ -1,0 +1,37 @@
+# Network watch: scripts/netwatch.py (docker-host cron, every 15 min) checks what watched devices
+# look up in Pi-hole against netwatch/watchlist.json and publishes:
+#   home/netwatch/alert   one message per new off-allowlist (device, domain), not retained
+#   home/netwatch/status  retained summary of the last 24 h per device
+
+mqtt:
+  sensor:
+    - name: Network watch off-allowlist lookups
+      unique_id: netwatch_off_allowlist_24h
+      state_topic: home/netwatch/status
+      value_template: "{{ value_json.off_allowlist_24h }}"
+      unit_of_measurement: lookups
+      state_class: measurement
+      json_attributes_topic: home/netwatch/status
+      json_attributes_template: "{{ {'updated': value_json.updated, 'devices': value_json.devices} | tojson }}"
+      icon: mdi:radar
+
+automation:
+  - id: netwatch_off_allowlist_domain
+    alias: "Network watch: a device looked up a domain off its allowlist"
+    description: >-
+      One push per new (device, domain) pair; netwatch.py remembers what it already reported.
+    triggers:
+      - trigger: mqtt
+        topic: home/netwatch/alert
+    conditions:
+      - condition: template
+        value_template: "{{ trigger.payload_json is defined and (trigger.payload_json.device | default('')) | length > 0 }}"
+    actions:
+      - action: script.notify_phones
+        data:
+          title: "Network watch: {{ trigger.payload_json.device }}"
+          channel: Network
+          tag: "netwatch-{{ (trigger.payload_json.device ~ '-' ~ trigger.payload_json.domain) | slugify }}"
+          message: "{{ trigger.payload_json.message }}"
+    mode: queued
+    max: 10

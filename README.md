@@ -95,7 +95,8 @@ docker-host/
 ├── .github/workflows/     # deploy.yml, runner.yml
 ├── docs/decisions/        # ADRs (Plex HA observability, …)
 ├── scripts/               # deploy.sh, validate.sh, plex-mqtt-bridge.sh
-├── cron/                  # host cron snippets (plex-mqtt-bridge)
+├── cron/                  # host cron snippets (plex-mqtt-bridge, netwatch, ...)
+├── netwatch/              # per-device DNS allowlists for scripts/netwatch.py
 ├── runner/                # self-hosted runner helper
 ├── docker-compose.yml     # HA, mosquitto, npm, pihole
 ├── homeassistant/config/  # YAML config (replaces czampino/homeassistant)
@@ -180,6 +181,24 @@ the backup page scrape was used, or route type/stars were unavailable. **Update 
 both sources failed (or the container didn't run); the last good list is still shown and
 the error is on the panel. **Not updating** = no run in 26 h, so check the cron and
 `cron.log`. **No data** = HA can't read the JSON file at all.
+
+## Network watch (netwatch)
+
+Every 15 minutes `scripts/netwatch.py` checks what the devices in `netwatch/watchlist.json` look up
+in Pi-hole (read-only) against each device's allowed domain suffixes. Each new off-allowlist
+domain sends one phone push. Devices are matched by MAC and resolved to their current IP through
+the UniFi Integration API, using the read-only `unifi_api_key` from HA's `secrets.yaml`. It runs as
+root because it reads that file and Pi-hole's database.
+
+| Piece | Path |
+|-------|------|
+| Script + cron (every 15 min, root) | `scripts/netwatch.py`, `cron/netwatch` → `/usr/local/bin/netwatch.py`, `/etc/cron.d/netwatch` |
+| Watchlist (add devices here) | `netwatch/watchlist.json` → `/etc/netwatch/watchlist.json` |
+| State / log on host | `/var/lib/netwatch/state.json` (pairs already alerted), `/var/log/netwatch.log` |
+| MQTT | `home/netwatch/alert` (per new domain), `home/netwatch/status` (retained 24 h summary) |
+| HA | `packages/netwatch.yaml`: `sensor.network_watch_off_allowlist_lookups` + push automation |
+
+To hear about a domain again, remove it from that device's list in `state.json`.
 
 ## Home Assistant note
 

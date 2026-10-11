@@ -380,6 +380,16 @@ install_bluetooth_watchdog() {
   sudo /usr/local/bin/bluetooth-watchdog.sh || log "WARN: bluetooth watchdog initial run failed"
 }
 
+install_netwatch() {
+  log "installing netwatch (Pi-hole lookups vs per-device allowlists)"
+  install_file "${REPO_ROOT}/scripts/netwatch.py" "/usr/local/bin/netwatch.py" 755
+  sudo mkdir -p /etc/netwatch
+  install_file "${REPO_ROOT}/netwatch/watchlist.json" "/etc/netwatch/watchlist.json" 644
+  install_file "${REPO_ROOT}/cron/netwatch" "/etc/cron.d/netwatch" 644
+  sudo /usr/bin/python3 /usr/local/bin/netwatch.py >>/tmp/netwatch-deploy.log 2>&1 \
+    || log "WARN: netwatch initial run failed (see /tmp/netwatch-deploy.log)"
+}
+
 main() {
   require_docker
   ensure_networks
@@ -401,6 +411,7 @@ main() {
   install_plex_mqtt_bridge
   install_hdhomerun_signal_bridge
   install_bluetooth_watchdog
+  install_netwatch
   deploy_mountain_project_feed
   deploy_hvac_prices
   deploy_alloy
