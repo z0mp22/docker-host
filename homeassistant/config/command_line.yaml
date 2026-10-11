@@ -130,7 +130,8 @@
       - priorities
 
 # Fingerboard session: same shape as Lift Session Latest plus a `fingerboard`
-# attribute (phase, ramp week, deload). run-lift-session.sh copies
+# attribute (phase, ramp week, deload) and `blocks` (the session set by set, for
+# the Coach panel). run-lift-session.sh copies
 # fingerboard_session_latest.json here after a fingerboard run.
 - sensor:
     name: Fingerboard Session Latest
@@ -147,6 +148,7 @@
       - flags_considered
       - routine_id
       - fingerboard
+      - blocks
 
 # Internet latency for the Network panel, measured from the Pi itself so it works
 # even when UniFi data doesn't. Prints {"avg": <ms or null>, "loss": <percent>};

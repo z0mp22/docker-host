@@ -15,6 +15,12 @@ POST /v1/exercise_templates on 2026-10-05, type weight_duration so added
 weight can be logged later). Exercises are resolved from the live catalog
 by exact title, never by hardcoded id.
 
+Since 2026-10-11 every set in Hevy is one hang with its own target time
+(phase 1: 6 sets of 10s per round, with the 20s off as the Hevy rest timer)
+instead of one 60s set per cycle, and the warm-up is its own exercise
+("BM1000 Warm-up", every set typed warm-up). The athlete found the cycle
+notation and the long notes hard to follow on the board.
+
 Phase is deliberately NOT decided by the coach. It lives in
 REPORT_OUTPUT_DIR/fingerboard_state.json and only moves when the athlete
 confirms a gate. The coach can only say a gate looks met.
@@ -65,6 +71,12 @@ PLAN_EXERCISES = {
     "BM1000 Bottom Row Outside - Half Crimp": "bottom_outside",
     "BM1000 Bottom Row Outside - Open Hand": "bottom_outside",
 }
+# The warm-up block: its own custom Hevy exercise (type duration), every set
+# written as a warm-up set. Jugs on the top corners, then easy feet-assisted
+# pulls on the plan hold. Never counts toward the board limits.
+WARMUP_EXERCISE = "BM1000 Warm-up"
+WARMUP_MAX_SETS = 8
+WARMUP_MAX_SET_SECONDS = 15
 # Any other catalog entry with one of these words is a finger-loading
 # exercise outside the plan (e.g. the athlete's older generic "Hangboard",
 # which has no hold and no weight field) and is never prescribable.
@@ -75,16 +87,20 @@ _FINGER_WORDS = {"hangboard", "fingerboard", "bm1000", "campus"}
 class PhaseRule:
     name: str
     holds: frozenset[str]
-    max_sets: int
+    # A round is what the athlete rests 2-3 minutes after. In phase 1 a round
+    # is 6 hangs, each its own Hevy set; in phases 2 and 3 a round is one set
+    # (a 6 x 7s/3s repeater can't be split, the 3s off is too short to log).
+    max_rounds: int
+    sets_per_round: int
     max_set_seconds: int
     added_weight: bool
     min_rir: float
 
 
 PHASES = {
-    1: PhaseRule("Tissue prep", frozenset({"middle_outside"}), 3, 60, False, 4.0),
-    2: PhaseRule("Volume base", frozenset({"middle_outside", "bottom_outside"}), 4, 60, False, 3.0),
-    3: PhaseRule("Strength", frozenset({"middle_outside", "bottom_outside"}), 5, 12, True, 2.0),
+    1: PhaseRule("Tissue prep", frozenset({"middle_outside"}), 3, 6, 10, False, 4.0),
+    2: PhaseRule("Volume base", frozenset({"middle_outside", "bottom_outside"}), 4, 1, 60, False, 3.0),
+    3: PhaseRule("Strength", frozenset({"middle_outside", "bottom_outside"}), 5, 1, 12, True, 2.0),
 }
 MAX_BOARD_DAYS_PER_WEEK = 2
 # Phase 3 load creeps up at most this much over the best weight already
@@ -112,8 +128,14 @@ def resolve_off_plan_finger_ids(catalog: list[dict[str, Any]]) -> dict[str, str]
     return {
         ex["id"]: ex["name"]
         for ex in catalog
-        if ex["name"] not in PLAN_EXERCISES and _name_words(ex["name"]) & _FINGER_WORDS
+        if ex["name"] not in PLAN_EXERCISES
+        and ex["name"] != WARMUP_EXERCISE
+        and _name_words(ex["name"]) & _FINGER_WORDS
     }
+
+
+def resolve_warmup_id(catalog: list[dict[str, Any]]) -> str | None:
+    return next((ex["id"] for ex in catalog if ex["name"] == WARMUP_EXERCISE), None)
 
 
 def without_board_exercises(catalog: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -125,13 +147,13 @@ def without_board_exercises(catalog: list[dict[str, Any]]) -> list[dict[str, Any
 
 
 def fingerboard_session_catalog(catalog: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """What a fingerboard session may use: the plan's board exercises plus
-    forearm work (wrist curls, reverse curls, wrist roller) for the antagonist
-    and wrist-health block. Nothing else."""
+    """What a fingerboard session may use: the warm-up, the plan's board
+    exercises, and forearm work (wrist curls, reverse curls, wrist roller) for
+    the antagonist and wrist-health block. Nothing else."""
     from .lift_equipment import home_gym_catalog
 
     home, _ = home_gym_catalog(without_board_exercises(catalog))
-    return [ex for ex in catalog if ex["name"] in PLAN_EXERCISES] + [
+    return [ex for ex in catalog if ex["name"] in PLAN_EXERCISES or ex["name"] == WARMUP_EXERCISE] + [
         ex for ex in home if ex.get("muscle") == "forearms"
     ]
 
@@ -276,6 +298,7 @@ def limits_for(
     """The same numbers assert_fingerboard_safe() enforces, handed to the
     coach so it never has to guess a limit."""
     rule = PHASES[state["phase"]]
+    rounds = math.ceil(rule.max_rounds / 2) if state["deload_week"] else rule.max_rounds
     blocked = (
         "finger flag is on" if finger_flag
         else f"already {board_days} board days in the last 7" if board_days >= MAX_BOARD_DAYS_PER_WEEK
@@ -285,14 +308,45 @@ def limits_for(
         "board_allowed_today": blocked is None,
         "blocked_reason": blocked,
         "allowed_holds": sorted(rule.holds),
-        "max_total_sets": math.ceil(rule.max_sets / 2) if state["deload_week"] else rule.max_sets,
+        "max_rounds": rounds,
+        "sets_per_round": rule.sets_per_round,
+        "max_total_sets": rounds * rule.sets_per_round,
         "max_seconds_per_set": rule.max_set_seconds,
+        "warmup": {"exercise": WARMUP_EXERCISE, "max_sets": WARMUP_MAX_SETS,
+                   "max_seconds_per_set": WARMUP_MAX_SET_SECONDS},
         "min_rir_target": rule.min_rir,
         "max_added_weight_lb": {
             hold: (best_added_weight_lb(history, hold) + MAX_WEIGHT_STEP_LB) if rule.added_weight else 0
             for hold in sorted(rule.holds)
         },
     }
+
+
+def board_blocks(exercises: list["ExercisePrescription"], sets_per_round: int = 1) -> list[dict[str, Any]]:
+    """The session set by set, for the Coach panel: one entry per exercise,
+    in order. `round` is how many sets make one round on a board exercise
+    (rest 2-3 min after each round)."""
+    out = []
+    for ex in sorted(exercises, key=lambda e: e.slot_order):
+        kind = (
+            "warmup" if ex.exercise_name == WARMUP_EXERCISE or ex.goal == "warmup"
+            else "board" if ex.exercise_name in PLAN_EXERCISES
+            else "accessory"
+        )
+        out.append(
+            {
+                "name": ex.exercise_name,
+                "kind": kind,
+                "sets": ex.sets,
+                "seconds": ex.duration_seconds,
+                "reps": ex.reps,
+                "weight_lb": ex.weight_lb,
+                "rest_seconds": ex.rest_seconds,
+                "round": sets_per_round if kind == "board" and sets_per_round > 1 else None,
+                "note": ex.notes or "",
+            }
+        )
+    return out
 
 
 # --- Guard -------------------------------------------------------------------
@@ -307,8 +361,10 @@ def assert_fingerboard_safe(
     the first violation; nothing partial is written."""
     plan = resolve_plan_exercises(catalog)
     off_plan = resolve_off_plan_finger_ids(catalog)
+    warmup_id = resolve_warmup_id(catalog)
     rule = PHASES[context["phase"]]
     board = [ex for ex in exercises if ex.exercise_id in plan]
+    warmups = [ex for ex in exercises if ex.exercise_id == warmup_id]
 
     for ex in exercises:
         if ex.exercise_id in off_plan:
@@ -316,7 +372,7 @@ def assert_fingerboard_safe(
                 f"Claude proposed {off_plan[ex.exercise_id]!r}, a finger exercise outside the "
                 "Beastmaker ramp -- only the BM1000 plan exercises may be prescribed"
             )
-    if not board:
+    if not board and not warmups:
         return
 
     def fail(ex: "ExercisePrescription", why: str) -> None:
@@ -326,15 +382,35 @@ def assert_fingerboard_safe(
         )
 
     limits = context["limits"]
+    # The warm-up is board time too: off with the board, short, never weighted,
+    # and always logged as warm-up sets (goal "warmup" makes hevy_client type them).
+    for ex in warmups:
+        if not limits["board_allowed_today"]:
+            fail(ex, f"prescribed but the board is off today ({limits['blocked_reason']})")
+        if ex.goal != "warmup":
+            fail(ex, f"must have goal 'warmup' so its sets are logged as warm-up sets, not {ex.goal!r}")
+        if ex.sets > WARMUP_MAX_SETS:
+            fail(ex, f"has {ex.sets} sets, limit {WARMUP_MAX_SETS}")
+        if ex.duration_seconds is None or ex.reps is not None:
+            fail(ex, "must be prescribed as timed hangs (duration_seconds), not reps")
+        if not 0 < ex.duration_seconds <= WARMUP_MAX_SET_SECONDS:
+            fail(ex, f"duration {ex.duration_seconds}s is outside 1-{WARMUP_MAX_SET_SECONDS}s per set")
+        if ex.weight_lb:
+            fail(ex, "adds weight; the warm-up is never weighted")
+    if not board:
+        return
     if not limits["board_allowed_today"]:
         fail(board[0], f"prescribed but the board is off today ({limits['blocked_reason']})")
 
     total_sets = sum(ex.sets for ex in board)
     if total_sets > limits["max_total_sets"]:
-        fail(board[0], f"block has {total_sets} sets, limit {limits['max_total_sets']}"
+        fail(board[0], f"block has {total_sets} sets, limit {limits['max_total_sets']} "
+             f"({limits['max_rounds']} rounds x {limits['sets_per_round']})"
              f"{' (deload week)' if context.get('deload_week') else ''}")
 
     for ex in board:
+        if ex.goal == "warmup":
+            fail(ex, "is a working board exercise; warm-up pulls go in the BM1000 Warm-up exercise")
         hold = plan[ex.exercise_id]["hold"]
         if hold not in limits["allowed_holds"]:
             fail(ex, f"uses the {hold} hold, not allowed until a later phase")

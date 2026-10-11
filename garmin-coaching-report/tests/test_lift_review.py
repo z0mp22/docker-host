@@ -1,7 +1,8 @@
 """Non-safety session checks (lift_review.py)."""
 
 from coaching_report.lift_coach import ExercisePrescription
-from coaching_report.lift_review import review_plan
+from coaching_report.lift_fingerboard import board_blocks
+from coaching_report.lift_review import fingerboard_problems, name_problems, review_plan
 
 CATALOG = {
     "DL": {"name": "Deadlift (Barbell)", "muscle": "glutes", "type": "weight_reps", "equipment": "barbell"},
@@ -12,6 +13,8 @@ CATALOG = {
     "TP": {"name": "Triceps Rope Pushdown", "muscle": "triceps", "type": "weight_reps", "equipment": "machine"},
     "HANG": {"name": "Dead Hang", "muscle": "upper_back", "type": "duration", "equipment": "none"},
     "PU": {"name": "Pull Up (Band)", "muscle": "lats", "type": "reps_only", "equipment": "resistance_band"},
+    "RWC": {"name": "Reverse Wrist Curl (Dumbbell)", "muscle": "forearms", "type": "weight_reps", "equipment": "dumbbell"},
+    "PUWC": {"name": "Seated Palms Up Wrist Curl", "muscle": "forearms", "type": "weight_reps", "equipment": "dumbbell"},
 }
 
 
@@ -66,3 +69,38 @@ def test_no_added_load_after_an_rpe_10_set():
     assert "RPE 10" in problem
     plan[0] = _ex("HC", 3, 30.0)
     assert review_plan(plan, "light_30m", CATALOG, history=history) == []
+
+
+def test_a_name_that_does_not_match_its_hevy_id_is_a_problem():
+    # Hevy shows the template behind the id: "reverse" in the plan, palms-up in Hevy.
+    wrong = ExercisePrescription("PUWC", "Reverse Wrist Curl (Dumbbell)", 1, None, 2, 15, None, 5.0, 4.0, 60,
+                                 None, "climbing", "wrist extensors")
+    (problem,) = name_problems([wrong, _ex("RWC", 2, 5.0)], CATALOG)
+    assert "'Seated Palms Up Wrist Curl'" in problem
+    assert any("Hevy shows" in p for p in review_plan([wrong], "fingerboard", CATALOG))
+
+
+def _board(name, sets, seconds, notes="Feet heavy. Active shoulders.", goal="climbing", slot=1):
+    return ExercisePrescription(name, name, slot, None, sets, None, seconds, None, 4.0, 20, notes, goal, "why")
+
+
+def test_fingerboard_wants_its_own_warmup_and_short_text():
+    plan = [_board("BM1000 Middle Row Outside - Half Crimp", 12, 10, notes="x" * 141)]
+    problems = fingerboard_problems(plan, "y" * 501, warmup_id="BM1000 Warm-up")
+    assert len(problems) == 3
+    assert "no BM1000 Warm-up entry" in problems[0]
+    assert "141 characters" in problems[1]
+    assert "summary_text is 501" in problems[2]
+    plan = [_board("BM1000 Warm-up", 6, 10, goal="warmup"), _board("BM1000 Middle Row Outside - Half Crimp", 12, 10)]
+    assert fingerboard_problems(plan, "short", warmup_id="BM1000 Warm-up") == []
+
+
+def test_board_blocks_lay_the_session_out_set_by_set():
+    plan = [_board("BM1000 Middle Row Outside - Half Crimp", 12, 10, slot=2),
+            _board("BM1000 Warm-up", 6, 10, goal="warmup", slot=1),
+            _ex("RWC", 2, 5.0)]
+    plan[2].slot_order = 3
+    warm, board, acc = board_blocks(plan, sets_per_round=6)
+    assert (warm["kind"], warm["sets"], warm["seconds"], warm["round"]) == ("warmup", 6, 10, None)
+    assert (board["kind"], board["sets"], board["round"], board["rest_seconds"]) == ("board", 12, 6, 20)
+    assert (acc["kind"], acc["reps"], acc["weight_lb"]) == ("accessory", 10, 5.0)

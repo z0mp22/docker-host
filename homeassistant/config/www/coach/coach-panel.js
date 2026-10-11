@@ -10,6 +10,7 @@ const ICONS = {
   mdiCheck: "M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z",
   mdiChevronDown: "M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z",
   mdiHandBackRightOutline: "M21 7C21 5.62 19.88 4.5 18.5 4.5C18.33 4.5 18.16 4.5 18 4.55V4C18 2.62 16.88 1.5 15.5 1.5C15.27 1.5 15.04 1.53 14.83 1.59C14.46 .66 13.56 0 12.5 0C11.27 0 10.25 .89 10.04 2.06C9.87 2 9.69 2 9.5 2C8.12 2 7 3.12 7 4.5V10.39C6.66 10.08 6.24 9.85 5.78 9.73L5 9.5C4.18 9.29 3.31 9.61 2.82 10.35C2.44 10.92 2.42 11.66 2.67 12.3L5.23 18.73C6.5 21.91 9.57 24 13 24C17.42 24 21 20.42 21 16V7M19 16C19 19.31 16.31 22 13 22C10.39 22 8.05 20.41 7.09 18L4.5 11.45L5 11.59C5.5 11.71 5.85 12.05 6 12.5L7 15H9V4.5C9 4.22 9.22 4 9.5 4S10 4.22 10 4.5V12H12V2.5C12 2.22 12.22 2 12.5 2S13 2.22 13 2.5V12H15V4C15 3.72 15.22 3.5 15.5 3.5S16 3.72 16 4V12H18V7C18 6.72 18.22 6.5 18.5 6.5S19 6.72 19 7V16Z",
+  mdiStop: "M18,18H6V6H18V18Z",
   mdiDumbbell: "M20.57,14.86L22,13.43L20.57,12L17,15.57L8.43,7L12,3.43L10.57,2L9.14,3.43L7.71,2L5.57,4.14L4.14,2.71L2.71,4.14L4.14,5.57L2,7.71L3.43,9.14L2,10.57L3.43,12L7,8.43L15.57,17L12,20.57L13.43,22L14.86,20.57L16.29,22L18.43,19.86L19.86,21.29L21.29,19.86L19.86,18.43L22,16.29L20.57,14.86Z",
   mdiLightningBolt: "M11 15H6L13 1V9H18L11 23V15Z",
   mdiMenu: "M3,6H21V8H3V6M3,11H21V13H3V11M3,16H21V18H3V16Z",
@@ -30,8 +31,9 @@ const PANEL_STATE = "input_text.coach_panel_state";
 const SLOW_MS = 15 * 60e3;
 const EXPIRE_MS = 60 * 60e3;
 const REPORT_BUSY_MS = 10 * 60e3;
-// Basement set-up (packages/workout.yaml): lights to 80% + workout playlist on the basement Roku.
-const WORKOUT = { script: "script.basement_workout", light: "light.basement", roku: "media_player.basement_roku" };
+// Basement set-up (packages/workout.yaml): lights to 80% + workout playlist on the basement Roku,
+// and the wind-down: Spotify closed, Roku (and TV) off, lights off, feedback prompt.
+const WORKOUT = { script: "script.basement_workout", end: "script.basement_workout_end", light: "light.basement", roku: "media_player.basement_roku" };
 const WORKOUT_DONE_MS = 8000;
 
 const TYPES = [
@@ -237,11 +239,26 @@ textarea::placeholder { color: #5d6b80; }
 .cta.wk-btn { margin-top: 0; width: auto; flex: none; padding: 0 26px; }
 .cta.wk-btn.quiet { background: #172234; border: 1px solid var(--line); box-shadow: none; color: var(--accent); }
 .cta.wk-btn.quiet:disabled { color: #56607a; }
+.wk-btns { display: flex; gap: 10px; flex: none; }
 .cta.wk-btn.done { background: linear-gradient(180deg, #2fa866, #1d7a46); box-shadow: 0 10px 30px rgba(34,197,94,.3), inset 0 1px 0 rgba(255,255,255,.25); color: #fff; border: 0; }
 .bd-list { margin-top: 14px; display: flex; flex-direction: column; gap: 2px; }
 .bd-ex { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; font-size: 16px; }
 .bd-ex + .bd-ex { border-top: 1px dashed rgba(148,170,200,.14); }
 .bd-ex span:last-child { color: #c7b8ff; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.bd-blocks { margin-top: 14px; display: flex; flex-direction: column; gap: 10px; }
+.bd-blk { padding: 12px 14px; border-radius: 16px; background: #121a28; border: 1px solid var(--line); }
+.bd-blk.warmup { border-style: dashed; }
+.bd-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.bd-name { font-size: 16px; font-weight: 600; overflow-wrap: anywhere; }
+.bd-name small { font-size: 13px; color: var(--muted); font-weight: 500; }
+.bd-rest { font-size: 13px; color: var(--muted); white-space: nowrap; }
+.bd-sets { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.bd-round { display: flex; flex-wrap: wrap; gap: 5px; }
+.bd-set { min-width: 38px; height: 28px; padding: 0 7px; border-radius: 8px; display: grid; place-items: center; font-size: 13.5px; font-weight: 600;
+  font-variant-numeric: tabular-nums; background: rgba(167,139,250,.14); color: #c7b8ff; }
+.bd-blk.warmup .bd-set { background: #1b2638; color: #9fb0c6; }
+.bd-blk.accessory .bd-set { background: rgba(76,195,255,.12); color: #9fdcff; }
+.bd-note { margin-top: 8px; font-size: 13.5px; color: var(--muted); line-height: 1.4; overflow-wrap: anywhere; }
 .cta.bd-btn { background: #172234; border: 1px solid var(--line); box-shadow: none; color: var(--accent); height: 56px; font-size: 18px; }
 .cta.bd-btn:disabled { color: #56607a; }
 .toast { position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%); padding: 14px 20px; border-radius: 14px; background: #3a1d24; border: 1px solid rgba(240,97,109,.5); color: #ffd3d7; z-index: 10; max-width: 90vw; }
@@ -281,7 +298,8 @@ textarea::placeholder { color: #5d6b80; }
   .report-row { flex-wrap: wrap; }
   .wk { flex-wrap: wrap; gap: 12px; }
   .wk .sub { font-size: 13.5px; }
-  .cta.wk-btn { width: 100%; }
+  .wk-btns { width: 100%; }
+  .cta.wk-btn { flex: 1 1 0; padding: 0 14px; }
   .btn2 { width: 100%; }
 }
 `;
@@ -319,6 +337,8 @@ class CoachPanel extends HTMLElement {
   connectedCallback() {
     loadFont();
     this._ensureSetup();
+    // The end-of-workout push opens /coach?feedback.
+    if (new URLSearchParams(location.search).has("feedback")) setTimeout(() => this._focusFeedback(), 600);
     this._tick = setInterval(() => this._render(), 5000);
   }
 
@@ -500,7 +520,10 @@ class CoachPanel extends HTMLElement {
         return;
       }
       case "workout":
-        this._runWorkout();
+        this._runWorkout("start");
+        return;
+      case "workout-end":
+        this._runWorkout("end");
         return;
       case "more-reports":
         this._moreReports = !this._moreReports;
@@ -539,20 +562,29 @@ class CoachPanel extends HTMLElement {
   }
 
   // Calls the script itself (not script.turn_on) so a failure comes back here as a toast.
-  async _runWorkout() {
+  async _runWorkout(kind) {
     if (this._workout?.phase === "busy") return;
     navigator.vibrate?.(8);
-    this._workout = { phase: "busy" };
+    this._workout = { phase: "busy", kind };
     this._render();
+    const script = kind === "end" ? WORKOUT.end : WORKOUT.script;
     try {
-      await this._hass.callService("script", WORKOUT.script.slice("script.".length));
-      this._workout = { phase: "done", at: Date.now() };
+      await this._hass.callService("script", script.slice("script.".length));
+      this._workout = { phase: "done", kind, at: Date.now() };
+      if (kind === "end") this._focusFeedback();
     } catch (err) {
       this._workout = null;
-      this._showToast(`Workout didn't start: ${err.message || err}`);
+      this._showToast(`${kind === "end" ? "Workout didn't end" : "Workout didn't start"}: ${err.message || err}`);
     }
     this._render();
     setTimeout(() => this._render(), WORKOUT_DONE_MS + 100);
+  }
+
+  // After End workout (or opening /coach?feedback from the push), bring the feedback box up.
+  _focusFeedback() {
+    const card = this.shadowRoot.querySelector(".a-feedback");
+    card?.scrollIntoView({ behavior: "smooth", block: "center" });
+    this._textarea?.focus({ preventScroll: true });
   }
 
   // What the basement is doing right now, from the light and the Roku themselves.
@@ -578,13 +610,26 @@ class CoachPanel extends HTMLElement {
     const w = this._workout;
     const busy = w?.phase === "busy";
     const done = w?.phase === "done" && Date.now() - w.at < WORKOUT_DONE_MS;
-    const label = busy ? `${svg("mdiRefresh")} Starting…` : done ? `${svg("mdiCheck")} Started` : `${svg("mdiPlay")} Start workout`;
+    // A workout is going while Spotify is up on the basement Roku.
+    const active = !rokuDead && /spotify/i.test(app) && !["off", "standby"].includes(roku.state);
+    const lightOn = !dead(light) && light.state === "on";
+    const startLabel =
+      busy && w.kind === "start" ? `${svg("mdiRefresh")} Starting…` : done && w.kind === "start" ? `${svg("mdiCheck")} Started` : `${svg("mdiPlay")} Start`;
+    const endLabel =
+      busy && w.kind === "end" ? `${svg("mdiRefresh")} Ending…` : done && w.kind === "end" ? `${svg("mdiCheck")} Ended` : `${svg("mdiStop")} End`;
+    const startCls = done && w.kind === "start" ? "done" : !active && m.fresh ? "" : "quiet";
+    const endCls = done && w.kind === "end" ? "done" : active ? "" : "quiet";
     this._set(
       "workout",
       `<div class="wk">
-        <div class="wk-t"><div class="eyebrow">Basement</div><h3>Lights 80% · workout playlist</h3>
-          <div class="sub">Now: ${esc(lightText)} · ${esc(tvText)}</div></div>
-        <button class="cta wk-btn ${done ? "done" : m.fresh ? "" : "quiet"}" data-action="workout" ${busy || rokuDead ? "disabled" : ""}>${label}</button>
+        <div class="wk-t"><div class="eyebrow">Basement workout</div>
+          <h3>${active ? "Workout in progress" : "Lights 80% · workout playlist"}</h3>
+          <div class="sub">Now: ${esc(lightText)} · ${esc(tvText)}</div>
+          ${active ? `<div class="sub">End turns off Spotify, the TV and the lights, then asks how it went.</div>` : ""}</div>
+        <div class="wk-btns">
+          <button class="cta wk-btn ${startCls}" data-action="workout" ${busy || rokuDead ? "disabled" : ""}>${startLabel}</button>
+          <button class="cta wk-btn ${endCls}" data-action="workout-end" ${busy || (rokuDead && !lightOn) ? "disabled" : ""}>${endLabel}</button>
+        </div>
       </div>
       ${rokuDead ? `<div class="alert warn">${svg("mdiAlertOutline")}<span>Home Assistant can't reach the basement Roku, so the playlist can't start. Check that it's plugged in and on Wi-Fi.</span></div>` : ""}`,
     );
@@ -654,7 +699,35 @@ class CoachPanel extends HTMLElement {
       flags: Array.isArray(a.flags_considered) ? a.flags_considered : [],
       routineId: a.routine_id,
       fb: a.fingerboard || null,
+      blocks: Array.isArray(a.blocks) ? a.blocks : [],
     };
+  }
+
+  // The board session set by set (sensor attribute `blocks`, since 2026-10-11):
+  // one chip per Hevy set, grouped into rounds, so the structure reads without text.
+  _boardBlocks(blocks) {
+    const secs = (n) => (n >= 60 && n % 60 === 0 ? `${n / 60} min` : `${n}s`);
+    return `<div class="bd-blocks">${blocks
+      .map((x) => {
+        const name = String(x.name || "").replace(/^BM1000\s+/, "");
+        const [hold, grip] = name.split(/\s+-\s+/);
+        const title = x.kind === "warmup" ? "Warm-up" : grip ? `${esc(grip)} <small>${esc(hold)}</small>` : esc(name);
+        const chip = x.seconds ? secs(x.seconds) : x.reps ? String(x.reps) : "✓";
+        const per = x.round > 1 ? x.round : x.sets;
+        const rounds = [];
+        for (let i = 0; i < x.sets; i += per) rounds.push(Math.min(per, x.sets - i));
+        const sets = rounds
+          .map((n) => `<div class="bd-round">${`<span class="bd-set">${esc(chip)}</span>`.repeat(n)}</div>`)
+          .join("");
+        const load = x.weight_lb ? ` @ ${x.weight_lb} lb` : "";
+        const rest = x.rest_seconds ? `rest ${secs(x.rest_seconds)}` : "";
+        return `<div class="bd-blk ${esc(x.kind || "")}">
+          <div class="bd-head"><div class="bd-name">${title}${esc(load)}</div><div class="bd-rest">${esc(rest)}</div></div>
+          <div class="bd-sets" aria-label="${x.sets} sets">${sets}</div>
+          ${x.note ? `<div class="bd-note">${esc(x.note)}</div>` : ""}
+        </div>`;
+      })
+      .join("")}</div>`;
   }
 
   // Same lifecycle as _liftJob, for the board request (panel state key "b").
@@ -769,7 +842,13 @@ class CoachPanel extends HTMLElement {
       const items = parseSummary(b.summary).items.filter((i) => i.kind === "ex");
       const when = b.fresh ? "Today" : `${new Date(`${b.date}T12:00:00`).toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })} · ${b.ageDays === 1 ? "yesterday" : `${b.ageDays} days ago`}`;
       list = `<div class="pills"><span class="pill ${b.fresh ? "fresh" : "stale"}">${esc(when)}</span></div>
-        ${items.length ? `<div class="bd-list">${items.map((e) => `<div class="bd-ex"><span>${esc(e.name)}</span><span>${esc(e.reps || "")}</span></div>`).join("")}</div>` : `<div class="raw">${esc(stripMd(b.summary))}</div>`}
+        ${
+          b.blocks.length
+            ? this._boardBlocks(b.blocks)
+            : items.length
+              ? `<div class="bd-list">${items.map((e) => `<div class="bd-ex"><span>${esc(e.name)}</span><span>${esc(e.reps || "")}</span></div>`).join("")}</div>`
+              : `<div class="raw">${esc(stripMd(b.summary))}</div>`
+        }
         ${b.routineId ? `<div class="hevy">${svg("mdiCheck")} Saved to Hevy as “Next Fingerboard Session”</div>` : ""}`;
     } else {
       list = `<div class="empty">No board session yet. Generate one for a separate 20–30 minute board day.</div>`;
