@@ -1,0 +1,78 @@
+# Garage door left open at night, seen by the Garage camera (there is no door sensor).
+# Frigate's state-classification model "garage_door" (frigate repo config.yml,
+# classification.custom) crops the top of the door opening and labels it open/closed;
+# the Frigate integration exposes that as sensor.garage_garage_door_classification.
+# - Frigate only publishes a verified change (3 matching classifications in a row) and doesn't
+#   retain it; the integration restores the last value across HA restarts.
+# - "Unknown" means the model hasn't been trained yet, so these automations stay quiet.
+# - A dropped camera stream freezes the sensor at its last value, so the 21:00 check pushes
+#   "can't check" when the Garage stream is down instead of trusting it.
+
+automation:
+  - id: garage_door_open_at_night
+    alias: "Garage: push when the door is open at night"
+    description: >-
+      At 21:00, or after the door has been open 10 minutes between 21:00 and 06:00, push a
+      Garage camera photo. Closing the door clears the push.
+    mode: single
+    triggers:
+      - trigger: time
+        at: "21:00:00"
+        id: check
+      - trigger: state
+        entity_id: sensor.garage_garage_door_classification
+        to: open
+        for: "00:10:00"
+        id: opened
+    conditions:
+      - condition: time
+        after: "21:00:00"
+        before: "06:00:00"
+    actions:
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: binary_sensor.garage_stream_active
+                state: "on"
+              - condition: state
+                entity_id: sensor.garage_garage_door_classification
+                state: open
+            sequence:
+              - action: script.notify_phones
+                data:
+                  title: Garage door is open
+                  message: "Open since {{ as_local(states.sensor.garage_garage_door_classification.last_changed).strftime('%-I:%M %p') }}"
+                  tag: garage-door-open
+                  channel: Garage
+                  data:
+                    image: "/api/camera_proxy/camera.garage?v={{ now().timestamp() | int }}"
+                    clickAction: /cameras?live=camera.garage
+                    url: /cameras?live=camera.garage
+          - conditions:
+              - condition: trigger
+                id: check
+              - condition: template
+                value_template: >-
+                  {{ not is_state('binary_sensor.garage_stream_active', 'on')
+                     and states('sensor.garage_garage_door_classification') | lower != 'unknown' }}
+            sequence:
+              - action: script.notify_phones
+                data:
+                  title: Can't check the garage door
+                  message: The Garage camera stream is down, so the door state is stale.
+                  tag: garage-door-unknown
+                  channel: Garage
+
+  - id: garage_door_closed_clear
+    alias: "Garage: clear the open-door push when it closes"
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id: sensor.garage_garage_door_classification
+        from: open
+        to: closed
+    actions:
+      - action: script.notify_phones
+        data:
+          message: clear_notification
+          tag: garage-door-open
