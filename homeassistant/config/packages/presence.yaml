@@ -1,0 +1,22 @@
+# Who's home, for the Home panel's header chips (panel_custom home-panel, config "people").
+# - Cody has the companion app, so person.cody (phone GPS) is used as-is.
+# - Other phones have no app. They count as home while they're on the home Wi-Fi, read from
+#   the UDM client list that sensor.network_clients already polls every minute.
+# - Clients are matched by hostname prefix, not MAC: this repo is public, and the UDM shows
+#   the name as "<hostname> <last two MAC bytes>".
+# - A phone briefly drops off Wi-Fi when it roams between APs or sleeps, so "away" waits
+#   10 minutes. A real departure shows up 10 minutes late; arrivals show within a minute.
+# - Unavailable (not "away") while the UDM client list can't be read.
+
+template:
+  - binary_sensor:
+      - name: Tiffany home
+        unique_id: presence_tiffany_home
+        device_class: presence
+        availability: "{{ has_value('sensor.network_clients') }}"
+        state: >
+          {{ state_attr('sensor.network_clients', 'data') | default([], true)
+             | selectattr('name', 'string')
+             | selectattr('name', 'match', 'TIFFANY-s-S22( |$)')
+             | list | count > 0 }}
+        delay_off: "00:10:00"

@@ -403,9 +403,14 @@ panel_custom:
     url_path: house
     sidebar_title: Home
     sidebar_icon: mdi:home
-    module_url: /local/home/home-panel.js?v=7
+    module_url: /local/home/home-panel.js?v=8
     config:
       person: person.cody
+      # Header "who's home" chips: a person.* (phone app GPS) or a presence binary_sensor
+      # (on = home; Wi-Fi based, packages/presence.yaml).
+      people:
+        - {name: Cody, entity: person.cody}
+        - {name: Tiffany, entity: binary_sensor.tiffany_home}
       # Eufy T8210 via the eufy-sdk integration (eufy-bridge container). The HomeBase shows up as
       # "zdoorbell" with its own event entities; these are the doorbell's.
       doorbell: &doorbell
