@@ -8,6 +8,7 @@ const ICONS = {
   mdiWateringCan: "M18.5 7.47C17.76 8.2 17.57 9.25 17.92 10.15L15 13.07V11C15 10.45 14.55 10 14 10H12.97C13 9.83 13 9.67 13 9.5C13 6.46 10.54 4 7.5 4S2 6.46 2 9.5C2 11.21 2.78 12.73 4 13.74V20C4 20.55 4.45 21 5 21H14C14.55 21 15 20.55 15 20V15.89L19.33 11.56C20.23 11.91 21.28 11.73 22 11L18.5 7.47M4.05 10C4.03 9.83 4 9.67 4 9.5C4 7.57 5.57 6 7.5 6S11 7.57 11 9.5C11 9.67 10.97 9.83 10.95 10H4.05Z",
   mdiDoorbell: "M12 10C10.9 10 10 10.9 10 12S10.9 14 12 14 14 13.1 14 12 13.1 10 12 10M16 2H8C6.9 2 6 2.9 6 4V20C6 21.1 6.9 22 8 22H16C17.1 22 18 21.1 18 20V4C18 2.9 17.1 2 16 2M16 20H8V4H16V20Z",
   mdiAccessPointOff: "M20.84 22.73L12.1 14C12.06 14 12.03 14 12 14C10.9 14 10 13.11 10 12C10 11.97 10 11.94 10 11.9L8.4 10.29C8.15 10.81 8 11.38 8 12C8 13.11 8.45 14.11 9.17 14.83L7.76 16.24C6.67 15.15 6 13.65 6 12C6 10.83 6.34 9.74 6.93 8.82L5.5 7.37C4.55 8.67 4 10.27 4 12C4 14.22 4.89 16.22 6.34 17.66L4.93 19.07C3.12 17.26 2 14.76 2 12C2 9.72 2.77 7.63 4.06 5.95L1.11 3L2.39 1.73L22.11 21.46L20.84 22.73M15.93 12.73L17.53 14.33C17.83 13.61 18 12.83 18 12C18 10.35 17.33 8.85 16.24 7.76L14.83 9.17C15.55 9.89 16 10.89 16 12C16 12.25 15.97 12.5 15.93 12.73M19.03 15.83L20.5 17.28C21.44 15.75 22 13.94 22 12C22 9.24 20.88 6.74 19.07 4.93L17.66 6.34C19.11 7.78 20 9.79 20 12C20 13.39 19.65 14.7 19.03 15.83Z",
+  mdiAccountQuestion: "M13,8A4,4 0 0,1 9,12A4,4 0 0,1 5,8A4,4 0 0,1 9,4A4,4 0 0,1 13,8M17,18V20H1V18C1,15.79 4.58,14 9,14C13.42,14 17,15.79 17,18M20.5,14.5V16H19V14.5H20.5M18.5,9.5H17V9A3,3 0 0,1 20,6A3,3 0 0,1 23,9C23,9.97 22.5,10.88 21.71,11.41L21.41,11.6C20.84,12 20.5,12.61 20.5,13.3V13.5H19V13.3C19,12.11 19.6,11 20.59,10.35L20.88,10.16C21.27,9.9 21.5,9.47 21.5,9A1.5,1.5 0 0,0 20,7.5A1.5,1.5 0 0,0 18.5,9V9.5Z",
   mdiAccountArrowRight: "M18 16H14V18H18V20L21 17L18 14V16M11 4C8.8 4 7 5.8 7 8S8.8 12 11 12 15 10.2 15 8 13.2 4 11 4M11 14C6.6 14 3 15.8 3 18V20H12.5C12.2 19.2 12 18.4 12 17.5C12 16.3 12.3 15.2 12.9 14.1C12.3 14.1 11.7 14 11 14",
   mdiAlarmLight: "M6,6.9L3.87,4.78L5.28,3.37L7.4,5.5L6,6.9M13,1V4H11V1H13M20.13,4.78L18,6.9L16.6,5.5L18.72,3.37L20.13,4.78M4.5,10.5V12.5H1.5V10.5H4.5M19.5,10.5H22.5V12.5H19.5V10.5M6,20H18A2,2 0 0,1 20,22H4A2,2 0 0,1 6,20M12,5A6,6 0 0,1 18,11V19H6V11A6,6 0 0,1 12,5Z",
   mdiBatteryAlert: "M13 14H11V8H13M13 18H11V16H13M16.7 4H15V2H9V4H7.3C6.6 4 6 4.6 6 5.3V20.6C6 21.4 6.6 22 7.3 22H16.6C17.3 22 17.9 21.4 17.9 20.7V5.3C18 4.6 17.4 4 16.7 4Z",
@@ -65,6 +66,7 @@ const LONG_OFFLINE_MS = 7 * 864e5;
 const WEATHER_REFRESH_MS = 30 * 60e3;
 const HISTORY_REFRESH_MS = 5 * 60e3;
 const CALENDAR_REFRESH_MS = 15 * 60e3;
+const PRESENCE_DAYS = 7;
 // Icons a lights/switches entry may name in config (anything else falls back to a bulb).
 const SWITCH_ICONS = ["mdiLightbulb", "mdiLamp", "mdiFloorLamp", "mdiDeskLamp", "mdiCeilingLight", "mdiLightRecessed", "mdiCoachLamp", "mdiOutdoorLamp", "mdiGarageVariant", "mdiStringLights", "mdiFan", "mdiPowerSocketUs"];
 
@@ -178,6 +180,9 @@ h1 { margin: 2px 0 0; font-size: 34px; font-weight: 700; line-height: 1.1; }
 @keyframes pulse { 50% { opacity: .35; } }
 .chip { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 11px; border-radius: 10px; font-size: 14px; font-weight: 500; background: #172234; border: 1px solid var(--line); color: #c3cedd; }
 .chip .ic { width: 17px; height: 17px; }
+.chip.who.home .ic { color: var(--green); }
+.chip.who.away, .chip.who.unknown { color: var(--muted); }
+.chip .since { color: var(--muted); font-weight: 400; }
 
 .card { background: linear-gradient(180deg, var(--card-2), var(--card)); border: 1px solid var(--line); border-radius: 28px; padding: 22px 24px; min-width: 0; }
 .eyebrow { font-size: 13px; letter-spacing: .12em; font-weight: 600; color: var(--muted); text-transform: uppercase; }
@@ -408,6 +413,7 @@ class HomePanel extends HTMLElement {
     this._wx = null;
     this._wxAt = 0;
     this._hist = {};
+    this._presHist = {};
     this._range = "24h";
     this._events = [];
     this._wildlife = [];
@@ -453,7 +459,10 @@ class HomePanel extends HTMLElement {
     loadFont();
     this._tick = setInterval(() => this._render(), 30000);
     this._wxTimer = setInterval(() => this._loadWeather(), WEATHER_REFRESH_MS);
-    this._histTimer = setInterval(() => this._loadHistory(), HISTORY_REFRESH_MS);
+    this._histTimer = setInterval(() => {
+      this._loadHistory();
+      this._loadPresence();
+    }, HISTORY_REFRESH_MS);
     this._calTimer = setInterval(() => this._loadCalendars(), CALENDAR_REFRESH_MS);
     this._wildTimer = setInterval(() => this._loadWildlife(), 10 * 60e3);
     if (this._hass) this._refreshAll();
@@ -475,6 +484,7 @@ class HomePanel extends HTMLElement {
   _refreshAll() {
     this._loadWeather();
     this._loadHistory();
+    this._loadPresence();
     this._loadCalendars();
     this._loadWildlife();
   }
@@ -564,6 +574,62 @@ class HomePanel extends HTMLElement {
     } catch (_) {
       /* trends are optional */
     }
+  }
+
+  // Presence history for "since" times. An entity's own last_changed resets on every HA restart.
+  async _loadPresence() {
+    const ids = (this._c.people || []).map((p) => p.entity).filter(Boolean);
+    if (!this._hass || !ids.length) return;
+    try {
+      const res = await this._hass.callWS({
+        type: "history/history_during_period",
+        start_time: new Date(Date.now() - PRESENCE_DAYS * 864e5).toISOString(),
+        entity_ids: ids,
+        minimal_response: true,
+        no_attributes: true,
+        significant_changes_only: false,
+      });
+      const out = {};
+      for (const [id, rows] of Object.entries(res || {})) out[id] = rows.map((r) => [(r.lc ?? r.lu) * 1000, r.s]);
+      this._presHist = out;
+      this._scheduleRender();
+    } catch (_) {
+      /* chips still show home/away without "since" */
+    }
+  }
+
+  // When the current home/away run started, skipping restart and outage blips (unavailable/unknown).
+  // null when it's older than the history window.
+  _since(st) {
+    const rows = (this._presHist[st.entity_id] || []).filter((r) => r[1] !== "unavailable" && r[1] !== "unknown");
+    if (!rows.length || rows[rows.length - 1][1] !== st.state) return Date.parse(st.last_changed);
+    let i = rows.length - 1;
+    while (i > 0 && rows[i - 1][1] === st.state) i--;
+    return i === 0 ? null : rows[i][0];
+  }
+
+  // "3:01 PM", "yesterday 8:12 PM", "Fri 7:30 AM"
+  _sinceLabel(ms) {
+    const diff = Math.round((startOfDay(Date.now()) - startOfDay(ms)) / 864e5);
+    const t = this._fmtTime(ms);
+    return diff === 0 ? t : diff === 1 ? `yesterday ${t}` : `${new Date(ms).toLocaleDateString([], { weekday: "short" })} ${t}`;
+  }
+
+  // person.* (phone GPS: home, not_home or a zone name) or a presence binary_sensor (on = home).
+  _peopleChips() {
+    const st = this._hass.states;
+    return (this._c.people || [])
+      .map((p) => {
+        const s = st[p.entity];
+        const name = esc(p.name || s?.attributes?.friendly_name || p.entity);
+        if (!live(s)) return `<span class="chip who unknown">${svg("mdiAccountQuestion")}${name} · Unknown</span>`;
+        const home = s.state === "home" || s.state === "on";
+        const where = home ? "Home" : s.state === "not_home" || s.state === "off" ? "Away" : nice(s.state);
+        const since = this._since(s);
+        const tail = since === null ? ` for ${PRESENCE_DAYS}+ days` : ` since ${this._sinceLabel(since)}`;
+        return `<span class="chip who ${home ? "home" : "away"}">${svg(home ? "mdiHomeAccount" : "mdiAccountArrowRight")}${name} · ${esc(where)}<span class="since">${esc(tail)}</span></span>`;
+      })
+      .join("");
   }
 
   // Every calendar.* entity (e.g. Google Calendar) except ones excluded in config.
@@ -1173,7 +1239,7 @@ class HomePanel extends HTMLElement {
           <h1>${esc(greet)}${userName ? `, ${esc(userName)}` : ""}</h1>
           <div class="status"><span class="dot ${status.dot}"></span>
             ${needs.length ? `<button data-action="scroll" data-target=".a-attn"><b>${esc(status.text)}</b></button>` : `<b>${esc(status.text)}</b>`}
-            ${presence ? `<span class="chip">${svg(person.state === "home" ? "mdiHomeAccount" : "mdiAccountArrowRight")}${esc(userName || "You")} · ${esc(presence)}</span>` : ""}
+            ${c.people?.length ? this._peopleChips() : presence ? `<span class="chip">${svg(person.state === "home" ? "mdiHomeAccount" : "mdiAccountArrowRight")}${esc(userName || "You")} · ${esc(presence)}</span>` : ""}
           </div>
         </div>
       </header>`;
