@@ -26,11 +26,6 @@ zeroconf:
 # One file per feature (helpers + sensors + automations together).
 homeassistant:
   packages: !include_dir_named packages
-  # local is HA's default. snapshots holds photos Claude checks (porch_and_wildlife.yaml); the
-  # phone loads them as /media/snapshots/<file> through the authenticated media API.
-  media_dirs:
-    local: /media
-    snapshots: /config/doorbell
 
 # Defaults otherwise. The climbing feed carries ~30 KB of list attributes that change nightly;
 # keeping history of it would bloat the DB (and trips HA's 16 KB attribute warning).
@@ -364,8 +359,6 @@ rest:
 # has no YAML setup) reading /config/doorbell/ring.jpg, so it stays behind HA's login.
 shell_command:
   doorbell_ring_snapshot: python3 /config/shell/doorbell_snapshot.py
-  # For packages/porch_and_wildlife.yaml; a separate file so the ring photo on the panel is kept.
-  doorbell_porch_snapshot: python3 /config/shell/doorbell_snapshot.py /config/doorbell/porch.jpg
 
 input_datetime:
   doorbell_ring_picture:

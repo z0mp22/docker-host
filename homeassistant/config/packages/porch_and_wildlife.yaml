@@ -1,6 +1,7 @@
 # Claude looks at camera photos so phone alerts carry things the detectors can't name:
-# - Porch: the T8210 doorbell never reports package events, so after someone leaves the porch
-#   Claude checks a fresh doorbell frame for a package.
+# - Porch: the T8210 doorbell never reports package events, so Claude checks Eufy's picture of
+#   each person detection. The battery doorbell is asleep between events, so that picture is the
+#   only fresh view of the porch (camera.doorbell also serves it).
 # - Wildlife: Frigate's COCO model has no deer/raccoon/fox class. Deer come through as
 #   horse/cow/sheep and raccoons/foxes as cat/dog/bear, so Claude names the animal and only
 #   wild ones are pushed (the household golden retriever is a Driveway "dog" too).
@@ -14,10 +15,10 @@ input_boolean:
 
 automation:
   - id: porch_package_check
-    alias: "Porch: check for a package after someone leaves"
+    alias: "Porch: check each doorbell person picture for a package"
     description: >-
-      Each doorbell person detection restarts a 90 s wait; once the porch has been quiet that long,
-      Claude looks at a fresh frame. A new package pushes a photo; a package that's gone clears it.
+      Claude looks at the doorbell's picture of each person detection. A new package pushes the
+      photo; a later picture without one clears it.
     mode: restart
     triggers:
       - trigger: state
@@ -31,21 +32,21 @@ automation:
       - condition: template
         value_template: "{{ expand('ai_task.claude_ai_task') | count > 0 }}"
     actions:
-      - delay: "00:01:30"
-      # Wakes the doorbell through eufy-bridge's go2rtc (about 8 s).
-      - action: shell_command.doorbell_porch_snapshot
-        response_variable: snapshot
-      - condition: template
-        value_template: "{{ snapshot.returncode == 0 }}"
+      # The event picture lands shortly after the detection event.
+      - wait_for_trigger:
+          - trigger: state
+            entity_id: image.doorbell_last_event
+        timeout: "00:01:00"
       - action: ai_task.generate_data
         response_variable: seen
         data:
           entity_id: ai_task.claude_ai_task
           task_name: porch package check
           instructions: >-
-            This is a doorbell camera photo of a front porch. Is there a delivered package,
-            parcel, box, envelope pack or grocery/food delivery bag on the ground or doormat?
-            Ignore anything carried by a person, furniture, plants and decorations.
+            This is a doorbell camera photo of a front porch, taken when someone walked up.
+            Is a delivered package, parcel, box, padded mailer or grocery/food delivery bag
+            sitting on the porch, steps or doormat, or being set down there by a delivery
+            worker? Ignore furniture, plants, decorations and bins.
           structure:
             package:
               description: True only if a delivered item is clearly visible
@@ -58,7 +59,7 @@ automation:
               selector:
                 text:
           attachments:
-            - media_content_id: media-source://media_source/snapshots/porch.jpg
+            - media_content_id: media-source://image/image.doorbell_last_event
               media_content_type: image/jpeg
       - choose:
           - conditions: "{{ seen.data.package and is_state('input_boolean.porch_package_present', 'off') }}"
@@ -73,7 +74,7 @@ automation:
                   tag: porch-package
                   channel: Porch
                   data:
-                    image: "/media/snapshots/porch.jpg?v={{ now().timestamp() | int }}"
+                    image: "/api/camera_proxy/camera.doorbell?v={{ now().timestamp() | int }}"
                     clickAction: /cameras?live=camera.doorbell
                     url: /cameras?live=camera.doorbell
           - conditions: "{{ not seen.data.package and is_state('input_boolean.porch_package_present', 'on') }}"
