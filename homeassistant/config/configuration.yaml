@@ -26,6 +26,9 @@ zeroconf:
 # One file per feature (helpers + sensors + automations together).
 homeassistant:
   packages: !include_dir_named packages
+  # camera.snapshot may only write here; the porch check saves package.jpg (porch_and_wildlife.yaml).
+  allowlist_external_dirs:
+    - /config/doorbell
 
 # Defaults otherwise. The climbing feed carries ~30 KB of list attributes that change nightly;
 # keeping history of it would bloat the DB (and trips HA's 16 KB attribute warning).
@@ -405,7 +408,7 @@ panel_custom:
     url_path: house
     sidebar_title: Home
     sidebar_icon: mdi:home
-    module_url: /local/home/home-panel.js?v=9
+    module_url: /local/home/home-panel.js?v=10
     config:
       person: person.cody
       # Header "who's home" chips: a person.* (phone app GPS) or a presence binary_sensor
@@ -424,6 +427,16 @@ panel_custom:
         last_event: image.doorbell_last_event
         ring_picture: camera.doorbell_ring
         ring_picture_at: input_datetime.doorbell_ring_picture
+      # Claude's porch check (packages/porch_and_wildlife.yaml): a waiting package and one that went
+      # missing while nobody was home, each with its photo and a button.
+      porch:
+        present: input_boolean.porch_package_present
+        taken: input_boolean.porch_package_taken
+        at: input_datetime.porch_package_at
+        note: input_text.porch_package_note
+        photo: camera.porch_package
+        brought_in: script.porch_package_brought_in
+        dismiss: script.porch_package_dismiss_taken
       weather: weather.home
       # Greys out a room whose thermometer has gone quiet (packages/bluetooth_health.yaml).
       thermometer_health: binary_sensor.bluetooth_thermometers_stale
@@ -596,9 +609,11 @@ panel_custom:
     url_path: wildlife
     sidebar_title: Wildlife
     sidebar_icon: mdi:paw
-    module_url: /local/wildlife/wildlife-panel.js?v=1
+    module_url: /local/wildlife/wildlife-panel.js?v=2
     config:
       # One Frigate camera; dogs (ours) and people (Security's job) are left out on purpose.
+      # Frigate "dog" events are still fetched (check_labels, default [dog]) and shown when Claude's
+      # description names a wild animal, e.g. a fox or coyote.
       camera: driveway
       name: Driveway
       # Everything else the Coral COCO model can name. It has no deer/fox/raccoon class: deer tend

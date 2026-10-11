@@ -3,6 +3,8 @@
 // deliberately simple read of a domain; its own panel has the full detail.
 
 const ICONS = {
+  mdiPackageVariantClosed: "M21,16.5C21,16.88 20.79,17.21 20.47,17.38L12.57,21.82C12.41,21.94 12.21,22 12,22C11.79,22 11.59,21.94 11.43,21.82L3.53,17.38C3.21,17.21 3,16.88 3,16.5V7.5C3,7.12 3.21,6.79 3.53,6.62L11.43,2.18C11.59,2.06 11.79,2 12,2C12.21,2 12.41,2.06 12.57,2.18L20.47,6.62C20.79,6.79 21,7.12 21,7.5V16.5M12,4.15L10.11,5.22L16,8.61L17.96,7.5L12,4.15M6.04,7.5L12,10.85L13.96,9.75L8.08,6.35L6.04,7.5M5,15.91L11,19.29V12.58L5,9.21V15.91M19,15.91V9.21L13,12.58V19.29L19,15.91Z",
+  mdiPackageVariantClosedRemove: "M13 12.6L19 9.2V13C19.7 13 20.4 13.1 21 13.4V7.5C21 7.1 20.8 6.8 20.5 6.6L12.6 2.2C12.4 2.1 12.2 2 12 2S11.6 2.1 11.4 2.2L3.5 6.6C3.2 6.8 3 7.1 3 7.5V16.5C3 16.9 3.2 17.2 3.5 17.4L11.4 21.8C11.6 21.9 11.8 22 12 22S12.4 21.9 12.6 21.8L13.5 21.3C13.2 20.7 13.1 20 13 19.3M12 4.2L18 7.5L16 8.6L10.1 5.2L12 4.2M11 19.3L5 15.9V9.2L11 12.6V19.3M12 10.8L6 7.5L8 6.3L14 9.8L12 10.8M16.9 15.5L19 17.6L21.1 15.5L22.5 16.9L20.4 19L22.5 21.1L21.1 22.5L19 20.4L16.9 22.5L15.5 21.1L17.6 19L15.5 16.9L16.9 15.5Z",
   mdiCheck: "M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z",
   mdiClockOutline: "M12,20A8,8 0 0,0 20,12A8,8 0 0,0 12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20M12,2A10,10 0 0,1 22,12A10,10 0 0,1 12,22C6.47,22 2,17.5 2,12A10,10 0 0,1 12,2M12.5,7V12.25L17,14.92L16.25,16.15L11,13V7H12.5Z",
   mdiWateringCan: "M18.5 7.47C17.76 8.2 17.57 9.25 17.92 10.15L15 13.07V11C15 10.45 14.55 10 14 10H12.97C13 9.83 13 9.67 13 9.5C13 6.46 10.54 4 7.5 4S2 6.46 2 9.5C2 11.21 2.78 12.73 4 13.74V20C4 20.55 4.45 21 5 21H14C14.55 21 15 20.55 15 20V15.89L19.33 11.56C20.23 11.91 21.28 11.73 22 11L18.5 7.47M4.05 10C4.03 9.83 4 9.67 4 9.5C4 7.57 5.57 6 7.5 6S11 7.57 11 9.5C11 9.67 10.97 9.83 10.95 10H4.05Z",
@@ -343,6 +345,7 @@ h1 { margin: 2px 0 0; font-size: 34px; font-weight: 700; line-height: 1.1; }
 .ag .when { text-align: right; font-size: 14px; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
 
 /* Attention */
+@container (max-width: 640px) { .item .ph { width: 88px; } }
 .items { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
 .item { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border-radius: 16px; background: #121a28; border: 1px solid var(--line); line-height: 1.4; width: 100%; }
 .item > .ic { width: 22px; height: 22px; margin-top: 1px; }
@@ -352,6 +355,12 @@ h1 { margin: 2px 0 0; font-size: 34px; font-weight: 700; line-height: 1.1; }
 .item.amber { border-color: rgba(245,176,65,.3); } .item.amber > .ic { color: var(--amber); }
 .item.info > .ic { color: var(--blue); }
 .item .go { margin-left: auto; align-self: center; }
+.item.rich { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; column-gap: 12px; }
+.item .ph { flex: none; width: 112px; aspect-ratio: 4 / 3; border-radius: 12px; overflow: hidden; background: #0b111c; padding: 0; border: 1px solid var(--line); }
+.item .ph img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.item .acts { grid-column: 2 / -1; display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+.item .btn { height: 42px; font-size: 14.5px; white-space: nowrap; }
+.item .btn.quiet { background: #1c2638; border: 1px solid var(--line); color: var(--text); }
 .allgood { display: flex; gap: 12px; align-items: center; margin-top: 14px; font-size: 16px; color: #b9f2cc; }
 .allgood .ic { color: var(--green); }
 .link { margin-top: 10px; color: var(--gold); font-weight: 600; font-size: 15px; }
@@ -712,6 +721,15 @@ class HomePanel extends HTMLElement {
       } catch (err) {
         this._showToast(`Couldn't log watering: ${err.message || err}`);
       }
+    } else if (a === "run-script") {
+      try {
+        await this._hass.callService("script", "turn_on", { entity_id: el.dataset.entity });
+        this._showToast(el.dataset.done || "Done.", true);
+      } catch (err) {
+        this._showToast(`Couldn't do that: ${err.message || err}`);
+      }
+    } else if (a === "more-info" && el.dataset.entity) {
+      this.dispatchEvent(new CustomEvent("hass-more-info", { detail: { entityId: el.dataset.entity }, bubbles: true, composed: true }));
     } else if (a === "more-attn") {
       this._showAllAttn = !this._showAllAttn;
       this._render();
@@ -802,6 +820,42 @@ class HomePanel extends HTMLElement {
       this._ring = { name, at };
       attn.push({ level: "info", icon: "mdiDoorbell", title: `${name} doorbell rang at ${this._fmtTime(at)}`, text: "Open Security to see who's there.", go });
     }
+  }
+
+  // Claude's porch check (packages/porch_and_wildlife.yaml). Missing beats waiting: both can't be on,
+  // but a stale "taken" must not hide a new package, so each is its own row.
+  _porch(attn) {
+    const p = this._c.porch;
+    if (!p) return;
+    const st = this._hass.states;
+    const at = Date.parse(st[p.at]?.state);
+    const when = Number.isFinite(at) ? this._pastLabel(at) : "";
+    const note = live(st[p.note]) && st[p.note].state.trim() ? st[p.note].state.trim() : "";
+    const pic = st[p.photo]?.attributes?.entity_picture;
+    const img = pic ? `${pic}${pic.includes("?") ? "&" : "?"}v=${Number.isFinite(at) ? at : 0}` : "";
+    if (st[p.taken]?.state === "on")
+      attn.push({
+        level: "red",
+        icon: "mdiPackageVariantClosedRemove",
+        title: "Package went missing",
+        text: `Nobody was home. ${note || "The package"} was gone ${when}; the photo shows who was there.`,
+        img,
+        photo: p.photo,
+        acts: [
+          { label: "I have it", script: p.brought_in, done: "Marked as brought in.", icon: "mdiCheck" },
+          { label: "Dismiss", script: p.dismiss, done: "Alert dismissed.", quiet: true },
+        ],
+      });
+    if (st[p.present]?.state === "on")
+      attn.push({
+        level: "amber",
+        icon: "mdiPackageVariantClosed",
+        title: "Package at the front door",
+        text: `${note || "Delivered"} · since ${when}`,
+        img,
+        photo: p.photo,
+        acts: [{ label: "Brought it in", script: p.brought_in, done: "Marked as brought in.", icon: "mdiCheck" }],
+      });
   }
 
   _media() {
@@ -1207,6 +1261,7 @@ class HomePanel extends HTMLElement {
     const L = c.links;
 
     this._security(attn);
+    this._porch(attn);
     const tiles = [
       { name: "Media", icon: "mdiPlayCircleOutline", go: L.media, ...this._media() },
       { name: "Irrigation", icon: "mdiSprinklerVariant", go: L.irrigation, ...(this._irrigation(attn, agenda) || { level: "", state: "—", sub: "" }) },
@@ -1313,6 +1368,12 @@ class HomePanel extends HTMLElement {
         attn.length
           ? `<div class="items">${shown
               .map((i) => {
+                if (i.acts || i.img)
+                  return `<div class="item rich ${i.level}">${svg(i.icon)}<div><b>${esc(i.title)}</b><span>${esc(i.text || "")}</span></div>${
+                    i.img ? `<button class="ph" data-action="more-info" data-entity="${esc(i.photo)}" aria-label="Open photo"><img src="${esc(i.img)}" alt=""></button>` : "<span></span>"
+                  }${
+                    i.acts ? `<div class="acts">${i.acts.map((a) => `<button class="btn${a.quiet ? " quiet" : ""}" data-action="run-script" data-entity="${esc(a.script)}" data-done="${esc(a.done)}">${a.icon ? svg(a.icon) : ""}${esc(a.label)}</button>`).join("")}</div>` : ""
+                  }</div>`;
                 const inner = `${svg(i.icon)}<div><b>${esc(i.title)}</b><span>${esc(i.text || "")}</span></div>${i.go ? svg("mdiChevronRight", "go") : ""}`;
                 return i.go ? `<button class="item ${i.level}" data-action="nav" data-path="${esc(i.go)}">${inner}</button>` : `<div class="item ${i.level}">${inner}</div>`;
               })

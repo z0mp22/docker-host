@@ -2,6 +2,9 @@
 // One Frigate camera, every animal except dogs (ours) and people (the Security panel's job).
 // Sightings come from Frigate events via the HA integration; "here now" from the
 // {camera}_{label}_occupancy binary sensors, which only exist for labels Frigate tracks.
+// Claude describes each animal once it leaves (frigate repo, Driveway objects.genai) as
+// "<animal>: <sentence>". That name replaces the COCO label, and a Frigate "dog" is shown only
+// when Claude says it's a wild animal (foxes and coyotes come through as dog).
 
 const ICONS = {
   mdiPaw: "M8.35,3C9.53,2.83 10.78,4.12 11.14,5.9C11.5,7.67 10.85,9.25 9.67,9.43C8.5,9.61 7.24,8.32 6.87,6.54C6.5,4.77 7.17,3.19 8.35,3M15.5,3C16.69,3.19 17.35,4.77 17,6.54C16.62,8.32 15.37,9.61 14.19,9.43C13,9.25 12.35,7.67 12.72,5.9C13.08,4.12 14.33,2.83 15.5,3M3,7.6C4.14,7.11 5.69,8 6.5,9.55C7.26,11.13 7,12.79 5.87,13.28C4.74,13.77 3.2,12.89 2.41,11.32C1.62,9.75 1.9,8.08 3,7.6M21,7.6C22.1,8.08 22.38,9.75 21.59,11.32C20.8,12.89 19.26,13.77 18.13,13.28C17,12.79 16.74,11.13 17.5,9.55C18.31,8 19.86,7.11 21,7.6M19.33,18.38C19.37,19.32 18.65,20.36 17.79,20.75C16,21.57 13.88,19.87 11.89,19.87C9.9,19.87 7.76,21.64 6,20.75C5,20.26 4.31,18.96 4.44,17.88C4.62,16.39 6.41,15.59 7.47,14.5C8.88,13.09 9.88,10.44 11.89,10.44C13.89,10.44 14.95,13.05 16.3,14.5C17.41,15.72 19.26,16.75 19.33,18.38Z",
@@ -35,6 +38,48 @@ const KINDS = {
 };
 const kindOf = (label) => (LARGE.includes(label) ? "large" : label);
 const kindInfo = (k) => KINDS[k] || { name: nice(k), plural: `${nice(k)}s`, icon: "mdiPaw" };
+// Claude's animal name -> display kind.
+const WILD = [
+  ["deer", /\b(deer|doe|bucks?|fawn|elk|moose|pronghorn)\b/],
+  ["raccoon", /\braccoons?\b/],
+  ["fox", /\bfox(es)?\b/],
+  ["coyote", /\bcoyotes?\b/],
+  ["skunk", /\bskunks?\b/],
+  ["rabbit", /\b(rabbit|bunny|cottontail|hare)s?\b/],
+  ["bear", /\bbears?\b/],
+  ["bobcat", /\b(bobcat|lynx)\b/],
+  ["mountain_lion", /\b(mountain lion|cougar|puma)s?\b/],
+  ["squirrel", /\bsquirrels?\b/],
+  ["opossum", /\b(opossum|possum)s?\b/],
+];
+const WILD_KINDS = new Set(WILD.map(([k]) => k));
+Object.assign(KINDS, {
+  deer: { name: "Deer", plural: "Deer", icon: "mdiPaw" },
+  fox: { name: "Fox", plural: "Foxes", icon: "mdiPaw" },
+  mountain_lion: { name: "Mountain lion", plural: "Mountain lions", icon: "mdiCat" },
+});
+
+// "mule deer: A doe crossed the lawn." -> { name, text }; anything else (older free-text
+// descriptions, none yet) -> null, and the COCO label stands.
+function aiOf(ev) {
+  const d = String(ev.data?.description || "").replace(/[*_`]/g, "").trim();
+  const m = d.match(/^([a-z][a-z '-]{1,40}):\s*(\S[\s\S]*)$/i);
+  return m ? { name: m[1].trim().toLowerCase(), text: m[2].trim() } : null;
+}
+
+function kindOfName(name) {
+  const wild = WILD.find(([, re]) => re.test(name));
+  if (wild) return wild[0];
+  if (/\b(dog|puppy|retriever)s?\b/.test(name)) return "dog";
+  if (/\b(cat|kitten)s?\b/.test(name)) return "cat";
+  return null;
+}
+
+function classify(ev) {
+  const ai = aiOf(ev);
+  const named = ai && kindOfName(ai.name);
+  return { kind: named || (ev.label === "dog" ? "dog" : kindOf(ev.label)), ai };
+}
 
 const svg = (name) => `<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="${ICONS[name] || ""}"/></svg>`;
 const esc = (s) =>
@@ -184,6 +229,7 @@ h1 { margin: 0; font-size: 34px; font-weight: 700; line-height: 1.1; }
 .sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 2px 4px 12px; }
 .sheet-head b { display: block; font-size: 19px; font-weight: 600; }
 .sheet-head span { font-size: 14px; color: var(--muted); }
+.sheet-head span.ai { display: block; margin-top: 4px; color: var(--text); font-size: 14.5px; }
 .media { border-radius: 16px; overflow: hidden; background: #000; aspect-ratio: 16 / 9; display: grid; place-items: center; }
 .media video, .media img { width: 100%; height: 100%; object-fit: contain; display: block; }
 .noclip { color: var(--muted); font-size: 15px; }
@@ -288,6 +334,11 @@ class WildlifePanel extends HTMLElement {
     return this._cfg?.labels?.length ? this._cfg.labels : ["cat", "bird", "bear", ...LARGE];
   }
 
+  // Labels fetched only so Claude can rescue wild animals from them; never "here now" or "watching for".
+  get _checkLabels() {
+    return this._cfg?.check_labels || ["dog"];
+  }
+
   get _instance() {
     return this._cfg?.frigate_instance || "frigate";
   }
@@ -315,7 +366,7 @@ class WildlifePanel extends HTMLElement {
       let res = await this._hass.callWS({
         type: "frigate/events/get",
         instance_id: this._instance,
-        labels: this._labels,
+        labels: [...this._labels, ...this._checkLabels],
         after: Math.floor((Date.now() - HISTORY_DAYS * 864e5) / 1000),
         limit: 1000,
       });
@@ -325,8 +376,11 @@ class WildlifePanel extends HTMLElement {
       const open = {};
       const visits = [];
       for (const ev of res.filter((e) => String(e.camera).toLowerCase() === cam).sort((a, b) => a.start_time - b.start_time)) {
-        if (!this._labels.includes(ev.label)) continue;
-        const kind = kindOf(ev.label);
+        if (!this._labels.includes(ev.label) && !this._checkLabels.includes(ev.label)) continue;
+        const { kind, ai } = classify(ev);
+        // Ours, or a Frigate dog Claude hasn't described yet (descriptions land after it leaves).
+        if (kind === "dog" || (this._checkLabels.includes(ev.label) && !WILD_KINDS.has(kind))) continue;
+        ev._ai = ai;
         const start = ev.start_time * 1000;
         const end = ev.end_time ? ev.end_time * 1000 : null;
         const cur = open[kind];
@@ -400,6 +454,17 @@ class WildlifePanel extends HTMLElement {
     }
   }
 
+  // Claude's name and sentence for a visit, from the first event that has one.
+  _aiOf(v) {
+    return v.events.map((e) => e._ai).find(Boolean) || null;
+  }
+
+  // "Mule deer" when Claude's name fits the visit's kind, else the kind ("Large animal").
+  _visitName(v) {
+    const ai = this._aiOf(v);
+    return ai && kindOfName(ai.name) === v.kind ? nice(ai.name) : kindInfo(v.kind).name;
+  }
+
   // Prefer the event with a clip, so Play shows video rather than a still.
   _bestEvent(v) {
     return v.events.find((e) => e.has_clip) || v.events.find((e) => e.has_snapshot) || v.events[0];
@@ -428,12 +493,13 @@ class WildlifePanel extends HTMLElement {
       : ev.has_snapshot
         ? `<img data-sign="${esc(this._media(ev, "snapshot.jpg"))}" alt="">`
         : `<div class="noclip">No recording was saved for this sighting.</div>`;
-    const seenAs = v.kind === "large" ? ` · Frigate saw a ${ev.label}` : "";
+    const ai = this._aiOf(v);
+    const seenAs = kindOf(ev.label) !== v.kind || v.kind === "large" ? ` · Frigate saw a ${ev.label}` : "";
     this._playerEl.innerHTML = `
       <div class="modal" data-action="close-player">
         <div class="sheet" role="dialog" aria-label="Sighting">
           <div class="sheet-head">
-            <div><b>${esc(kindInfo(v.kind).name)} · ${esc(this._cam.name)}</b><span>${esc(when)} · ${esc(len)}${ev.has_clip ? "" : " · snapshot only"}${esc(seenAs)}</span></div>
+            <div><b>${esc(this._visitName(v))} · ${esc(this._cam.name)}</b><span>${esc(when)} · ${esc(len)}${ev.has_clip ? "" : " · snapshot only"}${esc(seenAs)}</span>${ai ? `<span class="ai">${esc(ai.text)}</span>` : ""}</div>
             <button class="icon-btn" data-action="close-player" aria-label="Close">${svg("mdiClose")}</button>
           </div>
           <div class="media">${media}</div>
@@ -541,16 +607,20 @@ class WildlifePanel extends HTMLElement {
     } else if (latest) {
       const ev = this._bestEvent(latest);
       const len = latest.end ? fmtDur(latest.end - latest.start) : "still there";
-      pills.push(`<span class="pill">${svg(kindInfo(latest.kind).icon)}${esc(kindInfo(latest.kind).name)}</span>`);
+      pills.push(`<span class="pill">${svg(kindInfo(latest.kind).icon)}${esc(this._visitName(latest))}</span>`);
       if (!ev.has_snapshot) pills.push(`<span class="pill">No snapshot saved</span>`);
       hero = {
         cls: "",
         img: ev.has_snapshot ? `<img data-sign="${esc(this._media(ev, "snapshot.jpg"))}" alt="Latest ${esc(kindInfo(latest.kind).name.toLowerCase())} on the ${esc(cam.name.toLowerCase())}">` : "",
         action: `data-action="play" data-key="${esc(latest.key)}"`,
         tile: { icon: kindInfo(latest.kind).icon },
-        title: kindInfo(latest.kind).name,
+        title: this._visitName(latest),
         sub: `${this._whenText(latest.start)} · ${len}`,
-        note: latest.kind === "large" ? `Frigate saw a ${ev.label}. Its model has no deer class, so this is most likely a deer.` : "",
+        note: this._aiOf(latest)
+          ? `${this._aiOf(latest).text}${kindOf(ev.label) !== latest.kind ? ` (Frigate saw a ${ev.label}.)` : ""}`
+          : latest.kind === "large"
+            ? `Frigate saw a ${ev.label}. Its model has no deer class, so this is most likely a deer.`
+            : "",
         button: `<button class="primary" data-action="play" data-key="${esc(latest.key)}">${svg("mdiPlay")}${ev.has_clip ? "Play clip" : "View snapshot"}</button>`,
       };
     } else {
@@ -600,8 +670,9 @@ class WildlifePanel extends HTMLElement {
         const thumb = `<img class="th" data-sign="${esc(this._media(ev, "thumbnail.jpg"))}" alt="${esc(info.name)}">`;
         const clips = v.events.filter((e) => e.has_clip).length;
         const dur = v.end ? fmtDur(v.end - v.start) : "ongoing";
-        const seen = v.kind === "large" ? ` <small>seen as ${esc([...new Set(v.events.map((e) => e.label))].join("/"))}</small>` : clips > 1 ? ` <small>${clips} clips</small>` : "";
-        return `${header}<button class="ev" data-action="play" data-key="${esc(v.key)}"><span class="t">${this._fmtTime(v.start)}</span>${thumb}<span class="w">${esc(info.name)}${seen}</span><span class="d">${esc(dur)} ${svg("mdiPlay")}</span></button>`;
+        const labels = [...new Set(v.events.map((e) => e.label))];
+        const seen = v.kind === "large" || labels.some((l) => kindOf(l) !== v.kind) ? ` <small>seen as ${esc(labels.join("/"))}</small>` : clips > 1 ? ` <small>${clips} clips</small>` : "";
+        return `${header}<button class="ev" data-action="play" data-key="${esc(v.key)}"><span class="t">${this._fmtTime(v.start)}</span>${thumb}<span class="w">${esc(this._visitName(v))}${seen}</span><span class="d">${esc(dur)} ${svg("mdiPlay")}</span></button>`;
       })
       .join("");
     const emptyText = !this._loaded
@@ -631,8 +702,8 @@ class WildlifePanel extends HTMLElement {
           : ""
       }
       <ul class="facts">
-        <li>${svg("mdiInformationOutline")}<span><b>Large animal</b> means Frigate saw a horse, cow or sheep. Its model has no deer class, so that's most likely a deer.</span></li>
-        <li>${svg("mdiInformationOutline")}<span><b>Left out:</b> dogs (that's ours) and people (see Security). Foxes and coyotes usually register as dogs, so they're left out too.</span></li>
+        <li>${svg("mdiInformationOutline")}<span><b>Names come from Claude</b> once an animal leaves. Frigate's model has no deer, fox or raccoon class and sees deer as a horse, cow or sheep (<b>Large animal</b> until Claude names it).</span></li>
+        <li>${svg("mdiInformationOutline")}<span><b>Left out:</b> dogs (that's ours) and people (see Security). Frigate calls foxes and coyotes dogs, so a dog shows up here only when Claude says it's a wild animal.</span></li>
       </ul>
     </section>`;
 

@@ -10,17 +10,64 @@
 # a raccoon or coyote; Sonnet got it right. Without the integration these stop at their
 # first condition.
 
+# Porch state for the phone alerts and the /house "Needs attention" rows. camera.porch_package is a
+# Local File camera (added in the UI, like camera.doorbell_ring) showing /config/doorbell/package.jpg:
+# the package when it arrived, or whoever was there when it went missing.
 input_boolean:
   porch_package_present:
     name: Package on the porch
     icon: mdi:package-variant-closed
+  porch_package_taken:
+    name: Package gone while nobody was home
+    icon: mdi:package-variant-closed-remove
+
+input_datetime:
+  porch_package_at:
+    name: Porch package arrived or went missing
+    has_date: true
+    has_time: true
+
+input_text:
+  porch_package_note:
+    name: Porch package description
+    max: 255
+
+script:
+  porch_package_brought_in:
+    alias: "Porch: I brought the package in"
+    icon: mdi:package-variant-closed-check
+    sequence:
+      - action: input_boolean.turn_off
+        target:
+          entity_id: [input_boolean.porch_package_present, input_boolean.porch_package_taken]
+      - action: script.notify_phones
+        data:
+          message: clear_notification
+          tag: porch-package
+      - action: script.notify_phones
+        data:
+          message: clear_notification
+          tag: porch-package-taken
+
+  porch_package_dismiss_taken:
+    alias: "Porch: dismiss the missing-package alert"
+    icon: mdi:close
+    sequence:
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.porch_package_taken
+      - action: script.notify_phones
+        data:
+          message: clear_notification
+          tag: porch-package-taken
 
 automation:
   - id: porch_package_check
     alias: "Porch: check each doorbell person picture for a package"
     description: >-
       Claude looks at the doorbell's picture of each person detection. A new package pushes the
-      photo; a later picture without one clears it.
+      photo; a later clear view without one clears it, and if nobody is home that's a
+      "package gone" alert with the picture of whoever was there.
     mode: restart
     triggers:
       - trigger: state
@@ -55,6 +102,13 @@ automation:
               required: true
               selector:
                 boolean:
+            view_blocked:
+              description: >-
+                True if a person or object hides the porch floor, steps or doormat, so a
+                package there might not be visible
+              required: true
+              selector:
+                boolean:
             description:
               description: Under 12 words, e.g. "Brown box left of the door"
               required: true
@@ -63,9 +117,32 @@ automation:
           attachments:
             - media_content_id: media-source://image/image.doorbell_last_event
               media_content_type: image/jpeg
+      - variables:
+          # Both must say "away"; an unknown or unavailable presence never raises a theft alert.
+          nobody_home: >-
+            {{ states('person.cody') not in ['home', 'unknown', 'unavailable']
+               and is_state('binary_sensor.tiffany_home', 'off') }}
       - choose:
           - conditions: "{{ seen.data.package and is_state('input_boolean.porch_package_present', 'off') }}"
             sequence:
+              - action: camera.snapshot
+                target:
+                  entity_id: camera.doorbell
+                data:
+                  filename: /config/doorbell/package.jpg
+              - action: input_datetime.set_datetime
+                target:
+                  entity_id: input_datetime.porch_package_at
+                data:
+                  timestamp: "{{ now().timestamp() }}"
+              - action: input_text.set_value
+                target:
+                  entity_id: input_text.porch_package_note
+                data:
+                  value: "{{ seen.data.description[:255] }}"
+              - action: input_boolean.turn_off
+                target:
+                  entity_id: input_boolean.porch_package_taken
               - action: input_boolean.turn_on
                 target:
                   entity_id: input_boolean.porch_package_present
@@ -76,10 +153,12 @@ automation:
                   tag: porch-package
                   channel: Porch
                   data:
-                    image: "/api/camera_proxy/camera.doorbell?v={{ now().timestamp() | int }}"
-                    clickAction: /cameras?live=camera.doorbell
-                    url: /cameras?live=camera.doorbell
-          - conditions: "{{ not seen.data.package and is_state('input_boolean.porch_package_present', 'on') }}"
+                    image: "/api/camera_proxy/camera.porch_package?v={{ now().timestamp() | int }}"
+                    clickAction: /house
+                    url: /house
+          - conditions: >-
+              {{ not seen.data.package and not seen.data.view_blocked
+                 and is_state('input_boolean.porch_package_present', 'on') }}
             sequence:
               - action: input_boolean.turn_off
                 target:
@@ -88,6 +167,36 @@ automation:
                 data:
                   message: clear_notification
                   tag: porch-package
+              - if:
+                  - condition: template
+                    value_template: "{{ nobody_home }}"
+                then:
+                  # Keep the picture of whoever was there; it replaces the package photo.
+                  - action: camera.snapshot
+                    target:
+                      entity_id: camera.doorbell
+                    data:
+                      filename: /config/doorbell/package.jpg
+                  - action: input_datetime.set_datetime
+                    target:
+                      entity_id: input_datetime.porch_package_at
+                    data:
+                      timestamp: "{{ now().timestamp() }}"
+                  - action: input_boolean.turn_on
+                    target:
+                      entity_id: input_boolean.porch_package_taken
+                  - action: script.notify_phones
+                    data:
+                      title: Package gone while nobody's home
+                      message: >-
+                        {{ states('input_text.porch_package_note') or 'The package' }} is no longer
+                        on the porch · {{ now().strftime('%-I:%M %p') }}. This is who was there.
+                      tag: porch-package-taken
+                      channel: Security
+                      data:
+                        image: "/api/camera_proxy/camera.porch_package?v={{ now().timestamp() | int }}"
+                        clickAction: /house
+                        url: /house
 
   - id: wildlife_driveway_alert
     alias: "Wildlife: push when Claude confirms a wild animal on the Driveway"
