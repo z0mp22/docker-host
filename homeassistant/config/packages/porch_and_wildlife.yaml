@@ -5,8 +5,10 @@
 # - Wildlife: Frigate's COCO model has no deer/raccoon/fox class. Deer come through as
 #   horse/cow/sheep and raccoons/foxes as cat/dog/bear, so Claude names the animal and only
 #   wild ones are pushed (the household golden retriever is a Driveway "dog" too).
-# Both need the Anthropic integration (Settings > Devices & services > Anthropic), which provides
-# ai_task.claude_ai_task; until it exists these automations stop at their first condition.
+# Both use ai_task.claude_ai_task from the Anthropic integration (added in the UI 2026-10-11,
+# set to claude-sonnet-5 with thinking off). Haiku 4.5 called a leashed dog with two walkers
+# a raccoon or coyote; Sonnet got it right. Without the integration these stop at their
+# first condition.
 
 input_boolean:
   porch_package_present:
@@ -119,6 +121,8 @@ automation:
             Collins, Colorado. The object detector thinks it saw a {{ frigate_label }}. Is there a
             wild animal in the frame, such as a deer, raccoon, fox, coyote, skunk, bear, rabbit or
             mountain lion? Pets (dogs, house cats), people, vehicles and birds are not wild animals.
+            A dog on a leash or walking with people is a pet. If the animal is too small or unclear
+            to identify, answer false.
           structure:
             wild:
               description: True only if a wild mammal is visible
