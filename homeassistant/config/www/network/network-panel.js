@@ -4,11 +4,13 @@
 
 const ICONS = {
   mdiAccessPointOff: "M20.84 22.73L12.1 14C12.06 14 12.03 14 12 14C10.9 14 10 13.11 10 12C10 11.97 10 11.94 10 11.9L8.4 10.29C8.15 10.81 8 11.38 8 12C8 13.11 8.45 14.11 9.17 14.83L7.76 16.24C6.67 15.15 6 13.65 6 12C6 10.83 6.34 9.74 6.93 8.82L5.5 7.37C4.55 8.67 4 10.27 4 12C4 14.22 4.89 16.22 6.34 17.66L4.93 19.07C3.12 17.26 2 14.76 2 12C2 9.72 2.77 7.63 4.06 5.95L1.11 3L2.39 1.73L22.11 21.46L20.84 22.73M15.93 12.73L17.53 14.33C17.83 13.61 18 12.83 18 12C18 10.35 17.33 8.85 16.24 7.76L14.83 9.17C15.55 9.89 16 10.89 16 12C16 12.25 15.97 12.5 15.93 12.73M19.03 15.83L20.5 17.28C21.44 15.75 22 13.94 22 12C22 9.24 20.88 6.74 19.07 4.93L17.66 6.34C19.11 7.78 20 9.79 20 12C20 13.39 19.65 14.7 19.03 15.83Z",
+  mdiAccountArrowRight: "M18 16H14V18H18V20L21 17L18 14V16M11 4C8.8 4 7 5.8 7 8S8.8 12 11 12 15 10.2 15 8 13.2 4 11 4M11 14C6.6 14 3 15.8 3 18V20H12.5C12.2 19.2 12 18.4 12 17.5C12 16.3 12.3 15.2 12.9 14.1C12.3 14.1 11.7 14 11 14",
   mdiAlertOutline: "M12,2L1,21H23M12,6L19.53,19H4.47M11,10V14H13V10M11,16V18H13V16",
   mdiArrowDown: "M11,4H13V16L18.5,10.5L19.92,11.92L12,19.84L4.08,11.92L5.5,10.5L11,16V4Z",
   mdiArrowUp: "M13,20H11V8L5.5,13.5L4.08,12.08L12,4.16L19.92,12.08L18.5,13.5L13,8V20Z",
   mdiCheckCircleOutline: "M12 2C6.5 2 2 6.5 2 12S6.5 22 12 22 22 17.5 22 12 17.5 2 12 2M12 20C7.59 20 4 16.41 4 12S7.59 4 12 4 20 7.59 20 12 16.41 20 12 20M16.59 7.58L10 14.17L7.41 11.59L6 13L10 17L18 9L16.59 7.58Z",
   mdiEthernet: "M7,15H9V18H11V15H13V18H15V15H17V18H19V9H15V6H9V9H5V18H7V15M4.38,3H19.63C20.94,3 22,4.06 22,5.38V19.63A2.37,2.37 0 0,1 19.63,22H4.38C3.06,22 2,20.94 2,19.63V5.38C2,4.06 3.06,3 4.38,3Z",
+  mdiInformationOutline: "M11,9H13V7H11M12,20C7.59,20 4,16.41 4,12C4,7.59 7.59,4 12,4C16.41,4 20,7.59 20,12C20,16.41 16.41,20 12,20M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M11,17H13V11H11V17Z",
   mdiLanDisconnect: "M4,1C2.89,1 2,1.89 2,3V7C2,8.11 2.89,9 4,9H1V11H13V9H10C11.11,9 12,8.11 12,7V3C12,1.89 11.11,1 10,1H4M4,3H10V7H4V3M14,13C12.89,13 12,13.89 12,15V19C12,20.11 12.89,21 14,21H11V23H23V21H20C21.11,21 22,20.11 22,19V15C22,13.89 21.11,13 20,13H14M3.88,13.46L2.46,14.88L4.59,17L2.46,19.12L3.88,20.54L6,18.41L8.12,20.54L9.54,19.12L7.41,17L9.54,14.88L8.12,13.46L6,15.59L3.88,13.46M14,15H20V19H14V15Z",
   mdiLogin: "M11 7L9.6 8.4L12.2 11H2V13H12.2L9.6 15.6L11 17L16 12L11 7M20 19H12V21H20C21.1 21 22 20.1 22 19V5C22 3.9 21.1 3 20 3H12V5H20V19Z",
   mdiMemory: "M17,17H7V7H17M21,11V9H19V7C19,5.89 18.1,5 17,5H15V3H13V5H11V3H9V5H7C5.89,5 5,5.89 5,7V9H3V11H5V13H3V15H5V17A2,2 0 0,0 7,19H9V21H11V19H13V21H15V19H17A2,2 0 0,0 19,17V15H21V13H19V11M13,13H11V11H13M15,9H9V15H15V9Z",
@@ -22,6 +24,7 @@ const ICONS = {
   mdiTimerOutline: "M12,20A7,7 0 0,1 5,13A7,7 0 0,1 12,6A7,7 0 0,1 19,13A7,7 0 0,1 12,20M19.03,7.39L20.45,5.97C20,5.46 19.55,5 19.04,4.56L17.62,6C16.07,4.74 14.12,4 12,4A9,9 0 0,0 3,13A9,9 0 0,0 12,22C17,22 21,17.97 21,13C21,10.88 20.26,8.93 19.03,7.39M11,14H13V8H11M15,1H9V3H15V1Z",
   mdiUpdate: "M21,10.12H14.22L16.96,7.3C14.23,4.6 9.81,4.5 7.08,7.2C4.35,9.91 4.35,14.28 7.08,17C9.81,19.7 14.23,19.7 16.96,17C18.32,15.65 19,14.08 19,12.1H21C21,14.08 20.12,16.65 18.36,18.39C14.85,21.87 9.15,21.87 5.64,18.39C2.14,14.92 2.11,9.28 5.62,5.81C9.13,2.34 14.76,2.34 18.27,5.81L21,3V10.12M12.5,8V12.25L16,14.33L15.28,15.54L11,13V8H12.5Z",
   mdiWeb: "M16.36,14C16.44,13.34 16.5,12.68 16.5,12C16.5,11.32 16.44,10.66 16.36,10H19.74C19.9,10.64 20,11.31 20,12C20,12.69 19.9,13.36 19.74,14M14.59,19.56C15.19,18.45 15.65,17.25 15.97,16H18.92C17.96,17.65 16.43,18.93 14.59,19.56M14.34,14H9.66C9.56,13.34 9.5,12.68 9.5,12C9.5,11.32 9.56,10.65 9.66,10H14.34C14.43,10.65 14.5,11.32 14.5,12C14.5,12.68 14.43,13.34 14.34,14M12,19.96C11.17,18.76 10.5,17.43 10.09,16H13.91C13.5,17.43 12.83,18.76 12,19.96M8,8H5.08C6.03,6.34 7.57,5.06 9.4,4.44C8.8,5.55 8.35,6.75 8,8M5.08,16H8C8.35,17.25 8.8,18.45 9.4,19.56C7.57,18.93 6.03,17.65 5.08,16M4.26,14C4.1,13.36 4,12.69 4,12C4,11.31 4.1,10.64 4.26,10H7.64C7.56,10.66 7.5,11.32 7.5,12C7.5,12.68 7.56,13.34 7.64,14M12,4.03C12.83,5.23 13.5,6.57 13.91,8H10.09C10.5,6.57 11.17,5.23 12,4.03M18.92,8H15.97C15.65,6.75 15.19,5.55 14.59,4.44C16.43,5.07 17.96,6.34 18.92,8M12,2C6.47,2 2,6.5 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2Z",
+  mdiWebOff: "M9.4 4.44C9.19 4.83 9 5.23 8.84 5.64L10.37 7.17C10.78 6.05 11.33 5 12 4.03C12.83 5.23 13.5 6.57 13.91 8H11.2L13.2 10H14.34C14.4 10.41 14.44 10.84 14.47 11.27L16.44 13.24C16.47 12.83 16.5 12.42 16.5 12C16.5 11.32 16.44 10.66 16.36 10H19.74C19.9 10.64 20 11.31 20 12S19.9 13.36 19.74 14H17.2L20.5 17.28C21.44 15.75 22 13.94 22 12C22 6.5 17.5 2 12 2C10.06 2 8.25 2.56 6.72 3.5L8.18 5C8.57 4.77 9 4.58 9.4 4.44M18.92 8H15.97C15.65 6.75 15.19 5.55 14.59 4.44C16.43 5.07 17.96 6.34 18.92 8M2.39 1.73L1.11 3L4.06 5.95C2.77 7.63 2 9.73 2 12C2 17.5 6.5 22 12 22C14.28 22 16.37 21.23 18.06 19.95L20.84 22.73L22.11 21.46L2.39 1.73M5.5 7.37L6.11 8H5.08C5.2 7.78 5.34 7.58 5.5 7.37M4.26 14C4.1 13.36 4 12.69 4 12S4.1 10.64 4.26 10H7.64C7.56 10.66 7.5 11.32 7.5 12S7.56 13.34 7.64 14H4.26M5.08 16H8C8.35 17.25 8.8 18.45 9.4 19.56C7.57 18.93 6.03 17.65 5.08 16M9.5 12C9.5 11.8 9.5 11.61 9.53 11.42L12.11 14H9.66C9.56 13.34 9.5 12.68 9.5 12M12 19.96C11.17 18.76 10.5 17.43 10.09 16H13.91C13.5 17.43 12.83 18.76 12 19.96M14.59 19.56C14.96 18.88 15.26 18.15 15.5 17.41L16.62 18.5C16 18.95 15.32 19.31 14.59 19.56Z",
   mdiWifi: "M12,21L15.6,16.2C14.6,15.45 13.35,15 12,15C10.65,15 9.4,15.45 8.4,16.2L12,21M12,3C7.95,3 4.21,4.34 1.2,6.6L3,9C5.5,7.12 8.62,6 12,6C15.38,6 18.5,7.12 21,9L22.8,6.6C19.79,4.34 16.05,3 12,3M12,9C9.3,9 6.81,9.89 4.8,11.4L6.6,13.8C8.1,12.67 9.97,12 12,12C14.03,12 15.9,12.67 17.4,13.8L19.2,11.4C17.19,9.89 14.7,9 12,9Z",
   mdiWifiAlert: "M20.24 5H18V7.25C16.16 6.45 14.13 6 12 6C8.62 6 5.5 7.12 3 9L1.2 6.6C4.21 4.34 7.95 3 12 3C14.97 3 17.77 3.73 20.24 5M8.4 16.2L12 21L15.6 16.2C14.6 15.45 13.35 15 12 15S9.4 15.45 8.4 16.2M4.8 11.4L6.6 13.8C8.1 12.67 9.97 12 12 12S15.9 12.67 17.4 13.8L18 13V10.62C16.23 9.59 14.19 9 12 9C9.3 9 6.81 9.89 4.8 11.4M20 17H22V15H20V17M20 7V13H22V7H20Z",
 };
@@ -32,6 +35,11 @@ const FAILED_SIGNIN_WARN = 20;
 const SITE_NAMES = { frigate: "Frigate", ha: "Home Assistant", media: "Plex", opensprinkler: "OpenSprinkler" };
 const RETRY_WARN_PCT = 30;
 const HISTORY_HOURS = 24;
+// udm-traffic.py publishes every 15 min; past this the Traffic and Blocked cards say their data is old.
+const TRAFFIC_STALE_MIN = 45;
+// Below this much free memory, earlyoom starts stopping the UniFi Network app (the Oct 2026 outage).
+const MEM_LOW_PCT = 12;
+const PORT_NAMES = { 21: "FTP", 22: "SSH", 23: "Telnet", 25: "mail", 80: "web", 443: "web", 445: "Windows sharing", 3389: "Remote Desktop", 5900: "VNC", 8080: "web" };
 
 const svg = (name) => `<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="${ICONS[name] || ""}"/></svg>`;
 const esc = (s) =>
@@ -71,6 +79,57 @@ function since(ms) {
   const days = Math.floor((Date.now() - ms) / 864e5);
   const date = d.toLocaleDateString([], { month: "short", day: "numeric" });
   return days >= 1 ? `${date} (${plural(days, "day")})` : d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+
+// Decimal units, like the UniFi app.
+function fmtBytes(b) {
+  if (!Number.isFinite(b)) return "—";
+  if (b < 1e6) return `${Math.max(0, Math.round(b / 1e3))} KB`;
+  if (b < 1e9) return `${Math.round(b / 1e6)} MB`;
+  return `${b < 10e9 ? (b / 1e9).toFixed(1) : Math.round(b / 1e9)} GB`;
+}
+
+// "3:12 PM" today, "Oct 9, 3:12 PM" otherwise.
+function clock(iso) {
+  const d = new Date(iso);
+  if (!Number.isFinite(d.getTime())) return "";
+  const t = d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  return d.toDateString() === new Date().toDateString() ? t : `${d.toLocaleDateString([], { month: "short", day: "numeric" })}, ${t}`;
+}
+
+function country(code) {
+  try {
+    return new Intl.DisplayNames(["en"], { type: "region" }).of(code) || code;
+  } catch (_) {
+    return code;
+  }
+}
+
+// Hourly internet use: download above the line, upload below, on one scale so sizes compare.
+function hourBars(hours) {
+  if (hours.length < 2) return `<div class="spark-empty">Collecting history…</div>`;
+  const W = 480;
+  const H = 110;
+  const maxD = Math.max(...hours.map((h) => h[1]), 1);
+  const maxU = Math.max(...hours.map((h) => h[2]), 1);
+  const k = (H - 4) / (maxD + maxU);
+  const axis = 2 + maxD * k;
+  const slot = W / 24;
+  const bw = Math.max(2, slot - 4);
+  const x0 = W - hours.length * slot;
+  const bars = hours
+    .map(([t, d, u], i) => {
+      const x = (x0 + i * slot + (slot - bw) / 2).toFixed(1);
+      const hd = Math.max(d > 0 ? 1 : 0, d * k);
+      const hu = Math.max(u > 0 ? 1 : 0, u * k);
+      const when = new Date(t * 1000).toLocaleTimeString([], { hour: "numeric" });
+      return `<g><title>${esc(`${when}: ${fmtBytes(d)} down, ${fmtBytes(u)} up`)}</title>
+        <rect class="dn" x="${x}" y="${(axis - hd).toFixed(1)}" width="${bw.toFixed(1)}" height="${hd.toFixed(1)}" rx="2"/>
+        <rect class="up" x="${x}" y="${axis.toFixed(1)}" width="${bw.toFixed(1)}" height="${hu.toFixed(1)}" rx="2"/></g>`;
+    })
+    .join("");
+  return `<svg class="bars" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Internet use per hour">
+    <line x1="0" x2="${W}" y1="${axis.toFixed(1)}" y2="${axis.toFixed(1)}"/>${bars}</svg>`;
 }
 
 function sparkline(points, cls) {
@@ -124,7 +183,7 @@ h1 { margin: 0; font-size: 34px; font-weight: 700; line-height: 1.1; }
   background: rgba(245,176,65,.08); border: 1px solid rgba(245,176,65,.3); color: #f7d49a; }
 
 .grid { display: grid; gap: 22px; align-items: start; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  grid-template-areas: "path path" "internet wifi" "clients attn" "expo expo"; }
+  grid-template-areas: "path path" "internet wifi" "clients attn" "traffic blocks" "expo expo"; }
 .card { background: linear-gradient(180deg, var(--card-2), var(--card)); border: 1px solid var(--line); border-radius: 30px; padding: 24px 26px; min-width: 0; }
 .a-path { grid-area: path; } .a-internet { grid-area: internet; } .a-wifi { grid-area: wifi; } .a-clients { grid-area: clients; } .a-attn { grid-area: attn; }
 .eyebrow { font-size: 13px; letter-spacing: .12em; font-weight: 600; color: var(--muted); text-transform: uppercase; }
@@ -223,8 +282,37 @@ h1 { margin: 0; font-size: 34px; font-weight: 700; line-height: 1.1; }
 a.link { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
 a.link .ic { width: 16px; height: 16px; }
 
+/* Traffic */
+.a-traffic { grid-area: traffic; } .a-blocks { grid-area: blocks; }
+.metric .u { font-size: 13px; color: var(--muted); margin-top: 4px; }
+.bars { width: 100%; height: 110px; display: block; }
+.bars line { stroke: rgba(148,170,200,.35); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.bars .dn { fill: var(--teal); } .bars .up { fill: var(--blue); }
+.key i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin: 0 6px 0 12px; vertical-align: -1px; }
+.dev { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 2px 10px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); }
+.dev > .ic { width: 18px; height: 18px; color: var(--muted); grid-row: span 2; }
+.dev .n { font-size: 15px; display: flex; align-items: center; gap: 8px; min-width: 0; }
+.dev .n span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dev .s { grid-column: 2; font-size: 13px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dev .v { grid-row: span 2; grid-column: 3; text-align: right; font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.dev .v small { display: block; font-size: 12px; color: var(--muted); font-weight: 500; }
+.dev.warn .v { color: var(--amber); }
+.tag.warn { background: rgba(245,176,65,.14); color: var(--amber); }
+
+/* Blocked by your rules */
+.rules { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
+.rule { border-radius: 16px; background: #121a28; border: 1px solid var(--line); padding: 12px 14px; min-width: 0; }
+.rule-top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.rule-top b { font-size: 16px; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rule-n { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.rule-n small { font-size: 12px; color: var(--muted); font-weight: 500; margin-left: 6px; }
+.rule-devs, .rule-tried { font-size: 13.5px; color: #c3cedd; margin-top: 4px; line-height: 1.45; overflow-wrap: anywhere; }
+.rule-tried { color: var(--muted); }
+.rule.quiet { opacity: .6; }
+.rule.alert { border-color: rgba(245,176,65,.3); }
+
 @container (max-width: 980px) {
-  .grid { grid-template-columns: minmax(0, 1fr); grid-template-areas: "path" "attn" "expo" "internet" "wifi" "clients"; }
+  .grid { grid-template-columns: minmax(0, 1fr); grid-template-areas: "path" "attn" "expo" "traffic" "blocks" "internet" "wifi" "clients"; }
 }
 @container (max-width: 640px) {
   .app { padding: 14px 14px 24px; }
@@ -246,6 +334,8 @@ a.link .ic { width: 16px; height: 16px; }
   .counts .total { font-size: 36px; }
   .big.four { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .row { font-size: 14px; }
+  .dev .n { font-size: 14px; } .dev .v { font-size: 15px; }
+  .rule-n { font-size: 17px; } .rule-top b { font-size: 15px; }
 }
 `;
 
@@ -301,7 +391,13 @@ class NetworkPanel extends HTMLElement {
       devices: "sensor.network_devices",
       clients: "sensor.network_clients",
       ...(this._cfg || {}),
+      // MAC (lower case) -> friendly name, for devices UniFi only knows by vendor or MAC.
+      names: Object.fromEntries(Object.entries(this._cfg?.names || {}).map(([k, v]) => [k.toLowerCase(), v])),
     };
+  }
+
+  _name(d) {
+    return this._config.names[d.mac] || d.name || (d.vendor ? `${d.vendor} · ${d.mac.slice(-5)}` : d.mac);
   }
 
   async _loadHistory() {
@@ -382,6 +478,8 @@ class NetworkPanel extends HTMLElement {
       totalClients: live(clientSensor) ? num(clientSensor.state) : null,
       latency,
       exposure: this._exposure(),
+      traffic: this._traffic(),
+      netwatch: c.netwatch && live(st[c.netwatch]) ? st[c.netwatch] : null,
       down: num(st[c.download]?.state),
       up: num(st[c.upload]?.state),
     };
@@ -413,6 +511,16 @@ class NetworkPanel extends HTMLElement {
       sites: Object.entries(sites).sort((a, b) => b[1].requests - a[1].requests),
       signIn: live(si) ? { at: Date.parse(si.state), ...si.attributes } : null,
     };
+  }
+
+  // UDM traffic + firewall blocks (scripts/udm-traffic.py via MQTT). null = not configured.
+  _traffic() {
+    const c = this._config;
+    const s = c.traffic && this._hass.states[c.traffic];
+    if (!s) return null;
+    const at = Date.parse(s.state);
+    if (!live(s) || !Number.isFinite(at) || !s.attributes?.wan) return { ok: false };
+    return { ok: true, at, stale: Date.now() - at > TRAFFIC_STALE_MIN * 60e3, ...s.attributes };
   }
 
   _evaluateExposure(x) {
@@ -449,6 +557,22 @@ class NetworkPanel extends HTMLElement {
     else if ((g.cpu ?? 0) > 90 || (g.mem ?? 0) > 95) gateway = { level: "amber", word: "Busy", sub: `CPU ${Math.round(g.cpu ?? 0)}% · memory ${Math.round(g.mem ?? 0)}%` };
     else gateway = { level: "green", word: "Online", sub: `${g.name}${g.uptime ? ` · up ${fmtUptime(g.uptime)}` : ""}` };
 
+    // Traffic summary facts only count while fresh; an old reading isn't "now".
+    const t = m.traffic?.ok && !m.traffic.stale ? m.traffic : null;
+    const gm = t?.gateway || {};
+    if (gateway.level === "green" && (gm.mem_available_pct ?? 100) < MEM_LOW_PCT)
+      gateway = { level: "amber", word: "Low memory", sub: `${Math.round(gm.mem_available_pct)}% memory free · swap ${Math.round(gm.swap_used_pct ?? 0)}% used` };
+
+    // Amber traffic findings, in the order they'd lead the headline.
+    const flagged = [];
+    if (t?.wan?.unusual_up)
+      flagged.push({ label: "Unusual upload", detail: `${fmtBytes(t.wan.up)} sent to the internet in 24 h, usually ${fmtBytes(t.wan.usual_up)} a day` });
+    for (const d of (t?.devices || []).filter((x) => x.unusual && !x.internet_blocked))
+      flagged.push({ label: "Unusual upload", detail: `${this._name(d)} sent ${fmtBytes(d.sent)}, usually ${fmtBytes(d.usual_sent)} a day` });
+    const newDevs = (t?.new_devices || []).filter((d) => Date.now() - Date.parse(d.first_seen) < 864e5);
+    for (const d of newDevs.filter((x) => !/guest/i.test(x.network || "")))
+      flagged.push({ label: "New device", detail: `${this._name(d)} joined ${d.network || "the network"} at ${clock(d.first_seen)}` });
+
     const activeAps = m.aps.filter((a) => !a.retired);
     const downAps = activeAps.filter((a) => !a.online);
     const wireless = m.clients.filter((c) => c.type === "WIRELESS").length;
@@ -468,9 +592,10 @@ class NetworkPanel extends HTMLElement {
     else if (gateway.level === "red") status = { dot: "red", label: "Gateway offline", detail: gateway.sub };
     else if (wifi.level === "red") status = { dot: "red", label: "Wi-Fi down", detail: wifi.sub };
     else if (exposure?.level === "amber") status = { dot: "amber", label: exposure.word, detail: exposure.sub };
+    else if (flagged.length) status = { dot: "amber", ...flagged[0] };
     else if (internet.level === "amber") status = { dot: "amber", label: "Internet slow", detail: internet.sub };
     else if (wifi.level === "amber") status = { dot: "amber", label: "Wi-Fi degraded", detail: wifi.sub };
-    else if (gateway.level === "amber") status = { dot: "amber", label: "Gateway busy", detail: gateway.sub };
+    else if (gateway.level === "amber") status = { dot: "amber", label: gateway.word === "Low memory" ? "Gateway low on memory" : "Gateway busy", detail: gateway.sub };
     else if (!m.unifiOk) status = { dot: "", label: internet.level === "green" ? "Internet OK" : "No data", detail: "UniFi data unavailable" };
     else status = { dot: "green", label: "All good", detail: `${internet.sub.split(" · ")[0]} · ${plural(m.totalClients ?? 0, "device")} connected` };
 
@@ -489,7 +614,134 @@ class NetworkPanel extends HTMLElement {
     }
     for (const l of m.latency.filter((x) => x.ms !== null && (x.loss ?? 0) > 0))
       items.push({ level: "info", icon: "mdiLanDisconnect", title: `Packet loss to ${l.label}`, text: `${Math.round(l.loss)}% of pings lost in the last check.` });
+
+    if (t) {
+      if (t.wan.unusual_up)
+        items.push({ level: "amber", icon: "mdiArrowUp", title: `Uploading far more than usual`, text: `${fmtBytes(t.wan.up)} sent to the internet in 24 h; usually about ${fmtBytes(t.wan.usual_up)} a day. Traffic below shows the busiest Wi-Fi devices; wired ones (media-laptop, servers) aren't broken out.` });
+      for (const d of t.devices.filter((x) => x.unusual)) {
+        const ratio = Math.round(d.sent / d.usual_sent);
+        items.push(
+          d.internet_blocked
+            ? { level: "info", icon: "mdiArrowUp", title: `${this._name(d)} is sending ${ratio}× its usual`, text: `${fmtBytes(d.sent)} in 24 h. Its internet access is blocked, so this stays in the house (e.g. streaming to Frigate).` }
+            : { level: "amber", icon: "mdiArrowUp", title: `${this._name(d)} sent ${ratio}× its usual`, text: `${fmtBytes(d.sent)} in 24 h; usually about ${fmtBytes(d.usual_sent)} a day. This counts traffic inside the house too, so check what it's been doing.` },
+        );
+      }
+      for (const d of newDevs) {
+        const guest = /guest/i.test(d.network || "");
+        items.push({ level: guest ? "info" : "amber", icon: "mdiAccountArrowRight", title: `New device: ${this._name(d)}`, text: `Joined ${d.network || "the network"}${d.wired ? " (wired)" : ""} at ${clock(d.first_seen)}${d.vendor ? ` · made by ${d.vendor}` : ""}${d.ip ? ` · ${d.ip}` : ""}.${guest ? "" : " If you don't recognise it, block it in the UniFi app."}` });
+      }
+      if (gm.earlyoom_kills_24h > 0) {
+        const what = gm.earlyoom_procs?.length === 1 && gm.earlyoom_procs[0] === "unifi" ? "the UniFi Network app" : (gm.earlyoom_procs || []).join(", ") || "processes";
+        items.push({ level: "amber", icon: "mdiMemory", title: `UDM ran out of memory (${plural(gm.earlyoom_kills_24h, "stop")} in 24 h)`, text: `earlyoom stopped ${what}, last at ${clock(gm.earlyoom_last)}. UniFi data can have gaps around then. If it keeps happening, a reboot clears it for a while.` });
+      }
+      if (gateway.word === "Low memory")
+        items.push({ level: "amber", icon: "mdiMemory", title: `UDM is low on memory`, text: `${gateway.sub}. When it runs out, earlyoom stops the UniFi Network app, which is how UniFi went dark Oct 2–11.` });
+      for (const r of t.rules.filter((x) => x.went_quiet))
+        items.push({ level: "info", icon: "mdiWebOff", title: `"${r.name}" stopped seeing attempts`, text: `It blocked ${count(r.prev)} the day before and none in the last 24 h. The device may be off, or it has a new MAC address the rule doesn't cover.` });
+    }
+    if (m.traffic && (!m.traffic.ok || m.traffic.stale))
+      items.push({ level: "info", icon: "mdiInformationOutline", title: m.traffic.ok ? `Traffic summary is ${ago(new Date(m.traffic.at).toISOString()).replace(" ago", "")} old` : "No traffic summary from the UDM yet", text: "udm-traffic on docker-host isn't reporting. If the UDM's firmware was just updated, run scripts/udm-traffic-install.sh again." });
+    const nw = m.netwatch;
+    if (nw && num(nw.state) > 0) {
+      const who = Object.entries(nw.attributes?.devices || {}).filter(([, v]) => v.off_allowlist_24h > 0).map(([k]) => k);
+      items.push({ level: "amber", icon: "mdiShieldSearch", title: `Off-list lookups by ${who.join(" and ") || "a watched device"}`, text: `${plural(num(nw.state), "lookup")} in 24 h for domains outside its allowlist. You got a push for each new one.` });
+    }
     return { internet, gateway, wifi, exposure, status, items };
+  }
+
+  _trafficCards(t) {
+    if (!t) return { traffic: "", blocks: "" };
+    const empty = (card, cls, title, text) =>
+      `<section class="card ${cls}"><div class="head"><span class="eyebrow">${title}</span></div><div class="spark-empty" style="margin-top:14px">${esc(text)}</div></section>`;
+    if (!t.ok) {
+      const why = "No summary from the UDM yet (udm-traffic on docker-host)";
+      return { traffic: empty("", "a-traffic", "Traffic", why), blocks: empty("", "a-blocks", "Blocked by your rules", why) };
+    }
+    const span = t.covered_h < 23 ? `since ${clock(t.stats_since)}` : "last 24 h";
+    const stale = t.stale ? `<div class="note">From ${esc(clock(new Date(t.at).toISOString()))}: the UDM hasn't been read since.</div>` : "";
+    const w = t.wan;
+    const usualLine = (v) => (v ? `usually ${fmtBytes(v)} a day` : "learning what's usual");
+    const tile = (label, icon, bytes, usualV, cls) =>
+      `<div class="metric ${cls}"><div class="v">${esc(fmtBytes(bytes))}</div><div class="l">${svg(icon)}${esc(label)}</div><div class="u">${esc(usualLine(usualV))}</div></div>`;
+    const peak = w.hours.reduce((a, h) => (h[1] > a[1] ? h : a), [0, 0, 0]);
+    const devs = [...t.devices].sort((a, b) => b.sent - a.sent);
+    const devRow = (d) => {
+      const ratio = d.usual_sent ? d.sent / d.usual_sent : null;
+      const tags = [
+        d.internet_blocked ? `<span class="tag">No internet</span>` : "",
+        d.unusual ? `<span class="tag warn">${Math.round(ratio)}× usual</span>` : "",
+      ].join("");
+      const sub = [`received ${fmtBytes(d.recv)}`, d.usual_sent ? `usual ${fmtBytes(d.usual_sent)}/day` : "no usual yet"].join(" · ");
+      return `<div class="dev ${d.unusual && !d.internet_blocked ? "warn" : ""}">${svg("mdiWifi")}
+        <div class="n"><span>${esc(this._name(d))}</span>${tags}</div>
+        <div class="v">↑ ${esc(fmtBytes(d.sent))}<small>sent</small></div>
+        <div class="s">${esc(sub)}</div></div>`;
+    };
+    const traffic = `
+      <section class="card a-traffic">
+        <div class="head"><span class="eyebrow">Traffic</span><span class="muted">${esc(span)}</span></div>
+        <div class="big">
+          ${tile("Downloaded", "mdiArrowDown", w.down, w.usual_down, "")}
+          ${tile("Uploaded", "mdiArrowUp", w.up, w.usual_up, w.unusual_up ? "warn" : "")}
+        </div>
+        <div class="chart"><div class="cap"><span>Internet use per hour</span><span>${peak[1] ? `peak ${esc(fmtBytes(peak[1]))} at ${esc(new Date(peak[0] * 1000).toLocaleTimeString([], { hour: "numeric" }))}` : ""}</span></div>
+          ${hourBars(w.hours)}
+          <div class="cap key" style="margin-top:6px"><span><i style="background:var(--teal);margin-left:0"></i>download<i style="background:var(--blue)"></i>upload</span><span>now</span></div></div>
+        <div class="group">Busiest on Wi-Fi · by upload</div>
+        <div class="list">${devs.length ? devs.map(devRow).join("") : `<div class="note">No Wi-Fi traffic counted yet.</div>`}</div>
+        <div class="note">Wi-Fi devices only, and it includes traffic that stays in the house (cameras streaming to Frigate). The UDM doesn't break out wired devices.</div>
+        ${stale}
+      </section>`;
+
+    const blockRules = t.rules.filter((r) => r.kind === "block");
+    const total = blockRules.reduce((a, r) => a + (r.attempts || 0), 0);
+    const active = new Set(blockRules.flatMap((r) => r.devices.filter((d) => d.attempts > 0).map((d) => d.mac))).size;
+    const ruleBox = (r) => {
+      const seenAgo = (d) => (d.last_seen && Date.now() - Date.parse(d.last_seen) > 864e5 ? `not seen since ${since(Date.parse(d.last_seen))}` : "no attempts");
+      const devs = r.attempts
+        ? r.devices.filter((d) => d.attempts > 0).sort((a, b) => b.attempts - a.attempts).map((d) => `${this._name(d)} ${count(d.attempts)}`)
+        : r.devices.map((d) => `${this._name(d)}: ${seenAgo(d)}`);
+      const tried = [...new Set(r.devices.flatMap((d) => d.tried || []))].slice(0, 4);
+      return `<div class="rule ${r.attempts ? "" : "quiet"} ${r.went_quiet ? "alert" : ""}">
+        <div class="rule-top"><b>${esc(r.name)}</b><span class="rule-n">${count(r.attempts)}${r.prev !== null && r.prev !== undefined ? `<small>${count(r.prev)} day before</small>` : ""}</span></div>
+        <div class="rule-devs">${esc(devs.join(" · "))}</div>
+        ${tried.length ? `<div class="rule-tried">Trying to reach ${esc(tried.join(", "))}</div>` : ""}
+      </div>`;
+    };
+    const exceptions = t.rules.filter((r) => r.kind !== "block");
+    const exceptionText = (r) => (r.kind === "allow_port" ? (String(r.port) === "123" ? "time sync allowed (port 123)" : `port ${r.port} allowed`) : "allowed, connections logged");
+    const blocks = `
+      <section class="card a-blocks">
+        <div class="head"><span class="eyebrow">Blocked by your rules</span><span class="muted">${esc(span)}</span></div>
+        <div class="counts"><span class="total">${count(total)}</span><span class="split">attempts refused · ${plural(active, "device")} kept off the internet</span></div>
+        <div class="rules">${blockRules.map(ruleBox).join("")}</div>
+        ${
+          exceptions.length
+            ? `<div class="group">Exceptions</div><div class="list">${exceptions
+                .map((r) => `<div class="row">${svg("mdiInformationOutline")}<span class="n">${esc(r.name)}</span><span class="t">${esc(exceptionText(r))}</span></div>`)
+                .join("")}</div>`
+            : ""
+        }
+        <div class="note">These devices keep calling their cloud services, so a steady count is normal. Look closer if a count jumps, or a rule suddenly sees nothing.</div>
+        ${stale}
+      </section>`;
+    return { traffic, blocks };
+  }
+
+  // Connection attempts from the internet that the UDM dropped (exposure card's router half).
+  _inbound(t, metric) {
+    const i = t?.ok ? t.inbound : null;
+    if (!i || !i.dropped) return "";
+    const ports = i.ports.map(([p]) => `${p}${PORT_NAMES[p] ? ` ${PORT_NAMES[p]}` : ""}`).join(", ");
+    const top = i.countries[0];
+    return `<div class="group">At your router · since ${esc(clock(i.since))}</div>
+      <div class="big four">
+        ${metric("Dropped from the internet", "mdiShieldCheckOutline", count(i.dropped), "")}
+        ${metric("Addresses trying", "mdiWeb", count(i.sources), "")}
+        ${metric("Direct tries on 80/443", "mdiWebOff", count(i.web), "")}
+        ${metric(top ? `Most from ${country(top[0])}` : "Top country", "mdiWeb", top ? count(top[1]) : "—", "")}
+      </div>
+      <div class="note">Most-tried ports: ${esc(ports)}. Ports 80/443 only accept Cloudflare, so direct tries are dropped too.</div>`;
   }
 
   _render() {
@@ -575,6 +827,12 @@ class NetworkPanel extends HTMLElement {
           .map(([id]) => `<div class="group">${esc(deviceName[id] || "Other")}</div>${recent.filter((x) => x.uplinkDeviceId === id).map(row).join("")}`)
           .join("")
       : `<div class="group">Most recently connected</div>${recent.slice(0, 5).map(row).join("")}`;
+    const fresh = m.traffic?.ok ? m.traffic.new_devices || [] : [];
+    const newList = fresh.length
+      ? `<div class="group">New in the last 7 days</div>${fresh
+          .map((d) => `<div class="row">${svg(d.wired ? "mdiEthernet" : "mdiWifi")}<span class="n">${esc(this._name(d))}<small>${esc(d.network || "")}</small></span><span class="t">${esc(ago(d.first_seen))}</span></div>`)
+          .join("")}`
+      : "";
     const clientsCard = `
       <section class="card a-clients">
         <div class="head"><span class="eyebrow">Connected devices</span></div>
@@ -583,7 +841,7 @@ class NetworkPanel extends HTMLElement {
             ? `<div class="counts"><span class="total">${m.totalClients ?? m.clients.length}</span><span class="split">${wireless} on Wi-Fi · ${wired} wired</span></div>
         <div class="bar">${byUplink.map(([, n], i) => `<div style="flex:${n};background:${shades[i % shades.length]}"></div>`).join("")}</div>
         <div class="legend">${byUplink.map(([id, n], i) => `<span><i style="background:${shades[i % shades.length]}"></i>${esc(deviceName[id] || "Other")} ${n}</span>`).join("")}</div>
-        <div class="list">${clientList}</div>
+        <div class="list">${clientList}${newList}</div>
         <button class="link" data-action="all">${this._showAll ? "Show fewer" : `Show all ${m.clients.length} by access point`}</button>`
             : `<div class="spark-empty" style="margin-top:14px">Device list unavailable</div>`
         }
@@ -593,13 +851,15 @@ class NetworkPanel extends HTMLElement {
       <section class="card a-attn">
         <div class="head"><span class="eyebrow">Needs attention</span>${ev.items.length ? `<span class="muted">${ev.items.length}</span>` : ""}</div>
         ${
-          !m.unifiOk
+          !m.unifiOk && !ev.items.length
             ? `<div class="spark-empty" style="margin-top:14px">Can't check devices while UniFi data is unavailable</div>`
             : ev.items.length
             ? `<div class="items">${ev.items.map((i) => `<div class="item ${i.level}">${svg(i.icon)}<div><b>${esc(i.title)}</b><span>${esc(i.text)}</span></div></div>`).join("")}</div>`
             : `<div class="allgood">${svg("mdiCheckCircleOutline")} Nothing needs attention.</div>`
         }
       </section>`;
+
+    const { traffic: trafficCard, blocks: blocksCard } = this._trafficCards(m.traffic);
 
     const x = m.exposure;
     const xe = ev.exposure;
@@ -630,6 +890,7 @@ class NetworkPanel extends HTMLElement {
         }`
             : ""
         }
+        ${this._inbound(m.traffic, metric)}
         ${c.exposure_dashboard ? `<a class="link" href="${esc(c.exposure_dashboard)}" target="_blank" rel="noopener">Open the full dashboard (home network) ${svg("mdiOpenInNew")}</a>` : ""}
       </section>`;
 
@@ -647,7 +908,7 @@ class NetworkPanel extends HTMLElement {
             <div class="status"><span class="dot ${s.dot}"></span><b>${esc(s.label)}</b><span class="muted">·</span><span class="muted detail">${esc(s.detail)}</span></div></div>
         </header>
         ${banner}
-        <main class="grid">${path}${internet}${wifi}${clientsCard}${attn}${expo}</main>
+        <main class="grid">${path}${internet}${wifi}${clientsCard}${attn}${trafficCard}${blocksCard}${expo}</main>
       </div>`;
     if (html !== this._html) {
       this._html = html;

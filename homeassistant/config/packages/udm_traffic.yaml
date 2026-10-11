@@ -1,0 +1,14 @@
+# UDM traffic and firewall blocks: scripts/udm-traffic.py (docker-host cron, every 15 min) reads the
+# UDM's own stats over a restricted SSH key and publishes one retained summary on home/udm/traffic.
+# The Network panel's Traffic and Blocked cards read the attributes; the state is when it was made,
+# so the panel can tell "no recent data" apart from "nothing happening".
+
+mqtt:
+  sensor:
+    - name: Network traffic
+      unique_id: udm_traffic_summary
+      state_topic: home/udm/traffic
+      value_template: "{{ value_json.updated }}"
+      device_class: timestamp
+      json_attributes_topic: home/udm/traffic
+      icon: mdi:swap-vertical

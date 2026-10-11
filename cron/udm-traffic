@@ -1,0 +1,1 @@
+*/15 * * * * root /usr/bin/python3 /usr/local/bin/udm-traffic.py >>/var/log/udm-traffic.log 2>&1

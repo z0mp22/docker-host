@@ -33,6 +33,8 @@ recorder:
   exclude:
     entities:
       - sensor.mountain_project_feed
+      # ~7 KB of attributes every 15 min; the panel only needs the latest (MQTT retains it).
+      - sensor.network_traffic
 
 # Load frontend themes from the themes folder
 frontend:
@@ -517,7 +519,7 @@ panel_custom:
     url_path: network
     sidebar_title: Network
     sidebar_icon: mdi:router-wireless
-    module_url: /local/network/network-panel.js?v=2
+    module_url: /local/network/network-panel.js?v=3
     config:
       gateway: a765e99e-5f8c-3c5a-b264-0770b4d1030a
       # UniFi device id -> its stats sensor (see the UniFi rest resources above).
@@ -537,6 +539,18 @@ panel_custom:
       exposure: sensor.internet_exposure
       exposure_sign_in: sensor.internet_exposure_last_sign_in
       exposure_dashboard: http://10.0.0.6:3000/d/npm-exposure/internet-exposure
+      # Traffic + Blocked by your rules cards (packages/udm_traffic.yaml) and netwatch findings.
+      traffic: sensor.network_traffic
+      netwatch: sensor.network_watch_off_allowlist_lookups
+      # Names for devices UniFi only knows by vendor or MAC (cameras: frigate repo go2rtc IPs).
+      names:
+        "9c:8e:cd:23:d6:55": Basement camera
+        "a0:60:32:06:81:89": Garage camera
+        "a0:60:32:09:06:6b": Driveway camera
+        "e8:ab:fa:52:10:ae": Bambu printer camera
+        "8c:86:dd:55:26:9f": Kasa smart plug
+        "30:34:db:ec:16:9c": LG washer
+        "f4:14:bf:2a:0f:3c": LG dryer
   - name: recordings-panel
     url_path: recordings
     sidebar_title: Recordings
