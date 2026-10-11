@@ -169,8 +169,11 @@
     Alert when plex_recordings sync reports a bad library type or files on disk
     that are not visible in Plex (the old movie-library / awaiting-index failure).
   triggers:
+  # `to: ~` = state (ran_at) changes only, i.e. once per sync. Attributes like
+  # recent_checked_at (every 5 min) and disk (hourly) would re-push otherwise.
   - trigger: state
     entity_id: sensor.plex_recordings_sync_meta
+    to: ~
   - trigger: homeassistant
     event: start
   conditions:

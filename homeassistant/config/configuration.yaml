@@ -541,7 +541,7 @@ panel_custom:
     url_path: recordings
     sidebar_title: Recordings
     sidebar_icon: mdi:television-classic
-    module_url: /local/recordings/recordings-panel.js?v=1
+    module_url: /local/recordings/recordings-panel.js?v=2
     config:
       meta: sensor.plex_recordings_sync_meta
       tuners: [sensor.tuner0, sensor.tuner1]

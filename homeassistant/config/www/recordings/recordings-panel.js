@@ -19,6 +19,8 @@ const ICONS = {
 };
 
 const SYNC_STALE_H = 30;
+// "Ready to watch" refreshes every 5 min (plex_recordings ADR 0010).
+const RECENT_STALE_MIN = 30;
 const DISK_WARN = 85;
 const DISK_ALERT = 92;
 const WEAK_QUALITY = 70;
@@ -31,11 +33,17 @@ const live = (st) => !!st && !["unavailable", "unknown"].includes(st.state);
 const arr = (v) => (Array.isArray(v) ? v : []);
 const startOfDay = (ms) => new Date(ms).setHours(0, 0, 0, 0);
 
+// "2026-10-04" as a local calendar date (new Date("2026-10-04") would be UTC midnight).
+function isoDay(s) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s || "");
+  return m ? new Date(+m[1], +m[2] - 1, +m[3]).getTime() : null;
+}
+
 // Air date as a plain calendar date. The filename's date is the reliable one; the sync's
 // recorded_at is date-only UTC midnight and sometimes a day early.
 function recDate(r) {
-  const m = /(\d{4})-(\d{2})-(\d{2}) \d{2} \d{2} \d{2}/.exec(r.path || "") || /^(\d{4})-(\d{2})-(\d{2})/.exec(r.recorded_at || "");
-  return m ? new Date(+m[1], +m[2] - 1, +m[3]).getTime() : null;
+  const m = /(\d{4})-(\d{2})-(\d{2}) \d{2} \d{2} \d{2}/.exec(r.path || "");
+  return m ? new Date(+m[1], +m[2] - 1, +m[3]).getTime() : isoDay(r.recorded_at);
 }
 
 function dayLabel(ms) {
@@ -308,6 +316,9 @@ class RecordingsPanel extends HTMLElement {
       healthy: a.library_healthy !== false && a.library_healthy !== "false",
       awaiting: Number(a.awaiting_index_count) || 0,
       recent: arr(a.recent_recordings),
+      recentCheckedAt: a.recent_checked_at ? Date.parse(a.recent_checked_at) : null,
+      // Bookings the last sync removed because the guide no longer lists them; duplicates are housekeeping.
+      dropped: arr(a.pruned_subscriptions).filter((p) => !String(p.reason || "").startsWith("duplicate")),
       newCount: newGuids.size,
       queue,
       upcoming,
@@ -341,6 +352,15 @@ class RecordingsPanel extends HTMLElement {
       items.push({ level: "amber", icon: "mdiSyncAlert", title: `Sync hasn't run since ${dayLabel(m.ranAt)} ${this._fmtTime(m.ranAt)}`, text: "New games won't be scheduled until it does. Check the plex_recordings cron on media-laptop." });
     for (const o of m.orphans)
       items.push({ level: "info", icon: "mdiCalendarQuestion", title: `${o.show || o.title}: nothing scheduled`, text: "This DVR subscription has no upcoming airings. If you're done with it, remove it from Plex DVR." });
+    for (const p of m.dropped) {
+      const day = isoDay(p.air_date);
+      const why = String(p.reason || "").startsWith("no matching airing")
+        ? "No longer in the TV guide, so the booking was removed. Usually a regional game swap or a playoff game that wasn't needed."
+        : p.reason;
+      items.push({ level: "info", icon: "mdiCalendarRemove", title: `Dropped: ${String(p.title || "a recording").split(" - ").pop()}`, text: `${day ? `${dayLabel(day)} · ` : ""}${why}` });
+    }
+    if (m.recentCheckedAt && now - m.recentCheckedAt > RECENT_STALE_MIN * 60e3 && !stale)
+      items.push({ level: "amber", icon: "mdiSyncAlert", title: `Ready to watch last checked ${agoText(m.recentCheckedAt)}`, text: "New recordings won't show up or push until it refreshes. Check the publish_recent cron on media-laptop." });
     for (const t of busyTuners.filter((x) => x.quality !== null && x.quality < WEAK_QUALITY))
       items.push({ level: "info", icon: "mdiAntenna", title: `Weak signal on ${t.channel}`, text: `${t.name} quality ${Math.round(t.quality)}% — playback may stutter.` });
 
@@ -435,12 +455,14 @@ class RecordingsPanel extends HTMLElement {
     // Ready to watch
     const recent = m.recent.map((r, i) => ({ ...r, day: recDate(r), i })).sort((x, y) => (y.day ?? 0) - (x.day ?? 0) || x.i - y.i);
     const shown = this._showAllRecent ? recent : recent.slice(0, 5);
+    const checkedAt = m.recentCheckedAt ?? m.ranAt;
+    const nextLand = m.upcoming.filter((q) => q.lands && q.lands > now).sort((x, y) => x.lands - y.lands)[0];
     const watchUrl = (r) =>
       c.plex_server && r.rating_key
         ? `https://app.plex.tv/desktop/#!/server/${encodeURIComponent(c.plex_server)}/details?key=${encodeURIComponent(`/library/metadata/${r.rating_key}`)}`
         : null;
     const ready = `<section class="card a-ready">
-      <div class="head"><span class="eyebrow">Ready to watch</span><span class="muted">${m.recent.length ? `latest ${m.recent.length}` : ""}</span></div>
+      <div class="head"><span class="eyebrow">Ready to watch</span><span class="muted">${checkedAt ? `checked ${esc(agoText(checkedAt))}` : ""}</span></div>
       ${
         recent.length
           ? `<div class="recs">${shown
@@ -457,6 +479,7 @@ class RecordingsPanel extends HTMLElement {
             ${recent.length > 5 ? `<button class="link" data-action="recent">${this._showAllRecent ? "Show fewer" : `Show all ${recent.length}`}</button>` : ""}`
           : `<div class="empty">No recordings yet.</div>`
       }
+      ${nextLand ? `<div class="footer">${svg("mdiClockOutline")}Next to land: ${esc(nextLand.title)} · ${esc(dayLabel(nextLand.lands))} ~${this._fmtTime(nextLand.lands)}</div>` : ""}
     </section>`;
 
     // Tuners

@@ -18,8 +18,9 @@ LAST_SCHEDULED="$(read_topic home/plex_recordings/state/last_scheduled)"
 LAST_COMPLETED="$(read_topic home/plex_recordings/state/last_completed)"
 STATUS_JSON="$(read_topic home/plex_recordings/status)"
 DISK_JSON="$(read_topic home/plex_recordings/disk)"
+RECENT_JSON="$(read_topic home/plex_recordings/recent)"
 
-export STATUS LAST_SCHEDULED LAST_COMPLETED STATUS_JSON DISK_JSON OUT
+export STATUS LAST_SCHEDULED LAST_COMPLETED STATUS_JSON DISK_JSON RECENT_JSON OUT
 python3 - <<'PY'
 import json
 import os
@@ -64,6 +65,15 @@ if not isinstance(health, dict):
 awaiting = status_json.get("awaiting_index_count")
 if awaiting is None:
     awaiting = len(health.get("awaiting_index") or [])
+# plex_recordings refreshes landed recordings every 5 min on their own topic
+# (its ADR 0010); prefer that list unless the full-sync status is newer.
+recent_json = parse_json(os.environ.get("RECENT_JSON", ""))
+recent_recordings = status_json.get("recent_recordings") or []
+recent_checked_at = None
+if recent_json.get("checked_at") and str(recent_json["checked_at"]) >= str(status_json.get("ran_at") or ""):
+    recent_recordings = recent_json.get("recent_recordings") or []
+    recent_checked_at = recent_json["checked_at"]
+
 library_healthy = status_json.get("library_healthy")
 if library_healthy is None:
     library_healthy = bool(health.get("ok", True)) if health else True
@@ -78,7 +88,9 @@ data = {
     "skipped_existing": status_json.get("skipped_existing") or [],
     "plex_queue": status_json.get("plex_queue") or [],
     "errors": status_json.get("errors") or [],
-    "recent_recordings": status_json.get("recent_recordings") or [],
+    "recent_recordings": recent_recordings,
+    "recent_checked_at": recent_checked_at,
+    "pruned_subscriptions": status_json.get("pruned_subscriptions") or [],
     "completed_recent": status_json.get("completed_recent") or [],
     "health": health,
     "awaiting_index_count": int(awaiting or 0),
