@@ -1,4 +1,4 @@
-"""Save one live frame of the Eufy doorbell to /config/doorbell/ring.jpg.
+"""Save one live frame of the Eufy doorbell to /config/doorbell/ring.jpg (or argv[1]).
 
 Eufy often has no new event picture for a press, so the doorbell alert grabs a frame from
 eufy-bridge's go2rtc (loopback only) while the doorbell is still awake from the press.
@@ -10,7 +10,7 @@ import urllib.parse
 import urllib.request
 
 API = "http://127.0.0.1:1984/api"
-OUT = "/config/doorbell/ring.jpg"
+OUT = sys.argv[1] if len(sys.argv) > 1 else "/config/doorbell/ring.jpg"
 
 streams = json.load(urllib.request.urlopen(f"{API}/streams", timeout=5))
 # The bridge publishes one go2rtc stream per Eufy camera, named by serial; there is only the doorbell.

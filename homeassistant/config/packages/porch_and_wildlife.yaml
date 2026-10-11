@@ -1,0 +1,147 @@
+# Claude looks at camera photos so phone alerts carry things the detectors can't name:
+# - Porch: the T8210 doorbell never reports package events, so after someone leaves the porch
+#   Claude checks a fresh doorbell frame for a package.
+# - Wildlife: Frigate's COCO model has no deer/raccoon/fox class. Deer come through as
+#   horse/cow/sheep and raccoons/foxes as cat/dog/bear, so Claude names the animal and only
+#   wild ones are pushed (the household golden retriever is a Driveway "dog" too).
+# Both need the Anthropic integration (Settings > Devices & services > Anthropic), which provides
+# ai_task.claude_ai_task; until it exists these automations stop at their first condition.
+
+input_boolean:
+  porch_package_present:
+    name: Package on the porch
+    icon: mdi:package-variant-closed
+
+automation:
+  - id: porch_package_check
+    alias: "Porch: check for a package after someone leaves"
+    description: >-
+      Each doorbell person detection restarts a 90 s wait; once the porch has been quiet that long,
+      Claude looks at a fresh frame. A new package pushes a photo; a package that's gone clears it.
+    mode: restart
+    triggers:
+      - trigger: state
+        entity_id: event.doorbell_detection
+    conditions:
+      - condition: template
+        value_template: >-
+          {{ trigger.from_state is not none
+             and trigger.from_state.state != 'unavailable'
+             and trigger.to_state.attributes.event_type == 'person' }}
+      - condition: template
+        value_template: "{{ expand('ai_task.claude_ai_task') | count > 0 }}"
+    actions:
+      - delay: "00:01:30"
+      # Wakes the doorbell through eufy-bridge's go2rtc (about 8 s).
+      - action: shell_command.doorbell_porch_snapshot
+        response_variable: snapshot
+      - condition: template
+        value_template: "{{ snapshot.returncode == 0 }}"
+      - action: ai_task.generate_data
+        response_variable: seen
+        data:
+          entity_id: ai_task.claude_ai_task
+          task_name: porch package check
+          instructions: >-
+            This is a doorbell camera photo of a front porch. Is there a delivered package,
+            parcel, box, envelope pack or grocery/food delivery bag on the ground or doormat?
+            Ignore anything carried by a person, furniture, plants and decorations.
+          structure:
+            package:
+              description: True only if a delivered item is clearly visible
+              required: true
+              selector:
+                boolean:
+            description:
+              description: Under 12 words, e.g. "Brown box left of the door"
+              required: true
+              selector:
+                text:
+          attachments:
+            - media_content_id: media-source://media_source/snapshots/porch.jpg
+              media_content_type: image/jpeg
+      - choose:
+          - conditions: "{{ seen.data.package and is_state('input_boolean.porch_package_present', 'off') }}"
+            sequence:
+              - action: input_boolean.turn_on
+                target:
+                  entity_id: input_boolean.porch_package_present
+              - action: script.notify_phones
+                data:
+                  title: Package at the front door
+                  message: "{{ seen.data.description }} · {{ now().strftime('%-I:%M %p') }}"
+                  tag: porch-package
+                  channel: Porch
+                  data:
+                    image: "/media/snapshots/porch.jpg?v={{ now().timestamp() | int }}"
+                    clickAction: /cameras?live=camera.doorbell
+                    url: /cameras?live=camera.doorbell
+          - conditions: "{{ not seen.data.package and is_state('input_boolean.porch_package_present', 'on') }}"
+            sequence:
+              - action: input_boolean.turn_off
+                target:
+                  entity_id: input_boolean.porch_package_present
+              - action: script.notify_phones
+                data:
+                  message: clear_notification
+                  tag: porch-package
+
+  - id: wildlife_driveway_alert
+    alias: "Wildlife: push when Claude confirms a wild animal on the Driveway"
+    description: >-
+      Frigate's first sighting of a horse/cow/sheep/bear/cat/dog on the Driveway gets a live frame
+      checked by Claude; only wild animals are pushed, one alert per species.
+    mode: queued
+    max: 3
+    triggers:
+      - trigger: mqtt
+        topic: frigate/events
+    conditions:
+      - condition: template
+        value_template: >-
+          {{ trigger.payload_json.type == 'new'
+             and trigger.payload_json.after.camera == 'Driveway'
+             and trigger.payload_json.after.label in ['horse', 'cow', 'sheep', 'bear', 'cat', 'dog'] }}
+      - condition: template
+        value_template: "{{ expand('ai_task.claude_ai_task') | count > 0 }}"
+    actions:
+      - variables:
+          event_id: "{{ trigger.payload_json.after.id }}"
+          frigate_label: "{{ trigger.payload_json.after.label }}"
+      - action: ai_task.generate_data
+        response_variable: seen
+        data:
+          entity_id: ai_task.claude_ai_task
+          task_name: driveway wildlife check
+          instructions: >-
+            This is a driveway security camera frame (possibly infrared at night) in Fort
+            Collins, Colorado. The object detector thinks it saw a {{ frigate_label }}. Is there a
+            wild animal in the frame, such as a deer, raccoon, fox, coyote, skunk, bear, rabbit or
+            mountain lion? Pets (dogs, house cats), people, vehicles and birds are not wild animals.
+          structure:
+            wild:
+              description: True only if a wild mammal is visible
+              required: true
+              selector:
+                boolean:
+            animal:
+              description: Common name in lowercase, e.g. "mule deer", "raccoon"; empty if none
+              required: true
+              selector:
+                text:
+          attachments:
+            - media_content_id: media-source://camera/camera.driveway
+              media_content_type: image/jpeg
+      - condition: template
+        value_template: "{{ seen.data.wild and seen.data.animal | length > 0 }}"
+      - action: script.notify_phones
+        data:
+          title: "{{ seen.data.animal | capitalize }} on the driveway"
+          message: "Frigate saw a {{ frigate_label }} · {{ now().strftime('%-I:%M %p') }}"
+          # Per species, so a second deer replaces the first alert instead of stacking.
+          tag: "wildlife-{{ seen.data.animal | slugify }}"
+          channel: Wildlife
+          data:
+            image: "/api/frigate/notifications/{{ event_id }}/snapshot.jpg"
+            clickAction: /wildlife
+            url: /wildlife
