@@ -55,6 +55,8 @@ def _prepare_user_content(
 
     return {
         "report_date": payload["report_date"],
+        "report_weekday": payload.get("report_weekday"),
+        "plan_days": payload.get("plan_days") or [],
         "athlete_context": payload.get("athlete_context"),
         "week_full": week_full,
         "history_summaries": history_out,
@@ -77,6 +79,8 @@ def _split_user_content(user_content: dict[str, Any]) -> tuple[dict[str, Any], d
     }
     dynamic = {
         "report_date": user_content["report_date"],
+        "report_weekday": user_content.get("report_weekday"),
+        "plan_days": user_content.get("plan_days") or [],
         "athlete_context": user_content.get("athlete_context"),
         "week_full": user_content["week_full"],
         "strength_training_log": user_content.get("strength_training_log") or [],

@@ -29,6 +29,7 @@ def _collect_day_health(client: GarminClientWrapper, day: date, compact: bool = 
     ds = _date_str(day)
     entry: dict[str, Any] = {
         "date": ds,
+        "weekday": day.strftime("%A"),
         "stats": _safe(client, "get_stats", ds),
         "user_summary": _safe(client, "get_user_summary", ds),
         "training_readiness": _safe(client, "get_training_readiness", ds),
@@ -145,6 +146,20 @@ def collect_history_summaries(
         raise DataCollectionError(f"Failed to fetch history activities: {exc}") from exc
 
 
+PLAN_DAYS = 7
+
+
+def plan_days(report_date: date) -> list[dict[str, str]]:
+    """The 7 days the action plan covers (the day after report_date onward),
+    each with its weekday computed here. The model's own calendar is a year
+    off: from 2026-09-05 to 2026-10-05 it labeled Tue Oct 6 as "Mon Oct 6"
+    and laid the Tue/Thu gym climbs onto the wrong days."""
+    return [
+        {"date": _date_str(d), "weekday": d.strftime("%A"), "label": d.strftime("%a %b %-d")}
+        for d in (report_date + timedelta(days=i) for i in range(1, PLAN_DAYS + 1))
+    ]
+
+
 def build_payload(
     client: GarminClientWrapper,
     config: AppConfig,
@@ -196,6 +211,8 @@ def build_payload(
     tz = athlete_tz_name(config.athlete_timezone)
     return {
         "report_date": _date_str(today),
+        "report_weekday": today.strftime("%A"),
+        "plan_days": plan_days(today),
         "athlete_context": {
             "timezone": tz,
             "timezone_label": "Mountain Time (MT)",
