@@ -5,6 +5,8 @@ services:
     restart: unless-stopped
     command:
       - run
+      # loki.source.syslog's raw format (UDM syslog, see config.alloy) is experimental.
+      - --stability.level=experimental
       - --server.http.listen-addr=0.0.0.0:12345
       - --storage.path=/var/lib/alloy/data
       - --disable-reporting
@@ -14,6 +16,7 @@ services:
       LOKI_URL: http://10.0.0.6:3100/loki/api/v1/push
     ports:
       - "12345:12345"   # /metrics for Prometheus job "alloy" (minipc)
+      - "5514:5514/udp" # UDM syslog (UniFi Network rsyslogd setting)
     mem_limit: 384m
     volumes:
       - ./config.alloy:/etc/alloy/config.alloy:ro

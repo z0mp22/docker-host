@@ -34,6 +34,26 @@ with `OS_PW_SHA256` from `.env` to set `os_auth`, then redacts `pw`, `npw`, `cpw
 /docker/alloy/scripts/set-owner-pw.sh --from-logs  # or: the hash the app has been sending
 ```
 
+## UDM syslog (job=udm)
+
+The UDM's remote syslog (UniFi Network `rsyslogd` setting: `10.0.0.4:5514/udp`, all contents)
+lands on the same Alloy and goes to Loki as `job="udm"`. The stream mixes syslog-ng lines and
+UniFi Network CEF events, and the RFC 3164 parser drops the CEF lines, so the listener runs in
+`raw` mode. That mode needs `--stability.level=experimental` (in `docker-compose.yml`).
+
+| Label | Values |
+|---|---|
+| `kind` | `firewall` (zone policies with logging on), `event` (CEF: client joins/leaves, config changes, firewall blocks), `dhcp`, `system` |
+| `fw_chain`, `fw_action`, `fw_rule` | e.g. `LAN_WAN`, `A`/`D`/`R`, policy index `10008` |
+| `cef_category` | `Client`, `Security`, `Audit`, ... |
+
+Structured metadata: `program`, `descr` (policy name), `src`, `dst`, `proto`, `dpt`, `src_mac`, `cef_name`.
+Wi-Fi driver, hostapd/stahtd association and lease-reload chatter (about 70% of the stream) is dropped.
+`tests/udm_cases.py` covers the rules and runs as part of `tests/run.sh`.
+
+Example: `{job="udm", kind="firewall", fw_rule="10008"}` lists every new LG washer/dryer
+connection (policy "LG laundry: log connections").
+
 ## Changing the rules
 
 Edit `config.alloy`, add a case to `tests/cases.py`, then on the Pi:

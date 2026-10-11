@@ -255,3 +255,109 @@ loki.write "minipc" {
     url = sys.env("LOKI_URL")
   }
 }
+
+// UDM (UniFi Dream Machine) syslog -> Loki, job=udm. The UDM's rsyslogd setting points at
+// 10.0.0.4:5514/udp with all contents (set through the Network API; see README).
+//
+// One stream carries two formats: syslog-ng lines with a <PRI> header and a doubled hostname
+// ("<13>Oct 11 09:56:41 ZsDM ZsDM [LAN_WAN-A-10008] DESCR=..."), and UniFi Network's CEF event
+// lines with no header ("Oct 11 09:56:12 ZsDM CEF:0|Ubiquiti|UniFi Network|..."). The RFC 3164
+// parser drops every CEF line ("invalid or unsupported framing"), so the listener takes raw
+// lines (experimental stability level, set in docker-compose.yml) and this pipeline parses both.
+//
+// Labels: kind = firewall | event | dhcp | system; firewall adds fw_chain (LAN_WAN, ...),
+// fw_action (A accept, D drop, R reject) and fw_rule (policy index); event adds cef_category
+// (Client, Security, Audit, ...). Structured metadata: program, descr, src, dst, proto, dpt,
+// src_mac (firewall); cef_name (event). Wi-Fi driver and roaming chatter is dropped.
+// Rules are covered by tests/udm_cases.py.
+loki.source.syslog "udm" {
+  listener {
+    address       = "0.0.0.0:5514"
+    protocol      = "udp"
+    syslog_format = "raw"
+    labels        = { job = "udm" }
+  }
+  forward_to = [loki.process.udm.receiver]
+}
+
+loki.process "udm" {
+  forward_to = [loki.write.minipc.receiver]
+
+  // Strip the syslog header. host2 is the doubled hostname on syslog-ng lines; its character
+  // class can't match a CEF or "program[pid]:" token, so those stay in body.
+  stage.regex {
+    expression = `^(?:<\d+>)?[A-Z][a-z]{2} +\d+ \d\d:\d\d:\d\d (?P<host>\S+) (?:(?P<host2>[A-Za-z0-9_.-]+) )?(?P<body>.*)$`
+  }
+
+  stage.regex {
+    source     = "body"
+    expression = `^(?P<program>[A-Za-z0-9_./-]+)(?:\[\d+\])?: `
+  }
+
+  // Firewall policy logging (zone policies with logging on): "[LAN_WAN-A-10008] DESCR=..."
+  stage.regex {
+    source     = "body"
+    expression = `^\[(?P<fw_chain>[A-Z0-9_]+)-(?P<fw_action>[ADR])-(?P<fw_rule>[^\]]+)\] DESCR="(?P<descr>[^"]*)"`
+  }
+
+  stage.regex {
+    source     = "body"
+    expression = `MAC=[0-9a-f:]{17}:(?P<src_mac>[0-9a-f:]{17})`
+  }
+
+  stage.regex {
+    source     = "body"
+    expression = `SRC=(?P<src>\S+) DST=(?P<dst>\S+) .*?PROTO=(?P<proto>\S+)(?: .*?DPT=(?P<dpt>\d+))?`
+  }
+
+  // UniFi Network events: CEF:Version|Vendor|Product|Version|ID|Name|Severity|Extension
+  stage.regex {
+    source     = "body"
+    expression = `^CEF:\d+\|[^|]*\|[^|]*\|[^|]*\|[^|]*\|(?P<cef_name>[^|]*)\|[^|]*\|.*?UNIFIcategory=(?P<cef_category>\S+)`
+  }
+
+  stage.template {
+    source   = "kind"
+    template = `{{ if .fw_chain }}firewall{{ else if .cef_name }}event{{ else if and .program (eq .program "dnsmasq-dhcp") }}dhcp{{ else }}system{{ end }}`
+  }
+
+  stage.labels {
+    values = {
+      kind         = "",
+      fw_chain     = "",
+      fw_action    = "",
+      fw_rule      = "",
+      cef_category = "",
+    }
+  }
+
+  stage.structured_metadata {
+    values = {
+      program  = "",
+      descr    = "",
+      src      = "",
+      dst      = "",
+      proto    = "",
+      dpt      = "",
+      src_mac  = "",
+      cef_name = "",
+    }
+  }
+
+  // ~70% of the stream: Wi-Fi driver auth frames, hostapd/stahtd association tracking,
+  // ulogd/mcad plumbing and dnsmasq lease-file reloads. Client joins/leaves still arrive as
+  // CEF "WiFi Client Connected/Disconnected" events and DHCP lines.
+  stage.match {
+    selector = `{kind="system"}`
+
+    stage.drop {
+      source              = "program"
+      expression          = `^(kernel|hostapd|stahtd|wevent|mcad|ulogd|dnsmasq)$`
+      drop_counter_reason = "udm_noise"
+    }
+  }
+
+  stage.output {
+    source = "body"
+  }
+}
