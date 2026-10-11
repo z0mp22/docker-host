@@ -133,6 +133,32 @@
           {% set t = as_datetime(s.state) if s is not none else none %}
           {{ (as_local(t).date() - now().date()).days if t is not none else '' }}
 
+- switch:
+    - name: Basement Stream
+      unique_id: basement_stream
+      icon: mdi:cctv
+      state: "{{ is_state('binary_sensor.basement_stream_active', 'on') }}"
+      turn_on:
+        - action: rest_command.basement_stream_enable
+      turn_off:
+        - action: rest_command.basement_stream_disable
+    - name: Garage Stream
+      unique_id: garage_stream
+      icon: mdi:cctv
+      state: "{{ is_state('binary_sensor.garage_stream_active', 'on') }}"
+      turn_on:
+        - action: rest_command.garage_stream_enable
+      turn_off:
+        - action: rest_command.garage_stream_disable
+    - name: Driveway Stream
+      unique_id: driveway_stream
+      icon: mdi:cctv
+      state: "{{ is_state('binary_sensor.driveway_stream_active', 'on') }}"
+      turn_on:
+        - action: rest_command.driveway_stream_enable
+      turn_off:
+        - action: rest_command.driveway_stream_disable
+
 - trigger:
     - platform: time_pattern
       hours: "/1"
