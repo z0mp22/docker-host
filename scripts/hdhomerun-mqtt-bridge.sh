@@ -1,5 +1,6 @@
 #!/bin/bash
-# Pull the latest HDHomeRun signal reading from MQTT into a JSON file Home Assistant can read.
+# Pull the latest HDHomeRun signal readings from MQTT into a JSON file Home Assistant can read,
+# split per tuner (live view) and per channel (trend sensors). See docs/decisions/0007-*.md.
 set -euo pipefail
 
 OUT="${HDHOMERUN_STATE_FILE:-/docker/homeassistant/hdhomerun_signal_state.json}"
@@ -48,20 +49,43 @@ def parse_json(raw: str) -> dict:
 
 
 status = parse_json(os.environ.get("STATUS_JSON", ""))
-readings = status.get("readings") or []
-latest = readings[0] if readings else {}
-weather = latest.get("weather") or {}
+if not status:
+    # Nothing on the topic (or mosquitto_sub timed out): keep the last file.
+    # HA flags it as stale from updated_at instead of reading it as idle.
+    raise SystemExit(0)
+
+readings = [r for r in status.get("readings") or [] if isinstance(r, dict)]
+weather = next((r["weather"] for r in readings if r.get("weather")), {})
+
+tuners = [
+    {
+        "tuner": r.get("tuner"),
+        "channel": r.get("channel"),
+        "channel_name": r.get("channel_name"),
+        "strength": r.get("signal_strength_percent"),
+        "quality": r.get("signal_quality_percent"),
+        "symbol": r.get("symbol_quality_percent"),
+        # First minute on a channel: still locking on, symbol quality reads 0.
+        "settling": bool(r.get("settling")),
+    }
+    for r in readings
+]
+
+# Per channel, settled readings only. If both tuners sit on one channel, keep the worse one.
+channels = {}
+for t in tuners:
+    if t["settling"] or not t["channel"] or t["quality"] is None:
+        continue
+    prev = channels.get(t["channel"])
+    if prev is None or t["quality"] < prev["quality"]:
+        channels[t["channel"]] = {k: t[k] for k in ("channel_name", "strength", "quality", "symbol")}
 
 data = {
     "updated_at": status.get("updated_at"),
-    "channel": latest.get("channel"),
-    "channel_name": latest.get("channel_name"),
-    "signal_strength_percent": latest.get("signal_strength_percent"),
-    "signal_quality_percent": latest.get("signal_quality_percent"),
-    "symbol_quality_percent": latest.get("symbol_quality_percent"),
+    "tuners": tuners,
+    "channels": channels,
     "weather_condition": weather.get("condition"),
     "weather_temperature": weather.get("temperature"),
-    "readings": readings,
 }
 
 out = Path(os.environ["OUT"])

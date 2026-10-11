@@ -7,5 +7,6 @@
 | [0004](0004-mountain-project-feed.md) | Mountain Project feed: RSS first, page scrape as fallback | Accepted |
 | [0005](0005-fingerboard-ramp.md) | Fingerboard ramp inside the lift coach | Amended by 0006 |
 | [0006](0006-lift-coach-variety-home-gym-separate-fingerboard.md) | Goal-first lift sessions for the home gym; fingerboard as its own session | Accepted |
+| [0007](0007-tuner-signal-per-channel.md) | Tuner Signal: per-tuner live view, per-channel trend sensors | Accepted |
 
 Related DVR library decisions live in [czampino/plex_recordings](https://github.com/czampino/plex_recordings/tree/main/docs/decisions).

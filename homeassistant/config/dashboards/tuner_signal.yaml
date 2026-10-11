@@ -6,95 +6,123 @@ views:
     icon: mdi:antenna
     theme: RedditMushroom
     cards:
+      # Job: "Can the antenna record cleanly right now, and which channel can't?"
+      # Readings only exist while a tuner is in use (recording or live TV).
       - type: custom:mushroom-title-card
         title: HDHomeRun
-        subtitle: Signal strength — opportunistic, only while a tuner is in use
+        subtitle: >
+          {% set s = states('sensor.hdhomerun_tuners') %}
+          {% set u = state_attr('sensor.hdhomerun_tuners', 'updated_at') %}
+          {% if s in ['No data', 'unavailable', 'unknown'] %}No data from the signal poller{% if u %} since {{ as_timestamp(u) | timestamp_custom('%a %-I:%M %p') }}{% endif %}
+          {% elif s == 'Idle' %}Both tuners idle · readings appear while something records
+          {% else %}{{ s }}{% endif %}
 
       - type: custom:mushroom-chips-card
         alignment: center
         chips:
           - type: template
-            icon: mdi:television-classic
-            content: >
-              {{ state_attr('sensor.hdhomerun_signal_meta', 'channel_name')
-                 or state_attr('sensor.hdhomerun_signal_meta', 'channel')
-                 or 'idle' }}
-          - type: template
             icon: mdi:weather-partly-cloudy
             content: >
-              {% set cond = state_attr('sensor.hdhomerun_signal_meta', 'weather_condition') %}
-              {% set temp = state_attr('sensor.hdhomerun_signal_meta', 'weather_temperature') %}
-              {% if cond %}{{ temp }}° {{ cond | replace('_', ' ') | title }}{% else %}n/a{% endif %}
-          - type: template
-            icon: mdi:clock-outline
-            content: >
-              {{ state_attr('sensor.hdhomerun_signal_meta', 'updated_at') | default('never', true) }}
+              {% set cond = state_attr('sensor.hdhomerun_tuners', 'weather_condition') %}
+              {% set temp = state_attr('sensor.hdhomerun_tuners', 'weather_temperature') %}
+              {% if cond %}{{ temp }}° {{ cond | replace('partlycloudy', 'partly cloudy') | replace('_', ' ') | replace('-', ' ') | capitalize }}{% else %}Weather n/a{% endif %}
 
       - type: grid
-        columns: 3
+        columns: 2
         square: false
         cards:
-          - type: gauge
-            entity: sensor.hdhomerun_signal_strength
-            name: Signal strength
-            min: 0
-            max: 100
-            needle: true
-            severity:
-              red: 0
-              yellow: 75
-              green: 90
-          - type: gauge
-            entity: sensor.hdhomerun_signal_quality
-            name: Signal quality
-            min: 0
-            max: 100
-            needle: true
-            severity:
-              red: 0
-              yellow: 75
-              green: 90
-          - type: gauge
-            entity: sensor.hdhomerun_symbol_quality
-            name: Symbol quality
-            min: 0
-            max: 100
-            needle: true
-            severity:
-              red: 0
-              yellow: 75
-              green: 90
+          - type: custom:mushroom-template-card
+            entity: sensor.hdhomerun_tuners
+            primary: >
+              {% set id = 'tuner0' %}
+              {% set t = (state_attr('sensor.hdhomerun_tuners', 'tuners') or []) | selectattr('tuner', 'eq', id) | list | first %}
+              {% if states('sensor.hdhomerun_tuners') in ['No data', 'unavailable', 'unknown'] %}No data
+              {% elif not t %}Idle
+              {% else %}{{ t.channel }} {{ t.channel_name or '' }}{% endif %}
+            secondary: >
+              {% set id = 'tuner0' %}
+              {% set t = (state_attr('sensor.hdhomerun_tuners', 'tuners') or []) | selectattr('tuner', 'eq', id) | list | first %}
+              {% if states('sensor.hdhomerun_tuners') in ['No data', 'unavailable', 'unknown'] or not t %}Tuner {{ id[-1] | int + 1 }}
+              {% elif t.settling %}Tuner {{ id[-1] | int + 1 }} · locking on
+              {% else %}Quality {{ t.quality }}% · signal {{ t.strength }}% · {{ 'no errors' if (t.symbol or 0) >= 100 else 'picture errors' }}{% endif %}
+            icon: mdi:television-classic
+            icon_color: >
+              {% set id = 'tuner0' %}
+              {% set t = (state_attr('sensor.hdhomerun_tuners', 'tuners') or []) | selectattr('tuner', 'eq', id) | list | first %}
+              {% if states('sensor.hdhomerun_tuners') in ['No data', 'unavailable', 'unknown'] or not t or t.settling %}grey
+              {% elif (t.symbol or 0) < 100 %}red
+              {% elif (t.quality or 0) < 70 %}amber
+              {% else %}green{% endif %}
+          - type: custom:mushroom-template-card
+            entity: sensor.hdhomerun_tuners
+            primary: >
+              {% set id = 'tuner1' %}
+              {% set t = (state_attr('sensor.hdhomerun_tuners', 'tuners') or []) | selectattr('tuner', 'eq', id) | list | first %}
+              {% if states('sensor.hdhomerun_tuners') in ['No data', 'unavailable', 'unknown'] %}No data
+              {% elif not t %}Idle
+              {% else %}{{ t.channel }} {{ t.channel_name or '' }}{% endif %}
+            secondary: >
+              {% set id = 'tuner1' %}
+              {% set t = (state_attr('sensor.hdhomerun_tuners', 'tuners') or []) | selectattr('tuner', 'eq', id) | list | first %}
+              {% if states('sensor.hdhomerun_tuners') in ['No data', 'unavailable', 'unknown'] or not t %}Tuner {{ id[-1] | int + 1 }}
+              {% elif t.settling %}Tuner {{ id[-1] | int + 1 }} · locking on
+              {% else %}Quality {{ t.quality }}% · signal {{ t.strength }}% · {{ 'no errors' if (t.symbol or 0) >= 100 else 'picture errors' }}{% endif %}
+            icon: mdi:television-classic
+            icon_color: >
+              {% set id = 'tuner1' %}
+              {% set t = (state_attr('sensor.hdhomerun_tuners', 'tuners') or []) | selectattr('tuner', 'eq', id) | list | first %}
+              {% if states('sensor.hdhomerun_tuners') in ['No data', 'unavailable', 'unknown'] or not t or t.settling %}grey
+              {% elif (t.symbol or 0) < 100 %}red
+              {% elif (t.quality or 0) < 70 %}amber
+              {% else %}green{% endif %}
 
       - type: custom:mushroom-title-card
-        title: Trend
-        subtitle: Long-term statistics (survives HA's short history retention)
+        title: By channel
+        subtitle: Signal quality, one line per channel · only days a channel was tuned
 
       - type: statistics-graph
-        title: Signal over time
-        entities:
-          - sensor.hdhomerun_signal_strength
-          - sensor.hdhomerun_signal_quality
-          - sensor.hdhomerun_symbol_quality
+        title: Worst minute each day
+        chart_type: line
+        period: day
+        days_to_show: 60
+        stat_types:
+          - min
+        entities: &channel_entities
+          - entity: sensor.tuner_quality_22_1_kfct_fox
+            name: 22.1 FOX
+          - entity: sensor.tuner_quality_31_1_kdvr_fox
+            name: 31.1 FOX
+          - entity: sensor.tuner_quality_27_1_klwy_fox
+            name: 27.1 FOX
+          - entity: sensor.tuner_quality_5_1_kgwn_cbs
+            name: 5.1 CBS
+          - entity: sensor.tuner_quality_4_1_kcnc_cbs
+            name: 4.1 CBS
+          - entity: sensor.tuner_quality_5_2_kgwn_nbc
+            name: 5.2 NBC
+          - entity: sensor.tuner_quality_9_1_kusa_nbc
+            name: 9.1 NBC
+          - entity: sensor.tuner_quality_7_1_kmgh_abc
+            name: 7.1 ABC
+
+      - type: statistics-graph
+        title: Daily average
+        chart_type: line
+        period: day
+        days_to_show: 60
         stat_types:
           - mean
-          - min
-        period: day
-        days_to_show: 90
-
-      - type: custom:mushroom-title-card
-        title: Weather now
-        subtitle: For eyeballing conditions against the trend above
-
-      - type: weather-forecast
-        entity: weather.home
-        show_forecast: false
+        entities: *channel_entities
 
       - type: markdown
         content: >
-          This dashboard is a live/recent view. For the actual
-          signal-vs-weather correlation (mean/median/min signal per channel
-          per weather condition), run `./scripts/analyze_signal_weather.py`
-          on media-laptop — it reads the full weather-tagged sample log at
-          `logs/hdhomerun_signal.jsonl` in `plex_recordings`, which keeps
-          more detail (exact channel + condition per sample) than this
-          dashboard's numeric-only trend graph.
+          **Reading this:** a channel that sits low but steady (4.1 runs about
+          55%) still records cleanly. A worst minute near 0 is a dropout: the
+          picture broke up for that minute. NBC records from 5.2; 9.1 is a
+          fallback for KUSA-only airings because it drops out (ADR 0012 in
+          `plex_recordings`).
+
+
+          Weather correlation per channel: `./scripts/analyze_signal_weather.py`
+          on media-laptop, which reads the full sample log
+          (`logs/hdhomerun_signal.jsonl` in `plex_recordings`).

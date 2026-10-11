@@ -161,3 +161,91 @@
         forecast: "{{ daily['weather.home'].forecast | default([]) }}"
         temperature: "{{ state_attr('weather.home', 'temperature') }}"
         condition: "{{ states('weather.home') }}"
+
+# HDHomeRun signal quality per channel (Tuner Signal dashboard trend). One
+# sensor per channel so the long-term statistics never mix transmitters, which
+# is what made the old single sensor look like it dropped on a schedule.
+# Unavailable unless that channel is tuned right now and the reading is fresh,
+# so the statistics only cover real samples. Lock-on readings are already
+# dropped by the bridge. Channels = the ones plex_recordings books from.
+- sensor:
+    - name: Tuner quality 22.1 KFCT FOX
+      unique_id: hdhomerun_quality_22_1
+      unit_of_measurement: "%"
+      state_class: measurement
+      icon: mdi:signal
+      availability: >-
+        {% set u = state_attr('sensor.hdhomerun_tuners', 'updated_at') %}
+        {{ u is not none and (now() - as_datetime(u)).total_seconds() < 180
+           and '22.1' in (state_attr('sensor.hdhomerun_tuners', 'channels') or {}) }}
+      state: "{{ state_attr('sensor.hdhomerun_tuners', 'channels')['22.1'].quality }}"
+    - name: Tuner quality 31.1 KDVR FOX
+      unique_id: hdhomerun_quality_31_1
+      unit_of_measurement: "%"
+      state_class: measurement
+      icon: mdi:signal
+      availability: >-
+        {% set u = state_attr('sensor.hdhomerun_tuners', 'updated_at') %}
+        {{ u is not none and (now() - as_datetime(u)).total_seconds() < 180
+           and '31.1' in (state_attr('sensor.hdhomerun_tuners', 'channels') or {}) }}
+      state: "{{ state_attr('sensor.hdhomerun_tuners', 'channels')['31.1'].quality }}"
+    - name: Tuner quality 27.1 KLWY FOX
+      unique_id: hdhomerun_quality_27_1
+      unit_of_measurement: "%"
+      state_class: measurement
+      icon: mdi:signal
+      availability: >-
+        {% set u = state_attr('sensor.hdhomerun_tuners', 'updated_at') %}
+        {{ u is not none and (now() - as_datetime(u)).total_seconds() < 180
+           and '27.1' in (state_attr('sensor.hdhomerun_tuners', 'channels') or {}) }}
+      state: "{{ state_attr('sensor.hdhomerun_tuners', 'channels')['27.1'].quality }}"
+    - name: Tuner quality 5.1 KGWN CBS
+      unique_id: hdhomerun_quality_5_1
+      unit_of_measurement: "%"
+      state_class: measurement
+      icon: mdi:signal
+      availability: >-
+        {% set u = state_attr('sensor.hdhomerun_tuners', 'updated_at') %}
+        {{ u is not none and (now() - as_datetime(u)).total_seconds() < 180
+           and '5.1' in (state_attr('sensor.hdhomerun_tuners', 'channels') or {}) }}
+      state: "{{ state_attr('sensor.hdhomerun_tuners', 'channels')['5.1'].quality }}"
+    - name: Tuner quality 4.1 KCNC CBS
+      unique_id: hdhomerun_quality_4_1
+      unit_of_measurement: "%"
+      state_class: measurement
+      icon: mdi:signal
+      availability: >-
+        {% set u = state_attr('sensor.hdhomerun_tuners', 'updated_at') %}
+        {{ u is not none and (now() - as_datetime(u)).total_seconds() < 180
+           and '4.1' in (state_attr('sensor.hdhomerun_tuners', 'channels') or {}) }}
+      state: "{{ state_attr('sensor.hdhomerun_tuners', 'channels')['4.1'].quality }}"
+    - name: Tuner quality 5.2 KGWN NBC
+      unique_id: hdhomerun_quality_5_2
+      unit_of_measurement: "%"
+      state_class: measurement
+      icon: mdi:signal
+      availability: >-
+        {% set u = state_attr('sensor.hdhomerun_tuners', 'updated_at') %}
+        {{ u is not none and (now() - as_datetime(u)).total_seconds() < 180
+           and '5.2' in (state_attr('sensor.hdhomerun_tuners', 'channels') or {}) }}
+      state: "{{ state_attr('sensor.hdhomerun_tuners', 'channels')['5.2'].quality }}"
+    - name: Tuner quality 9.1 KUSA NBC
+      unique_id: hdhomerun_quality_9_1
+      unit_of_measurement: "%"
+      state_class: measurement
+      icon: mdi:signal
+      availability: >-
+        {% set u = state_attr('sensor.hdhomerun_tuners', 'updated_at') %}
+        {{ u is not none and (now() - as_datetime(u)).total_seconds() < 180
+           and '9.1' in (state_attr('sensor.hdhomerun_tuners', 'channels') or {}) }}
+      state: "{{ state_attr('sensor.hdhomerun_tuners', 'channels')['9.1'].quality }}"
+    - name: Tuner quality 7.1 KMGH ABC
+      unique_id: hdhomerun_quality_7_1
+      unit_of_measurement: "%"
+      state_class: measurement
+      icon: mdi:signal
+      availability: >-
+        {% set u = state_attr('sensor.hdhomerun_tuners', 'updated_at') %}
+        {{ u is not none and (now() - as_datetime(u)).total_seconds() < 180
+           and '7.1' in (state_attr('sensor.hdhomerun_tuners', 'channels') or {}) }}
+      state: "{{ state_attr('sensor.hdhomerun_tuners', 'channels')['7.1'].quality }}"

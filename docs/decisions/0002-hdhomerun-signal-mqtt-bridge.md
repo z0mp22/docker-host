@@ -1,6 +1,6 @@
 # ADR 0002: HDHomeRun signal-strength bridge + trend dashboard
 
-- **Status:** Accepted
+- **Status:** Accepted; sensors and dashboard superseded by [0007](0007-tuner-signal-per-channel.md)
 - **Date:** 2026-09-13
 - **Deciders:** Cody
 - **Tags:** homeassistant, mqtt, hdhomerun

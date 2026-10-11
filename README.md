@@ -148,7 +148,7 @@ and publishes each reading, weather-tagged, to Mosquitto on this host. See
 
 | Topic | Purpose |
 |-------|---------|
-| `home/hdhomerun_signal/status` | Retained latest reading(s): channel, signal/quality/symbol percentages, weather snapshot |
+| `home/hdhomerun_signal/status` | Retained, every minute: one reading per tuned tuner (channel, signal/quality/symbol %, `settling` on the lock-on minute, weather); empty `readings` when idle |
 
 | Piece | Path |
 |-------|------|
