@@ -73,11 +73,6 @@ main() {
   wait_for_metrics "npm-exporter" "http://${HOST}:9113/metrics" 'nginx_up 1'
   wait_for_metrics "npm-metrics" "http://${HOST}:9114/metrics" '^npm_proxy_hosts_total'
 
-  if docker ps --format '{{.Names}}' | grep -qx 'unifi-poller'; then
-    wait_for_metrics "unifi-poller" "http://${HOST}:9130/metrics" '^unpoller_' || true
-  else
-    echo "[validate] SKIP unifi-poller (not running — optional)"
-  fi
 
   echo "[validate] all required checks passed"
 }

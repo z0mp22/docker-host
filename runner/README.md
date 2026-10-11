@@ -49,4 +49,4 @@ The runner user (`pi`) must have Docker access (`docker` group) and passwordless
 ## Notes
 
 - Deploy workflows use `[self-hosted, docker-host]`
-- Secrets stay on the host: `/docker/.env`, `/docker/pihole-exporter/.env`, `/docker/unifi-poller/up.conf`, `/docker/homeassistant/secrets.yaml`
+- Secrets stay on the host: `/docker/.env`, `/docker/pihole-exporter/.env`, `/docker/homeassistant/secrets.yaml`

@@ -22,9 +22,6 @@ pihole/
 mosquitto/data/
 mosquitto/log/
 
-# UniFi poller credentials
-unifi-poller/up.conf
-!unifi-poller/up.conf.example
 
 # Garmin coaching report runtime (on host only)
 garmin-coaching-report/.env
