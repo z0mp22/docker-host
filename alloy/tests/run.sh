@@ -45,11 +45,19 @@ docker run -d --name "${NET}-alloy" --network "${NET}" \
   -v "${WORK}/backfill:/backfill:ro" \
   -v "${GEO}:/geo:ro" \
   -v "${WORK}/data:/var/lib/alloy/data" \
-  "${ALLOY_IMAGE}" run --storage.path=/var/lib/alloy/data --disable-reporting \
-  /etc/alloy/config.alloy >/dev/null
+  "${ALLOY_IMAGE}" run --stability.level=experimental --storage.path=/var/lib/alloy/data \
+  --disable-reporting /etc/alloy/config.alloy >/dev/null
 
 python3 "${HERE}/cases.py" expect > "${WORK}/expect.json"
 LOKI_ADDR="$(docker port "${NET}-loki" 3100/tcp | head -1)"
+
+# UDM syslog fixtures: wait for the UDP listener, then send them to the container's bridge IP.
+ALLOY_IP="$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "${NET}-alloy")"
+for _ in $(seq 1 30); do
+  docker logs "${NET}-alloy" 2>&1 | grep -q 'syslog listening' && break
+  sleep 1
+done
+python3 "${HERE}/udm_cases.py" send "${ALLOY_IP}" 5514
 set +e
 python3 - "${WORK}/expect.json" "${LOKI_ADDR}" <<'PY'
 import json, sys, time, urllib.parse, urllib.request
@@ -105,5 +113,6 @@ print(f"{len(rows)} lines ingested, {len(expect)} cases, {fail} failures")
 sys.exit(1 if fail else 0)
 PY
 status=$?
+python3 "${HERE}/udm_cases.py" check "${LOKI_ADDR}" || status=1
 if [ "${status}" -ne 0 ]; then docker logs "${NET}-alloy" 2>&1 | tail -30; fi
 exit "${status}"
