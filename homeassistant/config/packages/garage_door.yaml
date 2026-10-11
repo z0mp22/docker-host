@@ -1,10 +1,11 @@
 # Garage door left open at night, seen by the Garage camera (there is no door sensor).
 # Frigate's state-classification model "garage_door" (frigate repo config.yml,
 # classification.custom) crops the top of the door opening and labels it open/closed;
-# the Frigate integration exposes that as sensor.garage_garage_door_classification.
+# the Frigate integration exposes that as sensor.garage_garage_garage_door_classification.
 # - Frigate only publishes a verified change (3 matching classifications in a row) and doesn't
 #   retain it; the integration restores the last value across HA restarts.
-# - "Unknown" means the model hasn't been trained yet, so these automations stay quiet.
+# - It reads "Unknown" until the model is trained and the door first changes state after the
+#   sensor is created; these automations stay quiet until then.
 # - A dropped camera stream freezes the sensor at its last value, so the 21:00 check pushes
 #   "can't check" when the Garage stream is down instead of trusting it.
 
@@ -20,7 +21,7 @@ automation:
         at: "21:00:00"
         id: check
       - trigger: state
-        entity_id: sensor.garage_garage_door_classification
+        entity_id: sensor.garage_garage_garage_door_classification
         to: open
         for: "00:10:00"
         id: opened
@@ -35,13 +36,13 @@ automation:
                 entity_id: binary_sensor.garage_stream_active
                 state: "on"
               - condition: state
-                entity_id: sensor.garage_garage_door_classification
+                entity_id: sensor.garage_garage_garage_door_classification
                 state: open
             sequence:
               - action: script.notify_phones
                 data:
                   title: Garage door is open
-                  message: "Open since {{ as_local(states.sensor.garage_garage_door_classification.last_changed).strftime('%-I:%M %p') }}"
+                  message: "Open since {{ as_local(states.sensor.garage_garage_garage_door_classification.last_changed).strftime('%-I:%M %p') }}"
                   tag: garage-door-open
                   channel: Garage
                   data:
@@ -54,7 +55,7 @@ automation:
               - condition: template
                 value_template: >-
                   {{ not is_state('binary_sensor.garage_stream_active', 'on')
-                     and states('sensor.garage_garage_door_classification') | lower != 'unknown' }}
+                     and states('sensor.garage_garage_garage_door_classification') | lower != 'unknown' }}
             sequence:
               - action: script.notify_phones
                 data:
@@ -68,7 +69,7 @@ automation:
     mode: single
     triggers:
       - trigger: state
-        entity_id: sensor.garage_garage_door_classification
+        entity_id: sensor.garage_garage_garage_door_classification
         from: open
         to: closed
     actions:
