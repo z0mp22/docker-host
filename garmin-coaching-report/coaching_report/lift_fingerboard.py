@@ -384,6 +384,9 @@ def assert_fingerboard_safe(
     limits = context["limits"]
     # The warm-up is board time too: off with the board, short, never weighted,
     # and always logged as warm-up sets (goal "warmup" makes hevy_client type them).
+    for ex in board + warmups:
+        if ex.warmup_sets:
+            fail(ex, "has warmup_sets; board warm-up hangs go in the BM1000 Warm-up exercise")
     for ex in warmups:
         if not limits["board_allowed_today"]:
             fail(ex, f"prescribed but the board is off today ({limits['blocked_reason']})")

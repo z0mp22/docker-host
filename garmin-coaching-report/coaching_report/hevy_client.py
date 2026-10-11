@@ -141,7 +141,18 @@ class HevyClient:
         # A dedicated warm-up entry (e.g. "BM1000 Warm-up") is logged as warm-up
         # sets, so it never counts as working volume in history or progression.
         set_type = "warmup" if ex.goal == "warmup" else "normal"
-        sets = [
+        # Ramp-up sets the coach gave a rep exercise go first, as warm-up sets.
+        warmups = [
+            {
+                "type": "warmup",
+                "weight_kg": lb_to_kg(w["weight_lb"]) if w.get("weight_lb") is not None else None,
+                "reps": w["reps"],
+                "duration_seconds": None,
+            }
+            for w in (ex.warmup_sets or [])
+            if ex.duration_seconds is None
+        ]
+        sets = warmups + [
             {
                 "type": set_type,
                 "weight_kg": weight_kg,

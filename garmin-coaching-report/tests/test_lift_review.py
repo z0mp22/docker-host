@@ -2,7 +2,7 @@
 
 from coaching_report.lift_coach import ExercisePrescription
 from coaching_report.lift_fingerboard import board_blocks
-from coaching_report.lift_review import fingerboard_problems, name_problems, review_plan
+from coaching_report.lift_review import fingerboard_problems, name_problems, review_plan, warmup_problems
 
 CATALOG = {
     "DL": {"name": "Deadlift (Barbell)", "muscle": "glutes", "type": "weight_reps", "equipment": "barbell"},
@@ -33,7 +33,9 @@ def test_this_mornings_session_is_flagged_for_load_and_missing_triceps():
 
 
 def test_repeating_justified_lifts_is_fine():
-    plan = [_ex("DL", 4, 195.0, "mtb", "Still progressing: 185 -> 195 with RPE 7, so hold and add a set."),
+    dl = _ex("DL", 4, 195.0, "mtb", "Still progressing: 185 -> 195 with RPE 7, so hold and add a set.")
+    dl.warmup_sets = [{"reps": 8, "weight_lb": 45.0}, {"reps": 5, "weight_lb": 95.0}, {"reps": 3, "weight_lb": 145.0}]
+    plan = [dl,
             _ex("PU", 4, None, "climbing"), _ex("HC", 3, 30.0), _ex("TP", 3, 50.0), _ex("HANG", goal="climbing")]
     assert review_plan(plan, "heavy_1h", CATALOG) == []
 
@@ -104,3 +106,17 @@ def test_board_blocks_lay_the_session_out_set_by_set():
     assert (warm["kind"], warm["sets"], warm["seconds"], warm["round"]) == ("warmup", 6, 10, None)
     assert (board["kind"], board["sets"], board["round"], board["rest_seconds"]) == ("board", 12, 6, 20)
     assert (acc["kind"], acc["reps"], acc["weight_lb"]) == ("accessory", 10, 5.0)
+
+
+def test_heavy_barbell_lift_needs_makeable_lighter_warmups():
+    dl = _ex("DL", 4, 185.0)
+    (problem,) = warmup_problems([dl], CATALOG)
+    assert "no warmup_sets" in problem
+    dl.warmup_sets = [{"reps": 8, "weight_lb": 45.0}, {"reps": 5, "weight_lb": 97.5}, {"reps": 3, "weight_lb": 185.0}]
+    problems = warmup_problems([dl], CATALOG)
+    assert any("185 lb isn't lighter" in p for p in problems)
+    assert any("Deadlift (Barbell) warm-up at 97.5 lb" in p for p in problems)
+    hang = _ex("HANG")
+    hang.warmup_sets = [{"reps": 5, "weight_lb": None}]
+    assert "timed" in warmup_problems([hang], CATALOG)[0]
+    assert warmup_problems([_ex("HC", 3, 30.0), _ex("DL", 3, 65.0)], CATALOG) == []

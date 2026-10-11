@@ -20,15 +20,19 @@ found the board notes too long to follow on the board).
 
 from __future__ import annotations
 
+import dataclasses
 import re
 from typing import TYPE_CHECKING, Any
 
-from .lift_equipment import load_problems
+from .lift_equipment import load_kind, load_problems
 
 if TYPE_CHECKING:
     from .lift_coach import ExercisePrescription
 
 STRENGTH_SESSIONS = ("heavy_1h", "light_30m")
+# A barbell lift at or above this working weight needs warm-up sets (he asked
+# for them; going cold into 185 lb was rough).
+WARMUP_FROM_LB = 95.0
 # One line on a phone in Hevy. The RIR target is appended after this.
 MAX_BOARD_NOTE_CHARS = 140
 MAX_BOARD_SUMMARY_CHARS = 500
@@ -96,6 +100,45 @@ def fingerboard_problems(
     return problems
 
 
+def warmup_problems(
+    exercises: list["ExercisePrescription"], catalog_by_id: dict[str, dict[str, Any]]
+) -> list[str]:
+    """Warm-up sets are real Hevy sets: makeable loads, lighter than the
+    working weight, only on rep exercises, and present on heavy barbell lifts."""
+    problems = []
+    for ex in exercises:
+        warmups = ex.warmup_sets or []
+        entry = catalog_by_id.get(ex.exercise_id)
+        if warmups and ex.duration_seconds is not None:
+            problems.append(f"{ex.exercise_name} is timed; warmup_sets are for rep exercises only")
+            continue
+        for w in warmups:
+            if ex.weight_lb is not None and w.get("weight_lb") is not None and w["weight_lb"] >= ex.weight_lb:
+                problems.append(
+                    f"{ex.exercise_name} warm-up at {w['weight_lb']:g} lb isn't lighter than the "
+                    f"{ex.weight_lb:g} lb working sets"
+                )
+        problems += load_problems(
+            [
+                dataclasses.replace(ex, exercise_name=f"{ex.exercise_name} warm-up", weight_lb=w["weight_lb"], superset_group=None)
+                for w in warmups
+                if w.get("weight_lb") is not None
+            ],
+            catalog_by_id,
+        )
+        if (
+            entry
+            and load_kind(entry) == "barbell"
+            and (ex.weight_lb or 0) >= WARMUP_FROM_LB
+            and not warmups
+        ):
+            problems.append(
+                f"{ex.exercise_name} at {ex.weight_lb:g} lb has no warmup_sets; heavy compound lifts "
+                "get a ramp (e.g. bar x 8, then 2-3 lighter sets)"
+            )
+    return problems
+
+
 def _is_bodyweight_pull(name: str) -> bool:
     n = name.lower()
     return ("pull up" in n or "chin up" in n or "lock" in n) and "scapular" not in n
@@ -112,6 +155,7 @@ def review_plan(
     problems = (
         name_problems(exercises, catalog_by_id)
         + load_problems(exercises, catalog_by_id)
+        + warmup_problems(exercises, catalog_by_id)
         + progression_problems(exercises, history)
     )
     unexplained = [ex.exercise_name for ex in exercises if not ex.goal or not (ex.why or "").strip()]

@@ -199,7 +199,14 @@ def snap_free_weights(
         if entry is None or ex.weight_lb is None:
             continue
         options = {"dumbbell": DUMBBELLS_LB, "kettlebell": KETTLEBELLS_LB}.get(load_kind(entry) or "")
-        if not options or ex.weight_lb in options:
+        if not options:
+            continue
+        for w in ex.warmup_sets or []:
+            if w.get("weight_lb") is not None and w["weight_lb"] not in options:
+                new = min(options, key=lambda o: (abs(o - w["weight_lb"]), o))
+                changed.append(f"{ex.exercise_name} warm-up: {w['weight_lb']:g} lb -> {new:g} lb (nearest one you own)")
+                w["weight_lb"] = new
+        if ex.weight_lb in options:
             continue
         new = min(options, key=lambda o: (abs(o - ex.weight_lb), o))
         changed.append(f"{ex.exercise_name}: {ex.weight_lb:g} lb -> {new:g} lb (nearest one you own)")
