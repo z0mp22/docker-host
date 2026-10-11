@@ -1,0 +1,1 @@
+*/15 * * * * root /usr/bin/python3 /usr/local/bin/netwatch.py >>/var/log/netwatch.log 2>&1

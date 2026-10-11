@@ -1,0 +1,7 @@
+{
+  "_comment": "Devices scripts/netwatch.py watches in Pi-hole's query log. allow = domain suffixes the device may look up; anything else alerts once via home/netwatch/alert. MACs, not IPs, so DHCP changes don't matter.",
+  "devices": {
+    "LG washer": {"mac": "30:34:db:ec:16:9c", "allow": ["lgthinq.com"]},
+    "LG dryer": {"mac": "f4:14:bf:2a:0f:3c", "allow": ["lgthinq.com"]}
+  }
+}
