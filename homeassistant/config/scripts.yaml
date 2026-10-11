@@ -1,58 +1,80 @@
-notify_mobile_recording:
-  alias: Notify all Companion mobile apps
-  description: Sends a push notification to every registered Home Assistant mobile app.
+notify_phones:
+  alias: Push to every Companion app
+  description: >-
+    The one place that sends phone pushes. Companion app notify entities are named
+    notify.<device> while the action is notify.mobile_app_<device>; matching notify entity ids
+    on "mobile_app" finds nothing and silently drops every push. Each alert passes its own tag:
+    Android replaces a notification that has the same tag, so a shared tag hides earlier alerts.
+    scripts/lint-ha-notify.py enforces both.
+  mode: parallel
+  max: 20
   fields:
     title:
       description: Notification title
       example: Recording scheduled
-      required: true
       selector:
         text:
     message:
-      description: Notification body
+      description: Notification body ("clear_notification" removes the alert with this tag)
       example: USA · World Cup vs Bosnia
       required: true
       selector:
         text:
+    tag:
+      description: Unique per alert (per item when several can arrive together)
+      example: plex-scheduled-usa_vs_bosnia
+      required: true
+      selector:
+        text:
+    channel:
+      description: Android notification channel (settings are per channel on the phone)
+      example: Recordings
+      selector:
+        text:
+    data:
+      description: Extra Companion app data (actions, image, url, ...); overrides the defaults
+      example: "{'url': '/network'}"
+      selector:
+        object:
   sequence:
     - variables:
-        # Companion app notify entities are named notify.<device>; the action is
-        # notify.mobile_app_<device>. Same mapping as the doorbell alert.
         mobile_notifiers: >-
           {{ integration_entities('mobile_app')
              | select('match', '^notify\\.')
              | map('replace', 'notify.', 'notify.mobile_app_', 1)
              | list }}
-    - choose:
-        - conditions:
+        # High priority + ttl 0 so Android doesn't hold the push while the phone dozes.
+        push_data: >-
+          {{ dict(dict({'channel': channel | default('General', true), 'importance': 'high',
+                        'priority': 'high', 'ttl': 0,
+                        'push': {'interruption-level': 'active'}}, **(data | default({}, true))),
+                  tag=tag) }}
+        clearing: "{{ message == 'clear_notification' }}"
+    - if:
+        - condition: template
+          value_template: "{{ mobile_notifiers | count > 0 }}"
+      then:
+        - repeat:
+            for_each: "{{ mobile_notifiers }}"
+            sequence:
+              - action: "{{ repeat.item }}"
+                data:
+                  title: "{{ title | default('', true) }}"
+                  message: "{{ message }}"
+                  data: "{{ {'tag': tag} if clearing else push_data }}"
+      else:
+        - if:
             - condition: template
-              value_template: "{{ mobile_notifiers | count > 0 }}"
-          sequence:
-            - repeat:
-                for_each: "{{ mobile_notifiers }}"
-                sequence:
-                  - action: "{{ repeat.item }}"
-                    data:
-                      title: "{{ title }}"
-                      message: "{{ message }}"
-                      data:
-                        tag: plex-recordings
-                        channel: Recordings
-                        importance: high
-                        priority: high
-                        ttl: 0
-                        push:
-                          sound:
-                            name: default
-                            critical: 0
-                          interruption-level: active
-        - conditions:
-            - condition: template
-              value_template: "{{ mobile_notifiers | count == 0 }}"
-          sequence:
+              value_template: "{{ clearing }}"
+          then:
+            - action: persistent_notification.dismiss
+              data:
+                notification_id: "{{ tag }}"
+          else:
             - action: persistent_notification.create
               data:
-                title: "{{ title }}"
+                notification_id: "{{ tag }}"
+                title: "{{ title | default('', true) }}"
                 message: "{{ message }} (no mobile app registered)"
 
 coaching_report_run_since_last:

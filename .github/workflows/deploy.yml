@@ -12,6 +12,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Lint HA phone notifications
+        run: python3 scripts/lint-ha-notify.py
+
       - name: Deploy to /docker
         env:
           PULL_IMAGES: "0"

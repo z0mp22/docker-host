@@ -82,23 +82,12 @@ automation:
           message: >-
             {{ trigger.json.alerts | selectattr('status', 'eq', 'firing')
                | map(attribute='annotations') | map(attribute='summary') | unique | join('\n') }}
-          # Companion app notify entities are named notify.<device>; same pattern as the doorbell.
-          mobile_notifiers: >-
-            {{ integration_entities('mobile_app')
-               | select('match', '^notify\\.')
-               | map('replace', 'notify.', 'notify.mobile_app_', 1)
-               | list }}
-      - repeat:
-          for_each: "{{ mobile_notifiers }}"
-          sequence:
-            - action: "{{ repeat.item }}"
-              data:
-                title: Internet exposure
-                message: "{{ message }}"
-                data:
-                  tag: internet-exposure
-                  channel: Security
-                  importance: high
-                  priority: high
-                  clickAction: /network
-                  url: /network
+      - action: script.notify_phones
+        data:
+          title: Internet exposure
+          message: "{{ message }}"
+          tag: internet-exposure
+          channel: Security
+          data:
+            clickAction: /network
+            url: /network
