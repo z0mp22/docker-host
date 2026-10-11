@@ -10,6 +10,12 @@ call, ADR 0006), so there is no repeat cap; the coach has to justify it in
 `why` instead. A problem here doesn't discard the session: lift_main hands
 the list back to the coach for one revision, and whatever is still wrong
 after that is shown in flags_considered.
+
+Two checks are stricter. A name that doesn't match the Hevy template behind
+its exercise_id would make the plan say one exercise while Hevy shows (and
+logs) another, so lift_main refuses to write it if the revision doesn't fix
+it. Fingerboard sessions also get brevity checks (2026-10-11: the athlete
+found the board notes too long to follow on the board).
 """
 
 from __future__ import annotations
@@ -23,6 +29,9 @@ if TYPE_CHECKING:
     from .lift_coach import ExercisePrescription
 
 STRENGTH_SESSIONS = ("heavy_1h", "light_30m")
+# One line on a phone in Hevy. The RIR target is appended after this.
+MAX_BOARD_NOTE_CHARS = 140
+MAX_BOARD_SUMMARY_CHARS = 500
 VALID_GOALS = {"climbing", "mtb", "snowboard", "physique", "core", "shoulder_health"}
 
 
@@ -53,6 +62,40 @@ def progression_problems(
     return problems
 
 
+def name_problems(
+    exercises: list["ExercisePrescription"], catalog_by_id: dict[str, dict[str, Any]]
+) -> list[str]:
+    """Hevy shows (and logs) the template behind exercise_id, whatever name
+    the coach wrote next to it."""
+    return [
+        f"{ex.exercise_name!r} has exercise_id {ex.exercise_id}, which Hevy shows as "
+        f"{catalog_by_id[ex.exercise_id]['name']!r}; use the id of the exercise you mean "
+        "and its exact catalog name"
+        for ex in exercises
+        if ex.exercise_id in catalog_by_id and catalog_by_id[ex.exercise_id]["name"] != ex.exercise_name
+    ]
+
+
+def fingerboard_problems(
+    exercises: list["ExercisePrescription"], summary_text: str, warmup_id: str | None
+) -> list[str]:
+    problems = []
+    if warmup_id and not any(ex.exercise_id == warmup_id for ex in exercises):
+        problems.append("no BM1000 Warm-up entry; the warm-up is its own exercise with timed warm-up sets")
+    for ex in exercises:
+        if len(ex.notes or "") > MAX_BOARD_NOTE_CHARS:
+            problems.append(
+                f"notes for {ex.exercise_name} are {len(ex.notes)} characters; keep them to one line "
+                f"under {MAX_BOARD_NOTE_CHARS} (the sets carry the structure, the notes only the cue)"
+            )
+    if len(summary_text) > MAX_BOARD_SUMMARY_CHARS:
+        problems.append(
+            f"summary_text is {len(summary_text)} characters; keep it under {MAX_BOARD_SUMMARY_CHARS}: "
+            "the focus line and one short line per exercise"
+        )
+    return problems
+
+
 def _is_bodyweight_pull(name: str) -> bool:
     n = name.lower()
     return ("pull up" in n or "chin up" in n or "lock" in n) and "scapular" not in n
@@ -66,7 +109,11 @@ def review_plan(
     history: list[dict[str, Any]] = (),
 ) -> list[str]:
     """`history` is the payload's recent_lift_sessions (oldest first)."""
-    problems = load_problems(exercises, catalog_by_id) + progression_problems(exercises, history)
+    problems = (
+        name_problems(exercises, catalog_by_id)
+        + load_problems(exercises, catalog_by_id)
+        + progression_problems(exercises, history)
+    )
     unexplained = [ex.exercise_name for ex in exercises if not ex.goal or not (ex.why or "").strip()]
     if unexplained:
         problems.append(f"no goal or why given for: {', '.join(unexplained)}")

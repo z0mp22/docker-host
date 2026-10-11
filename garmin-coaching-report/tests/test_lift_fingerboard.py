@@ -17,6 +17,7 @@ MID_HC = "mid-hc"
 MID_OH = "mid-oh"
 BOT_HC = "bot-hc"
 OLD_HANGBOARD = "old-hb"
+WARMUP = "bm-warmup"
 DEAD_HANG = "B9380898"
 
 CATALOG = [
@@ -24,6 +25,7 @@ CATALOG = [
     {"id": MID_OH, "name": "BM1000 Middle Row Outside - Open Hand"},
     {"id": BOT_HC, "name": "BM1000 Bottom Row Outside - Half Crimp"},
     {"id": OLD_HANGBOARD, "name": "Hangboard"},
+    {"id": WARMUP, "name": "BM1000 Warm-up"},
     {"id": DEAD_HANG, "name": "Dead Hang"},
     {"id": "row", "name": "Seated Cable Row - V Grip (Cable)"},
 ]
@@ -34,11 +36,12 @@ SESSION = date(2026, 10, 12)
 class _Ex:
     exercise_id: str
     exercise_name: str = "x"
-    sets: int = 3
+    sets: int = 6
     reps: int | None = None
-    duration_seconds: int | None = 60
+    duration_seconds: int | None = 10
     weight_lb: float | None = None
     rir_target: float | None = 4.0
+    goal: str | None = "climbing"
 
 
 def _context(phase=1, deload=False, finger_flag=False, history=(), board_days=0):
@@ -80,7 +83,49 @@ def test_bad_phase_value_falls_back_to_phase_1(tmp_path):
 
 
 def test_valid_phase_1_block_passes():
-    fb.assert_fingerboard_safe([_Ex(MID_HC, sets=2), _Ex(DEAD_HANG, sets=3)], CATALOG, _context())
+    # Warm-up, then 3 rounds of 6 x 10s hangs (each hang its own Hevy set).
+    fb.assert_fingerboard_safe(
+        [_Ex(WARMUP, sets=6, goal="warmup", rir_target=None), _Ex(MID_HC, sets=12), _Ex(MID_OH, sets=6),
+         _Ex(DEAD_HANG, sets=3)],
+        CATALOG, _context(),
+    )
+
+
+def test_phase_1_hangs_are_10s_each_not_60s_cycles():
+    with pytest.raises(UnsafeExerciseError, match="1-10s"):
+        fb.assert_fingerboard_safe([_Ex(MID_HC, sets=2, duration_seconds=60)], CATALOG, _context())
+
+
+def test_warmup_is_not_an_off_plan_finger_exercise_and_not_counted():
+    assert WARMUP not in fb.resolve_off_plan_finger_ids(CATALOG)
+    fb.assert_fingerboard_safe(
+        [_Ex(WARMUP, sets=8, goal="warmup", rir_target=None), _Ex(MID_HC, sets=18)], CATALOG, _context()
+    )
+
+
+def test_warmup_must_be_typed_warmup_short_and_unweighted():
+    with pytest.raises(UnsafeExerciseError, match="goal 'warmup'"):
+        fb.assert_fingerboard_safe([_Ex(WARMUP, goal="climbing")], CATALOG, _context())
+    with pytest.raises(UnsafeExerciseError, match="limit 8"):
+        fb.assert_fingerboard_safe([_Ex(WARMUP, sets=9, goal="warmup")], CATALOG, _context())
+    with pytest.raises(UnsafeExerciseError, match="1-15s"):
+        fb.assert_fingerboard_safe([_Ex(WARMUP, duration_seconds=30, goal="warmup")], CATALOG, _context())
+    with pytest.raises(UnsafeExerciseError, match="never weighted"):
+        fb.assert_fingerboard_safe([_Ex(WARMUP, weight_lb=5, goal="warmup")], CATALOG, _context())
+
+
+def test_warmup_is_off_with_the_board():
+    with pytest.raises(UnsafeExerciseError, match="finger flag"):
+        fb.assert_fingerboard_safe([_Ex(WARMUP, goal="warmup")], CATALOG, _context(finger_flag=True))
+
+
+def test_board_exercise_cannot_hide_as_a_warmup():
+    with pytest.raises(UnsafeExerciseError, match="BM1000 Warm-up exercise"):
+        fb.assert_fingerboard_safe([_Ex(MID_HC, goal="warmup")], CATALOG, _context())
+
+
+def test_warmup_is_in_the_fingerboard_catalog_but_never_in_lift_sessions():
+    assert all(ex["id"] != WARMUP for ex in fb.without_board_exercises(CATALOG))
 
 
 def test_no_board_work_is_always_fine_even_with_flag():
@@ -108,13 +153,14 @@ def test_bottom_row_is_not_allowed_in_phase_1():
 
 
 def test_total_sets_across_grips_are_capped():
-    with pytest.raises(UnsafeExerciseError, match="4 sets, limit 3"):
-        fb.assert_fingerboard_safe([_Ex(MID_HC, sets=2), _Ex(MID_OH, sets=2)], CATALOG, _context())
+    with pytest.raises(UnsafeExerciseError, match=r"24 sets, limit 18 \(3 rounds x 6\)"):
+        fb.assert_fingerboard_safe([_Ex(MID_HC, sets=12), _Ex(MID_OH, sets=12)], CATALOG, _context())
 
 
 def test_deload_week_halves_sets():
-    with pytest.raises(UnsafeExerciseError, match="deload"):
-        fb.assert_fingerboard_safe([_Ex(MID_HC, sets=3)], CATALOG, _context(deload=True))
+    fb.assert_fingerboard_safe([_Ex(MID_HC, sets=12)], CATALOG, _context(deload=True))
+    with pytest.raises(UnsafeExerciseError, match="limit 12 .*deload"):
+        fb.assert_fingerboard_safe([_Ex(MID_HC, sets=18)], CATALOG, _context(deload=True))
 
 
 def test_phase_1_is_rpe_6_only():
@@ -130,13 +176,13 @@ def test_hangs_must_be_timed():
 def test_no_added_weight_before_phase_3():
     with pytest.raises(UnsafeExerciseError, match="limit 0"):
         fb.assert_fingerboard_safe(
-            [_Ex(MID_HC, duration_seconds=42, rir_target=3.0, weight_lb=5)], CATALOG, _context(phase=2)
+            [_Ex(MID_HC, sets=3, duration_seconds=42, rir_target=3.0, weight_lb=5)], CATALOG, _context(phase=2)
         )
 
 
 def test_phase_3_hangs_are_short():
     with pytest.raises(UnsafeExerciseError, match="1-12s"):
-        fb.assert_fingerboard_safe([_Ex(BOT_HC, duration_seconds=42, rir_target=2.0)], CATALOG, _context(phase=3))
+        fb.assert_fingerboard_safe([_Ex(BOT_HC, sets=4, duration_seconds=42, rir_target=2.0)], CATALOG, _context(phase=3))
 
 
 def test_phase_3_weight_creeps_up_from_best_logged():

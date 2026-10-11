@@ -142,6 +142,14 @@ def test_routine_payload_maps_sets_units_rir_and_supersets():
     assert h["notes"] == "Target RIR 4 (RPE 6)"
 
 
+def test_warmup_entry_is_logged_as_warmup_sets():
+    client = HevyClient(api_key="k")
+    ex = _ex(slot_order=1, exercise_id="W", sets=3, reps=None, duration_seconds=10, weight_lb=None,
+             rir_target=None, goal="warmup")
+    sets = client.routine_payload(_plan(ex), "Next Fingerboard Session", "fingerboard")["routine"]["exercises"][0]["sets"]
+    assert sets == [{"type": "warmup", "weight_kg": None, "reps": None, "duration_seconds": 10}] * 3
+
+
 def test_lb_round_trips_to_the_same_plate_number():
     """Hevy set to lb must display exactly what the coach chose (135, not 134.9)."""
     for lb in (5.0, 22.5, 45.0, 135.0, 225.0, 317.5):

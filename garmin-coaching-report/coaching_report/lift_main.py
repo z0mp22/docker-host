@@ -31,8 +31,8 @@ from .lift_coach import generate_lift_session
 from .lift_collector import build_fingerboard_payload, build_lift_payload, last_lift_session
 from .lift_equipment import home_gym_catalog, snap_free_weights
 from .lift_feedback import append_feedback
-from .lift_fingerboard import assert_fingerboard_safe, without_board_exercises
-from .lift_review import review_plan
+from .lift_fingerboard import assert_fingerboard_safe, board_blocks, resolve_warmup_id, without_board_exercises
+from .lift_review import fingerboard_problems, name_problems, review_plan
 from .lift_safety import assert_session_plan_safe, resolve_banned_exercise_ids
 from .hevy_client import HevyClient
 
@@ -146,23 +146,11 @@ def main() -> int:
         # no silent substitution.
         assert_session_plan_safe(plan.exercises, catalog_by_id, banned_ids)
 
-        problems = review_plan(plan.exercises, session_type, catalog_by_id, plan.priorities, payload["recent_lift_sessions"])
-        if problems:
-            for p in problems:
-                print(f"[lift-session] review: {p}", file=sys.stderr)
-            plan, meta2 = _generate(config, payload, revise=(plan, problems))
-            assert_session_plan_safe(plan.exercises, catalog_by_id, banned_ids)
-            model_meta = {
-                **meta2,
-                "input_tokens": model_meta["input_tokens"] + meta2["input_tokens"],
-                "output_tokens": model_meta["output_tokens"] + meta2["output_tokens"],
-                "revised_for": problems,
-            }
-            for change in snap_free_weights(plan.exercises, catalog_by_id):
-                plan.flags_considered.append(f"Load adjusted after generation: {change}")
-            for p in review_plan(plan.exercises, session_type, catalog_by_id, plan.priorities, payload["recent_lift_sessions"]):
-                print(f"[lift-session] review still failing after revision: {p}", file=sys.stderr)
-                plan.flags_considered.append(f"Coach check not met: {p}")
+        plan, model_meta = _review_and_revise(
+            config, payload, plan, model_meta, catalog_by_id,
+            lambda p: review_plan(p.exercises, session_type, catalog_by_id, p.priorities, payload["recent_lift_sessions"]),
+            lambda p: assert_session_plan_safe(p.exercises, catalog_by_id, banned_ids),
+        )
 
         routine_id = hevy_client.upsert_session_routine(
             plan, config.hevy_routine_title, session_type
@@ -213,6 +201,34 @@ def _generate(config, payload, revise=None):
     )
 
 
+def _review_and_revise(config, payload, plan, model_meta, catalog_by_id, review, check):
+    """One revision call when `review` finds problems; `check` is the hard
+    safety guard, rerun on the revised plan. A name/id mismatch that survives
+    the revision is refused: Hevy would show a different exercise than the
+    plan names."""
+    problems = review(plan)
+    if problems:
+        for p in problems:
+            print(f"[lift-session] review: {p}", file=sys.stderr)
+        plan, meta2 = _generate(config, payload, revise=(plan, problems))
+        check(plan)
+        model_meta = {
+            **meta2,
+            "input_tokens": model_meta["input_tokens"] + meta2["input_tokens"],
+            "output_tokens": model_meta["output_tokens"] + meta2["output_tokens"],
+            "revised_for": problems,
+        }
+        for change in snap_free_weights(plan.exercises, catalog_by_id):
+            plan.flags_considered.append(f"Load adjusted after generation: {change}")
+        for p in review(plan):
+            print(f"[lift-session] review still failing after revision: {p}", file=sys.stderr)
+            plan.flags_considered.append(f"Coach check not met: {p}")
+    mismatched = name_problems(plan.exercises, catalog_by_id)
+    if mismatched:
+        raise LiftPlanError("Exercise names don't match their Hevy ids: " + "; ".join(mismatched))
+    return plan, model_meta
+
+
 def _run_fingerboard(
     config, garmin_client, hevy_client, full_catalog, banned_ids,
     shoulder_flag, finger_flag, session_date, dry_run,
@@ -245,8 +261,19 @@ def _run_fingerboard(
 
     plan, model_meta = _generate(config, payload)
     catalog_by_id = {ex["id"]: ex for ex in payload["exercise_catalog"]}
-    assert_session_plan_safe(plan.exercises, catalog_by_id, banned_ids)
-    assert_fingerboard_safe(plan.exercises, full_catalog, fb)
+    warmup_id = resolve_warmup_id(full_catalog)
+
+    def check(p):
+        assert_session_plan_safe(p.exercises, catalog_by_id, banned_ids)
+        assert_fingerboard_safe(p.exercises, full_catalog, fb)
+
+    check(plan)
+    plan, model_meta = _review_and_revise(
+        config, payload, plan, model_meta, catalog_by_id,
+        lambda p: review_plan(p.exercises, "fingerboard", catalog_by_id)
+        + fingerboard_problems(p.exercises, p.summary_text, warmup_id),
+        check,
+    )
     plan_ids = {ex["id"] for ex in fb["plan_exercises"]}
     if not any(ex.exercise_id in plan_ids for ex in plan.exercises):
         raise LiftPlanError("Fingerboard session came back with no board exercise")
@@ -258,10 +285,14 @@ def _run_fingerboard(
     )
     save_lift_outputs(
         config, session_date, plan, model_meta, routine_id, "fingerboard",
-        extra_meta={"fingerboard": {k: fb[k] for k in (
-            "phase", "phase_name", "phase_started", "weeks_in_phase", "ramp_week",
-            "deload_week", "board_days_last_7d",
-        )}},
+        extra_meta={
+            "fingerboard": {k: fb[k] for k in (
+                "phase", "phase_name", "phase_started", "weeks_in_phase", "ramp_week",
+                "deload_week", "board_days_last_7d",
+            )},
+            # Set-by-set structure for the Coach panel's Fingerboard card.
+            "blocks": board_blocks(plan.exercises, fb["limits"]["sets_per_round"]),
+        },
     )
     print(
         f"[lift-session] wrote Hevy routine {config.hevy_fingerboard_routine_title!r} id={routine_id}",

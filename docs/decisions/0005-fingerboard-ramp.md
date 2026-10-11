@@ -50,3 +50,29 @@ should live inside the lift sessions.
   it lives in the exercise notes as feet heavy / light / off.
 - The mountain report is untouched. It already sees board sets through the
   Hevy strength log.
+
+## Amendment 2026-10-11: one hang per Hevy set, warm-up as its own exercise
+
+Cody found the first board session hard to follow at the board: one 60s
+"set" stood for 6 × 10s on / 20s off, and the warm-up and cues were long
+paragraphs in the notes. So:
+
+- **Each Hevy set is one hang with its own target time.** Phase 1 is 6 sets
+  of 10s per round (rest timer 20s), 2-3 rounds; the note says where the
+  2-minute round break is. The limits are `max_rounds × sets_per_round` (18
+  hangs in phase 1, halved by round on a deload week). Phases 2 and 3 keep one
+  set per round: a 6 × 7s/3s repeater can't be split, and phase 3 is already
+  single hangs. History logged before this date reads phase 1 sets as rounds.
+- **The warm-up is its own custom exercise, "BM1000 Warm-up"** (type
+  `duration`, created 2026-10-11): goal `warmup`, so `hevy_client` writes
+  every set as a warm-up set. Jugs, then easy feet-assisted pulls on the plan
+  hold. At most 8 sets of 15s, never weighted, off when the board is off; it
+  never counts toward the board limit.
+- **Text is short and checked.** Notes are one line under 140 characters and
+  summary_text is under 500. A longer one, or a session without the warm-up,
+  goes back to the coach for one revision (`lift_review.fingerboard_problems`).
+  The Coach panel's Fingerboard card draws the session from the new `blocks`
+  attribute as one chip per set, grouped into rounds.
+- **Exercise names must match their Hevy id** for every session type. Hevy
+  shows the template behind the id, so a mismatch would show a different
+  exercise from the one the plan names. A mismatch is revised once, then refused.

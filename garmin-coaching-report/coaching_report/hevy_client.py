@@ -138,9 +138,12 @@ class HevyClient:
         if ex.rir_target is not None:
             notes.append(f"Target RIR {ex.rir_target:g} (RPE {RIR_TO_RPE[ex.rir_target]:g})")
         weight_kg = lb_to_kg(ex.weight_lb) if ex.weight_lb is not None else None
+        # A dedicated warm-up entry (e.g. "BM1000 Warm-up") is logged as warm-up
+        # sets, so it never counts as working volume in history or progression.
+        set_type = "warmup" if ex.goal == "warmup" else "normal"
         sets = [
             {
-                "type": "normal",
+                "type": set_type,
                 "weight_kg": weight_kg,
                 "reps": ex.reps if ex.duration_seconds is None else None,
                 "duration_seconds": ex.duration_seconds,

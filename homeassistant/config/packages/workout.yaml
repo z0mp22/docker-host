@@ -11,6 +11,12 @@
 # - The param is contentId. HA's roku.play_media sends contentID, which hasn't been tested with
 #   Spotify, so this calls ECP directly with the exact request that worked.
 # No Spotify account link or developer app is involved.
+#
+# End workout (same card, added 2026-10-11): Home closes Spotify (a Roku app can't keep playing in the
+# background), PowerOff puts the Roku in standby and the TV follows over HDMI-CEC, lights off, then a
+# push asks how it went. The push has an inline Reply: the text goes straight into the coach feedback
+# log (script.lift_feedback_submit), and the push clears itself once feedback is logged, from the push or
+# the Coach panel. Tapping the push opens /coach?feedback with the feedback box focused.
 
 rest_command:
   basement_roku_workout_playlist:
@@ -42,3 +48,65 @@ script:
         then:
           - stop: "The basement Roku didn't start Spotify"
             error: true
+
+  basement_workout_end:
+    alias: "Basement: end workout"
+    description: Spotify closed, basement Roku and TV off, lights off, then a push asking how it went.
+    icon: mdi:stop-circle-outline
+    mode: single
+    sequence:
+      # Each step is independent: a Roku that's already off shouldn't keep the lights on.
+      - action: remote.send_command
+        continue_on_error: true
+        target:
+          entity_id: remote.basement_roku
+        data:
+          command: home
+      - delay:
+          seconds: 2
+      - action: media_player.turn_off
+        continue_on_error: true
+        target:
+          entity_id: media_player.basement_roku
+      - action: light.turn_off
+        continue_on_error: true
+        target:
+          entity_id: light.basement
+      - action: script.notify_phones
+        data:
+          title: How did the workout go?
+          message: Reply here and it goes straight to the coach.
+          tag: workout-feedback
+          channel: Coach
+          data:
+            clickAction: /coach?feedback
+            url: /coach?feedback
+            # REPLY is the Companion app's inline text reply.
+            actions:
+              - action: REPLY
+                title: Reply
+
+automation:
+  - id: workout_feedback_reply
+    alias: "Workout: log the reply to the end-of-workout push as coach feedback"
+    triggers:
+      - trigger: event
+        event_type: mobile_app_notification_action
+        event_data:
+          action: REPLY
+    conditions:
+      # Only this push has a Reply action today; the tag check keeps it that way if another one is added.
+      - condition: template
+        value_template: "{{ (trigger.event.data.tag | default('workout-feedback', true)) == 'workout-feedback' }}"
+      - condition: template
+        value_template: "{{ (trigger.event.data.reply_text | default('', true) | trim) != '' }}"
+    actions:
+      - action: input_text.set_value
+        target:
+          entity_id: input_text.lift_feedback
+        data:
+          value: "{{ (trigger.event.data.reply_text | trim)[:255] }}"
+      - action: script.lift_feedback_submit
+        data:
+          source: push
+    mode: queued

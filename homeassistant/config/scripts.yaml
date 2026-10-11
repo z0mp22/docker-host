@@ -211,6 +211,12 @@ lift_feedback_submit:
   alias: "Lift: submit coach feedback"
   icon: mdi:comment-check-outline
   mode: single
+  fields:
+    source:
+      description: '"push" when it came from the end-of-workout push (packages/workout.yaml), so a failure is pushed back'
+      example: push
+      selector:
+        text:
   sequence:
     - variables:
         submitted_text: "{{ states('input_text.lift_feedback') | trim }}"
@@ -254,6 +260,30 @@ lift_feedback_submit:
                 GitHub rejected the request — HTTP {{ dispatch.status }}.
                 {{ dispatch.content if dispatch.content else 'No response body.' }}
               {% endif %}
+        # The end-of-workout push asks for this feedback: clear it once logged from the push or the
+        # panel (an inline reply also needs the clear to stop its spinner). A failed reply from the
+        # push gets its own alert, since the phone is where it was typed.
+        - if:
+            - condition: template
+              value_template: "{{ (dispatch is defined and dispatch.status == 204) or source | default('') == 'push' }}"
+          then:
+            - action: script.notify_phones
+              data:
+                message: clear_notification
+                tag: workout-feedback
+        - if:
+            - condition: template
+              value_template: "{{ not (dispatch is defined and dispatch.status == 204) and source | default('') == 'push' }}"
+          then:
+            - action: script.notify_phones
+              data:
+                title: Feedback not logged
+                message: "GitHub didn't take it. Tap to resend from the Coach panel: {{ submitted_text }}"
+                tag: workout-feedback-failed
+                channel: Coach
+                data:
+                  clickAction: /coach?feedback
+                  url: /coach?feedback
 
 coaching_report_run_full_7d:
   alias: "Coaching report: run (full 7-day window)"
