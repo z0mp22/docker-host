@@ -35,20 +35,23 @@ views:
             entity: sensor.hdhomerun_tuners
             primary: >
               {% set id = 'tuner0' %}
-              {% set t = (state_attr('sensor.hdhomerun_tuners', 'tuners') or []) | selectattr('tuner', 'eq', id) | list | first %}
+              {% set m = (state_attr('sensor.hdhomerun_tuners', 'tuners') or []) | selectattr('tuner', 'eq', id) | list %}
+              {% set t = m[0] if m else none %}
               {% if states('sensor.hdhomerun_tuners') in ['No data', 'unavailable', 'unknown'] %}No data
               {% elif not t %}Idle
               {% else %}{{ t.channel }} {{ t.channel_name or '' }}{% endif %}
             secondary: >
               {% set id = 'tuner0' %}
-              {% set t = (state_attr('sensor.hdhomerun_tuners', 'tuners') or []) | selectattr('tuner', 'eq', id) | list | first %}
+              {% set m = (state_attr('sensor.hdhomerun_tuners', 'tuners') or []) | selectattr('tuner', 'eq', id) | list %}
+              {% set t = m[0] if m else none %}
               {% if states('sensor.hdhomerun_tuners') in ['No data', 'unavailable', 'unknown'] or not t %}Tuner {{ id[-1] | int + 1 }}
               {% elif t.settling %}Tuner {{ id[-1] | int + 1 }} · locking on
               {% else %}Quality {{ t.quality }}% · signal {{ t.strength }}% · {{ 'no errors' if (t.symbol or 0) >= 100 else 'picture errors' }}{% endif %}
             icon: mdi:television-classic
             icon_color: >
               {% set id = 'tuner0' %}
-              {% set t = (state_attr('sensor.hdhomerun_tuners', 'tuners') or []) | selectattr('tuner', 'eq', id) | list | first %}
+              {% set m = (state_attr('sensor.hdhomerun_tuners', 'tuners') or []) | selectattr('tuner', 'eq', id) | list %}
+              {% set t = m[0] if m else none %}
               {% if states('sensor.hdhomerun_tuners') in ['No data', 'unavailable', 'unknown'] or not t or t.settling %}grey
               {% elif (t.symbol or 0) < 100 %}red
               {% elif (t.quality or 0) < 70 %}amber
@@ -57,20 +60,23 @@ views:
             entity: sensor.hdhomerun_tuners
             primary: >
               {% set id = 'tuner1' %}
-              {% set t = (state_attr('sensor.hdhomerun_tuners', 'tuners') or []) | selectattr('tuner', 'eq', id) | list | first %}
+              {% set m = (state_attr('sensor.hdhomerun_tuners', 'tuners') or []) | selectattr('tuner', 'eq', id) | list %}
+              {% set t = m[0] if m else none %}
               {% if states('sensor.hdhomerun_tuners') in ['No data', 'unavailable', 'unknown'] %}No data
               {% elif not t %}Idle
               {% else %}{{ t.channel }} {{ t.channel_name or '' }}{% endif %}
             secondary: >
               {% set id = 'tuner1' %}
-              {% set t = (state_attr('sensor.hdhomerun_tuners', 'tuners') or []) | selectattr('tuner', 'eq', id) | list | first %}
+              {% set m = (state_attr('sensor.hdhomerun_tuners', 'tuners') or []) | selectattr('tuner', 'eq', id) | list %}
+              {% set t = m[0] if m else none %}
               {% if states('sensor.hdhomerun_tuners') in ['No data', 'unavailable', 'unknown'] or not t %}Tuner {{ id[-1] | int + 1 }}
               {% elif t.settling %}Tuner {{ id[-1] | int + 1 }} · locking on
               {% else %}Quality {{ t.quality }}% · signal {{ t.strength }}% · {{ 'no errors' if (t.symbol or 0) >= 100 else 'picture errors' }}{% endif %}
             icon: mdi:television-classic
             icon_color: >
               {% set id = 'tuner1' %}
-              {% set t = (state_attr('sensor.hdhomerun_tuners', 'tuners') or []) | selectattr('tuner', 'eq', id) | list | first %}
+              {% set m = (state_attr('sensor.hdhomerun_tuners', 'tuners') or []) | selectattr('tuner', 'eq', id) | list %}
+              {% set t = m[0] if m else none %}
               {% if states('sensor.hdhomerun_tuners') in ['No data', 'unavailable', 'unknown'] or not t or t.settling %}grey
               {% elif (t.symbol or 0) < 100 %}red
               {% elif (t.quality or 0) < 70 %}amber
