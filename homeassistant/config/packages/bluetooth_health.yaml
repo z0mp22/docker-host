@@ -112,11 +112,6 @@ automation:
             /var/log/bluetooth-watchdog.log on docker-host.
             {%- else %} The other thermometer is fine, so check this one's battery and distance
             from the Pi.{%- endif %}
-          mobile_notifiers: >-
-            {{ integration_entities('mobile_app')
-               | select('match', '^notify\\.')
-               | map('replace', 'notify.', 'notify.mobile_app_', 1)
-               | list }}
       - choose:
           - conditions: "{{ trigger.to_state.state == 'on' }}"
             sequence:
@@ -125,26 +120,18 @@ automation:
                   notification_id: bluetooth_thermometers
                   title: Thermometers offline
                   message: "{{ message }}"
-              - repeat:
-                  for_each: "{{ mobile_notifiers }}"
-                  sequence:
-                    - action: "{{ repeat.item }}"
-                      data:
-                        title: Thermometers offline
-                        message: "{{ message }}"
-                        data:
-                          tag: bluetooth-thermometers
-                          channel: House
+              - action: script.notify_phones
+                data:
+                  title: Thermometers offline
+                  message: "{{ message }}"
+                  tag: bluetooth-thermometers
+                  channel: House
         default:
           - action: persistent_notification.dismiss
             data:
               notification_id: bluetooth_thermometers
-          - repeat:
-              for_each: "{{ mobile_notifiers }}"
-              sequence:
-                - action: "{{ repeat.item }}"
-                  data:
-                    message: clear_notification
-                    data:
-                      tag: bluetooth-thermometers
+          - action: script.notify_phones
+            data:
+              message: clear_notification
+              tag: bluetooth-thermometers
     mode: queued

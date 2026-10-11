@@ -18,6 +18,11 @@ RECORDER_DB = Path("/docker/homeassistant/home-assistant_v2.db")
 MAX_WAIT_S = 180
 # ThermoPro BLE thermometers advertise intermittently; allow a generous freshness window.
 BT_TEMP_MAX_AGE_S = int(os.environ.get("BT_TEMP_MAX_AGE_S", "1800"))
+# Same lookup as script.notify_phones in homeassistant/config/scripts.yaml.
+MOBILE_NOTIFIER_TEMPLATE = (
+    "{{ integration_entities('mobile_app') | select('match', '^notify\\\\.')"
+    " | map('replace', 'notify.', 'notify.mobile_app_', 1) | join(',') }}"
+)
 REQUIRED_BT_TEMP_SENSORS = (
     "sensor.tp358s_f429_temperature",  # Basement Thermometer
     "sensor.tp358s_1c99_temperature",  # Master Bedroom Thermometer
@@ -149,10 +154,45 @@ def validate_via_api(headers: dict[str, str]) -> int:
         return 1
     log(f"OK recovery_mode=false (version {cfg.get('version')})")
 
+    if validate_mobile_notify(headers):
+        return 1
+
     states = requests.get(f"{HA_URL}/api/states", headers=headers, timeout=30)
     states.raise_for_status()
     items = states.json()
     return validate_entities(items)
+
+
+def validate_mobile_notify(headers: dict[str, str]) -> int:
+    """Hard gate: script.notify_phones must resolve to real Companion app notify actions.
+
+    A lookup that finds nothing doesn't error in HA; every push silently becomes a persistent
+    notification. Render the script's lookup and check each action is registered. No push is sent.
+    """
+    resp = requests.post(
+        f"{HA_URL}/api/template",
+        headers=headers,
+        json={"template": MOBILE_NOTIFIER_TEMPLATE},
+        timeout=15,
+    )
+    resp.raise_for_status()
+    notifiers = [n for n in resp.text.split(",") if n]
+    services = requests.get(f"{HA_URL}/api/services", headers=headers, timeout=15)
+    services.raise_for_status()
+    by_domain = {item["domain"]: set(item["services"]) for item in services.json()}
+    registered = {f"notify.{name}" for name in by_domain.get("notify", ())}
+    if "notify_phones" not in by_domain.get("script", ()):
+        log("FAIL script.notify_phones is not loaded")
+        return 1
+    if not notifiers:
+        log("FAIL no Companion app notifiers resolved; phone pushes would fall back to persistent notifications")
+        return 1
+    missing = [n for n in notifiers if n not in registered]
+    if missing:
+        log(f"FAIL notifier lookup maps to unregistered actions: {', '.join(missing)}")
+        return 1
+    log(f"OK phone pushes resolve to {', '.join(notifiers)}")
+    return 0
 
 
 def validate_entities(items: list[dict]) -> int:

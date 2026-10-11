@@ -134,7 +134,7 @@ Runtime on Pi mirrors this under `/docker/`.
 | MQTT → JSON bridge (minutely) | `scripts/plex-mqtt-bridge.sh`, `cron/plex-mqtt-bridge` |
 | HA sensors | `homeassistant/config/command_line.yaml` |
 | Dashboard | `homeassistant/config/dashboards/recordings.yaml` |
-| Notify + unhealthy alerts | `homeassistant/config/automations.yaml`, `scripts.yaml` (`notify_mobile_recording`) |
+| Notify + unhealthy alerts | `homeassistant/config/automations.yaml`, `scripts.yaml` (`notify_phones`, the only phone-push path; `scripts/lint-ha-notify.py` enforces it) |
 
 Unhealthy = `library_healthy=false` or `awaiting_index_count > 0` → persistent notification + mobile push. Fix on media-laptop (`heal_recordings_library.sh`), not by force-scanning alone.
 

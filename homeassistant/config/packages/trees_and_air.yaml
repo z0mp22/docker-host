@@ -857,35 +857,16 @@ automation:
             {%- else -%}Trees: skip watering today{%- endif -%}
           message: >-
             {{ state_attr('sensor.trees_watering_decision', 'reason') }}{% if water %} {{ state_attr('sensor.trees_watering_decision', 'how_much') }} {{ state_attr('sensor.trees_watering_decision', 'when') }}{% endif %}
-          # Companion app notify entities are named notify.<device>, so filtering for "mobile_app"
-          # found nothing and the reminder (with its "I watered" action) never reached the phone.
-          # Same mapping as the doorbell alert.
-          notifiers: >-
-            {{ integration_entities('mobile_app')
-               | select('match', '^notify\\.')
-               | map('replace', 'notify.', 'notify.mobile_app_', 1)
-               | list }}
-      - choose:
-          - conditions: "{{ notifiers | count > 0 }}"
-            sequence:
-              - repeat:
-                  for_each: "{{ notifiers }}"
-                  sequence:
-                    - action: "{{ repeat.item }}"
-                      data:
-                        title: "{{ title }}"
-                        message: "{{ message }}"
-                        data:
-                          tag: trees-watering
-                          channel: Trees
-                          actions: >-
-                            {{ [{'action': 'TREES_WATERED', 'title': 'I watered'}] if water else [] }}
-        default:
-          - action: persistent_notification.create
-            data:
-              notification_id: trees_watering
-              title: "{{ title }}"
-              message: "{{ message }}"
+      # Falls back to a persistent notification (id trees-watering) when no phone is registered.
+      - action: script.notify_phones
+        data:
+          title: "{{ title }}"
+          message: "{{ message }}"
+          tag: trees-watering
+          channel: Trees
+          data:
+            actions: >-
+              {{ [{'action': 'TREES_WATERED', 'title': 'I watered'}] if water else [] }}
     mode: single
 
   - id: trees_watered_from_notification

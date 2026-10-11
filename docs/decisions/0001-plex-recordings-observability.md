@@ -20,7 +20,7 @@
 2. **Bridge on this host:** `scripts/plex-mqtt-bridge.sh` (minutely cron) writes `/docker/homeassistant/plex_recordings_state.json` (merges status + disk topics, plus the 5-minute `home/plex_recordings/recent` topic for `recent_recordings` / `recent_checked_at` whenever it is at least as new as the sync — plex_recordings ADR 0010).
 3. **HA sensors:** `homeassistant/config/command_line.yaml` exposes status + sync meta (including health and `disk` attrs).
 4. **Dashboard:** `homeassistant/config/dashboards/recordings.yaml` — recently landed, DVR queue, last sync, **Library OK / UNHEALTHY** chip, **Storage** chip/card.
-5. **Alerts:** automations for scheduled/completed (mobile) and for unhealthy library (persistent + `script.notify_mobile_recording`); filesystem ≥90% full flips health via plex_recordings.
+5. **Alerts:** automations for scheduled/completed (mobile) and for unhealthy library (persistent + `script.notify_phones`); filesystem ≥90% full flips health via plex_recordings.
 
 ## Consequences
 
