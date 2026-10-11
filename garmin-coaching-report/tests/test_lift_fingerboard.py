@@ -4,7 +4,7 @@ backs them. The guard is the part that matters -- a coach that drifts past
 the current phase must never reach Hevy."""
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime
 from unittest.mock import MagicMock
 
@@ -42,6 +42,7 @@ class _Ex:
     weight_lb: float | None = None
     rir_target: float | None = 4.0
     goal: str | None = "climbing"
+    warmup_sets: list = field(default_factory=list)
 
 
 def _context(phase=1, deload=False, finger_flag=False, history=(), board_days=0):
@@ -237,3 +238,8 @@ def test_board_map_names_every_plan_hold_by_location():
     assert "Middle row, outside" in locations
     assert "Bottom row, outside" in locations
     assert not any("mm" in row["hold"] for row in fb.BOARD_MAP)
+
+
+def test_board_warmup_goes_in_its_own_exercise_not_warmup_sets():
+    with pytest.raises(UnsafeExerciseError, match="BM1000 Warm-up exercise"):
+        fb.assert_fingerboard_safe([_Ex(MID_HC, warmup_sets=[{"reps": 1, "weight_lb": None}])], CATALOG, _context())

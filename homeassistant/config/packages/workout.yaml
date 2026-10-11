@@ -16,7 +16,8 @@
 # background), PowerOff puts the Roku in standby and the TV follows over HDMI-CEC, lights off, then a
 # push asks how it went. The push has an inline Reply: the text goes straight into the coach feedback
 # log (script.lift_feedback_submit), and the push clears itself once feedback is logged, from the push or
-# the Coach panel. Tapping the push opens /coach?feedback with the feedback box focused.
+# the Coach panel. Tapping the push opens /coach?feedback with the feedback box focused. "Felt good" and
+# "Too hard" log a one-tap answer, naming which of today's coach sessions it was about.
 
 rest_command:
   basement_roku_workout_playlist:
@@ -81,8 +82,12 @@ script:
           data:
             clickAction: /coach?feedback
             url: /coach?feedback
-            # REPLY is the Companion app's inline text reply.
+            # Two one-tap answers, then REPLY (the Companion app's inline text reply). Android shows 3 at most.
             actions:
+              - action: WORKOUT_FB_GOOD
+                title: Felt good
+              - action: WORKOUT_FB_HARD
+                title: Too hard
               - action: REPLY
                 title: Reply
 
@@ -106,6 +111,36 @@ automation:
           entity_id: input_text.lift_feedback
         data:
           value: "{{ (trigger.event.data.reply_text | trim)[:255] }}"
+      - action: script.lift_feedback_submit
+        data:
+          source: push
+    mode: queued
+
+  - id: workout_feedback_quick
+    alias: "Workout: log a one-tap answer from the end-of-workout push"
+    triggers:
+      - trigger: event
+        event_type: mobile_app_notification_action
+        event_data:
+          action: WORKOUT_FB_GOOD
+        id: Felt good
+      - trigger: event
+        event_type: mobile_app_notification_action
+        event_data:
+          action: WORKOUT_FB_HARD
+        id: Too hard
+    actions:
+      - variables:
+          today: "{{ now().date().isoformat() }}"
+          done: >-
+            {{ (['lift'] if states('sensor.lift_session_latest') == today else [])
+               + (['board'] if states('sensor.fingerboard_session_latest') == today else []) }}
+      - action: input_text.set_value
+        target:
+          entity_id: input_text.lift_feedback
+        data:
+          value: >-
+            {{ trigger.id }}{{ " (today's " ~ (done | join(' + ')) ~ ' session)' if done else '' }}.
       - action: script.lift_feedback_submit
         data:
           source: push

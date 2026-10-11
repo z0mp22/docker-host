@@ -50,7 +50,7 @@ Rules
 - When the history shows the current phase's gate is met, add "Fingerboard: phase N gate looks met, confirm to advance" to flags_considered. Do not change the plan beyond the current phase yourself.
 - rest_seconds is the gap after every set of that exercise. When a round is several sets (phase 1), the note says where the round break is, e.g. "2 min rest after set 6".
 - Feet assist goes in the notes as "feet: heavy", "feet: light" or "feet: off", based on the last session's RPE and notes.
-- Never a superset; leave superset_group null.
+- Never a superset; leave superset_group null. Leave warmup_sets empty; the warm-up is its own exercise.
 
 Standing feedback (recent_feedback)
 A running, athlete-submitted log of likes, dislikes, health flags and how sessions felt, shared with his lifting coach. Weight recent entries more, read every entry for finger, elbow and shoulder notes, and honor stated preferences. Past tense ("I did hangs") reports what he did; an imperative is a request.

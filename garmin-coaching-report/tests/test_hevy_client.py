@@ -260,3 +260,11 @@ def test_rpe_to_rir():
     assert rpe_to_rir(8) == 2.0
     assert rpe_to_rir(9.5) == 0.5
     assert rpe_to_rir(None) is None
+
+
+def test_warmup_sets_come_first_as_warmup_type():
+    client = HevyClient(api_key="k")
+    ex = _ex(weight_lb=185.0, sets=2, warmup_sets=[{"reps": 8, "weight_lb": 45.0}, {"reps": 3, "weight_lb": 135.0}])
+    sets = client.routine_payload(_plan(ex), "Next Lift Session", "heavy_1h")["routine"]["exercises"][0]["sets"]
+    assert [(s["type"], s["reps"]) for s in sets] == [("warmup", 8), ("warmup", 3), ("normal", 8), ("normal", 8)]
+    assert sets[0]["weight_kg"] == lb_to_kg(45.0) and sets[2]["weight_kg"] == lb_to_kg(185.0)

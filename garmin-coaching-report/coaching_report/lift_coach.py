@@ -34,6 +34,11 @@ VALID_RIR_TARGETS = {None, 0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 4.0}
 Goal = Literal["climbing", "mtb", "snowboard", "physique", "core", "shoulder_health", "warmup"]
 
 
+class WarmupSetSchema(BaseModel):
+    reps: int
+    weight_lb: float | None = None
+
+
 class ExercisePrescriptionSchema(BaseModel):
     exercise_id: str
     exercise_name: str
@@ -48,6 +53,9 @@ class ExercisePrescriptionSchema(BaseModel):
     notes: str | None = None
     goal: Goal
     why: str
+    # Ramp-up sets before the working sets, logged in Hevy as warm-up sets
+    # (since 2026-10-11; before that the ramp was text in the notes).
+    warmup_sets: list[WarmupSetSchema] = Field(default_factory=list)
 
     @field_validator("rir_target")
     @classmethod
@@ -88,6 +96,7 @@ class ExercisePrescription:
     notes: str | None
     goal: str | None = None
     why: str | None = None
+    warmup_sets: list[dict[str, Any]] = field(default_factory=list)  # [{"reps", "weight_lb"}]
 
 
 @dataclass
