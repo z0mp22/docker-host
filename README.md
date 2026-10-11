@@ -97,6 +97,7 @@ docker-host/
 ├── scripts/               # deploy.sh, validate.sh, plex-mqtt-bridge.sh
 ├── cron/                  # host cron snippets (plex-mqtt-bridge, netwatch, ...)
 ├── netwatch/              # per-device DNS allowlists for scripts/netwatch.py
+├── udm/traffic/           # read-only collector the UDM runs for scripts/udm-traffic.py
 ├── runner/                # self-hosted runner helper
 ├── docker-compose.yml     # HA, mosquitto, npm, pihole
 ├── homeassistant/config/  # YAML config (replaces czampino/homeassistant)
@@ -199,6 +200,29 @@ root because it reads that file and Pi-hole's database.
 | HA | `packages/netwatch.yaml`: `sensor.network_watch_off_allowlist_lookups` + push automation |
 
 To hear about a domain again, remove it from that device's list in `state.json`.
+
+## UDM traffic (udm-traffic)
+
+Every 15 minutes `scripts/udm-traffic.py` reads the UDM's own stats and publishes a summary for the
+Network panel's **Traffic** and **Blocked by your rules** cards, the "At your router" half of the
+exposure card, and attention items: unusual uploads, new devices, low UDM memory and earlyoom stops.
+It SSHes to the UDM with a key that can only run `udm/traffic/collect.sh`, a read-only Mongo query.
+There's no shell, no forwarding, it only works from 10.0.0.4, and it never touches the UniFi login,
+so the account can't get locked out.
+
+| Piece | Path |
+|-------|------|
+| Script + cron (every 15 min, root) | `scripts/udm-traffic.py`, `cron/udm-traffic` → `/usr/local/bin/udm-traffic.py`, `/etc/cron.d/udm-traffic` |
+| UDM side | `udm/traffic/{collect.sh,query.js}` → `/data/udm-traffic/` on the UDM |
+| Key | `/etc/udm-traffic/id_ed25519` on the Pi; restricted line in the UDM's `/root/.ssh/authorized_keys` |
+| Setup / repair | `UDM_SSH_PASS=... scripts/udm-traffic-install.sh` from a workstation. Re-run after a UDM firmware update or a change to `udm/traffic/` |
+| MQTT | `home/udm/traffic` (retained) |
+| HA | `packages/udm_traffic.yaml`: `sensor.network_traffic` (excluded from the recorder) |
+
+Limits: per-device bytes cover Wi-Fi clients only and include in-house traffic. The UDM only counts
+wired devices per switch port. Hourly stats restart when the UDM reboots. "Usual" is the median of
+the last 14 daily totals. The UDM's flow log, used for inbound ports and countries, keeps only a
+few hours.
 
 ## Home Assistant note
 

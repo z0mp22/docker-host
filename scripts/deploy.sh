@@ -390,6 +390,19 @@ install_netwatch() {
     || log "WARN: netwatch initial run failed (see /tmp/netwatch-deploy.log)"
 }
 
+install_udm_traffic() {
+  log "installing udm-traffic (UDM traffic + firewall blocks for the Network panel)"
+  install_file "${REPO_ROOT}/scripts/udm-traffic.py" "/usr/local/bin/udm-traffic.py" 755
+  install_file "${REPO_ROOT}/cron/udm-traffic" "/etc/cron.d/udm-traffic" 644
+  # The SSH key and the UDM side are set up once by scripts/udm-traffic-install.sh.
+  if sudo test -f /etc/udm-traffic/id_ed25519; then
+    sudo /usr/bin/python3 /usr/local/bin/udm-traffic.py >>/tmp/udm-traffic-deploy.log 2>&1 \
+      || log "WARN: udm-traffic initial run failed (see /tmp/udm-traffic-deploy.log)"
+  else
+    log "WARN: no /etc/udm-traffic key yet; run scripts/udm-traffic-install.sh from a workstation"
+  fi
+}
+
 main() {
   require_docker
   ensure_networks
@@ -412,6 +425,7 @@ main() {
   install_hdhomerun_signal_bridge
   install_bluetooth_watchdog
   install_netwatch
+  install_udm_traffic
   deploy_mountain_project_feed
   deploy_hvac_prices
   deploy_alloy
