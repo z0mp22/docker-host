@@ -499,7 +499,7 @@ panel_custom:
         aqi: sensor.outdoor_air_aqi
         airnow: sensor.airnow_air_quality_index
         purpleair_pm25: sensor.purpleair_pm2_5_corrected
-        wind_gust: sensor.nws_zone_home_wind_gust
+        wind_gust: sensor.outdoor_wind_gust
         frigate_instance: frigate
         # Frigate labels shown as wildlife markers on the outdoor timeline.
         wildlife_labels: [cat, dog, bear, bird, deer, fox, raccoon]
