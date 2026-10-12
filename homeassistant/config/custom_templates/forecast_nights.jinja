@@ -1,0 +1,31 @@
+{#- Overnight lows from an hourly weather.get_forecasts list (Open-Meteo weather.home has no
+    twice_daily). A night runs 18:00 to 09:00 local and is keyed by its first forecast hour,
+    so a night already under way at 03:00 still reads as "tonight"; from 06:00 that night is
+    over (NWS switches to "Today" then) and is dropped. A night the forecast cuts off before
+    08:00 is dropped too rather than reported with a too-warm partial low.
+    Returns JSON: [[iso start, low], ...], soonest first. -#}
+{%- macro forecast_nights(fc) -%}
+  {%- set ns = namespace(out=[], key=none, start=none, low=none, last=none, late=false) -%}
+  {%- for f in fc if f.temperature is number -%}
+    {%- set t = as_local(as_datetime(f.datetime)) -%}
+    {%- set key = t.date() if t.hour >= 18 else ((t - timedelta(days=1)).date() if t.hour < 9 else none) -%}
+    {%- if ns.key is not none and key != ns.key and not ns.late -%}{%- set ns.out = ns.out + [[ns.start, ns.low]] -%}{%- endif -%}
+    {%- if key is not none and key != ns.key -%}{%- set ns.start = t.isoformat() -%}{%- set ns.low = f.temperature -%}{%- set ns.late = 6 <= t.hour < 9 -%}
+    {%- elif key is not none -%}{%- set ns.low = [ns.low, f.temperature] | min -%}{%- endif -%}
+    {%- set ns.key = key -%}
+    {%- set ns.last = t.hour -%}
+  {%- endfor -%}
+  {%- if ns.key is not none and ns.last == 8 and not ns.late -%}{%- set ns.out = ns.out + [[ns.start, ns.low]] -%}{%- endif -%}
+  {{- ns.out | to_json -}}
+{%- endmacro -%}
+
+{#- Highest forecast temperature for the rest of today's daytime (09:00-18:00 local), or
+    nothing once that window has passed, as NWS "This Afternoon" periods behaved. -#}
+{%- macro forecast_today_high(fc) -%}
+  {%- set ns = namespace(hi=none) -%}
+  {%- for f in fc if f.temperature is number -%}
+    {%- set t = as_local(as_datetime(f.datetime)) -%}
+    {%- if t.date() == now().date() and 9 <= t.hour < 18 -%}{%- set ns.hi = f.temperature if ns.hi is none else [ns.hi, f.temperature] | max -%}{%- endif -%}
+  {%- endfor -%}
+  {{- ns.hi | to_json -}}
+{%- endmacro -%}

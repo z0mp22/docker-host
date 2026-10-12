@@ -16,7 +16,8 @@
 #     as of 2026-10-03): no watering 10 AM-6 PM, lawns 2 days/week, ~1 in/week; it explicitly
 #     asks residents to keep prioritising trees with careful hand or drip watering.
 #   Data: Open-Meteo REST (past rainfall, soil temperature, snow depth: the core Open-Meteo
-#   integration exposes none of these) and the NWS integration (overnight lows / first freeze).
+#   integration exposes none of these) and the Open-Meteo weather.home hourly forecast (overnight
+#   lows / first freeze).
 #
 # PROJECT 2 - smoke and air gate
 #   0-100 outdoor activity score with a green/yellow/red level.
@@ -30,7 +31,7 @@
 #       PA > 611:        4.21e-4*PA^2 + 0.392*PA + 3.44
 #     QC: A and B must agree within 5 ug/m3 or 70%, else the reading is dropped.
 #     AQI uses EPA's 2024 PM2.5 breakpoints (9.0 / 35.4 / 55.4 / 125.4 / 225.4).
-#   - NWS integration: wind gust and RH as secondary inputs (RH also backfills the
+#   - weather.home hourly forecast: wind gust and RH as secondary inputs (RH also backfills the
 #     correction if the PurpleAir humidity is missing).
 #   - Climbing and riding scores are placeholders to be wired up later.
 #
@@ -367,19 +368,25 @@ rest:
           - name
 
 template:
-  # NWS twice-daily forecast: overnight lows for the next week and today's high.
+  # Open-Meteo hourly forecast (weather.home, about 6.5 days): overnight lows for the week,
+  # today's high, and next-hour wind gust and humidity for the outdoor score. This was
+  # written for an NWS weather entity that was never set up, so it logged an error every
+  # run and the freeze logic never saw a forecast.
   - triggers:
       - trigger: homeassistant
         event: start
       - trigger: time_pattern
         minutes: "/30"
+    conditions:
+      - condition: template
+        value_template: "{{ has_value('weather.home') }}"
     actions:
       - action: weather.get_forecasts
         target:
-          entity_id: weather.nws_zone_home
+          entity_id: weather.home
         data:
-          type: twice_daily
-        response_variable: nws
+          type: hourly
+        response_variable: hourly
         continue_on_error: true
     sensor:
       - name: Trees overnight low
@@ -387,22 +394,37 @@ template:
         unit_of_measurement: "°F"
         device_class: temperature
         icon: mdi:weather-night
-        availability: "{{ nws is defined and (nws.get('weather.nws_zone_home', {}).get('forecast') or []) | count > 0 }}"
+        availability: "{{ hourly is defined and (hourly.get('weather.home', {}).get('forecast') or []) | count > 0 }}"
         state: >-
-          {% set fc = nws['weather.nws_zone_home'].forecast %}
-          {% set nights = fc | rejectattr('is_daytime') | list %}
-          {{ nights[0].temperature if nights else none }}
+          {% from 'forecast_nights.jinja' import forecast_nights %}
+          {% set nights = forecast_nights(hourly['weather.home'].forecast) | from_json %}
+          {{ nights[0][1] if nights else none }}
         attributes:
           nights: >-
-            {% set fc = (nws.get('weather.nws_zone_home', {}).get('forecast') or []) if nws is defined else [] %}
-            {% set ns = namespace(out=[]) %}
-            {% for f in fc if not f.is_daytime %}{% set ns.out = ns.out + [[f.datetime, f.temperature]] %}{% endfor %}
-            {{ ns.out }}
+            {% from 'forecast_nights.jinja' import forecast_nights %}
+            {% set fc = (hourly.get('weather.home', {}).get('forecast') or []) if hourly is defined else [] %}
+            {{ forecast_nights(fc) | from_json }}
           today_high: >-
-            {% set fc = (nws.get('weather.nws_zone_home', {}).get('forecast') or []) if nws is defined else [] %}
-            {% set day = fc | selectattr('is_daytime') | list %}
-            {% set d = day[0] if day else none %}
-            {{ d.temperature if d and as_datetime(d.datetime).date() == now().date() else none }}
+            {% from 'forecast_nights.jinja' import forecast_today_high %}
+            {% set fc = (hourly.get('weather.home', {}).get('forecast') or []) if hourly is defined else [] %}
+            {{ forecast_today_high(fc) | from_json }}
+      - name: Outdoor wind gust
+        unique_id: outdoor_wind_gust
+        unit_of_measurement: mph
+        device_class: wind_speed
+        state_class: measurement
+        icon: mdi:weather-windy
+        availability: "{{ hourly is defined and (hourly.get('weather.home', {}).get('forecast') or [{}])[0].wind_gust_speed is number }}"
+        state: >-
+          {% set f = hourly['weather.home'].forecast[0] %}
+          {{ [f.wind_gust_speed, f.wind_speed | float(0)] | max | round(1) }}
+      - name: Outdoor humidity
+        unique_id: outdoor_humidity
+        unit_of_measurement: "%"
+        device_class: humidity
+        state_class: measurement
+        availability: "{{ hourly is defined and (hourly.get('weather.home', {}).get('forecast') or [{}])[0].humidity is number }}"
+        state: "{{ hourly['weather.home'].forecast[0].humidity }}"
 
   - sensor:
       # ---------------- Trees: inputs ----------------
@@ -495,7 +517,7 @@ template:
           {%- set a = state_attr('sensor.purpleair_raw', 'pm2.5_cf_1_a') | float -%}
           {%- set b = state_attr('sensor.purpleair_raw', 'pm2.5_cf_1_b') | float -%}
           {%- set pa = (a + b) / 2 -%}
-          {%- set rh = state_attr('sensor.purpleair_raw', 'humidity') | float(states('sensor.nws_zone_home_relative_humidity') | float(30)) -%}
+          {%- set rh = state_attr('sensor.purpleair_raw', 'humidity') | float(states('sensor.outdoor_humidity') | float(30)) -%}
           {%- set low = 0.524 * pa - 0.0862 * rh + 5.75 -%}
           {%- set high = 0.000421 * pa ** 2 + 0.392 * pa + 3.44 -%}
           {%- if pa < 570 -%}{% set pm = low %}
@@ -507,7 +529,7 @@ template:
           method: "EPA extended US-wide correction (Barkjohn et al. 2022) on PurpleAir CF=1, A/B averaged"
           raw_cf1_average: >-
             {{ (((state_attr('sensor.purpleair_raw', 'pm2.5_cf_1_a') | float(0)) + (state_attr('sensor.purpleair_raw', 'pm2.5_cf_1_b') | float(0))) / 2) | round(1) }}
-          humidity_used: "{{ state_attr('sensor.purpleair_raw', 'humidity') if state_attr('sensor.purpleair_raw', 'humidity') is number else states('sensor.nws_zone_home_relative_humidity') }}"
+          humidity_used: "{{ state_attr('sensor.purpleair_raw', 'humidity') if state_attr('sensor.purpleair_raw', 'humidity') is number else states('sensor.outdoor_humidity') }}"
           sensor_name: "{{ state_attr('sensor.purpleair_raw', 'name') }}"
 
       - name: PurpleAir AQI
@@ -551,16 +573,16 @@ template:
           {%- set g = states('input_number.outdoor_aqi_good') | float(50) -%}
           {%- set z = [states('input_number.outdoor_aqi_zero') | float(150), g + 1] | max -%}
           {%- set base = 100 if aqi <= g else (0 if aqi >= z else 100 * (z - aqi) / (z - g)) -%}
-          {%- set gust = [states('sensor.nws_zone_home_wind_gust') | float(0), states('sensor.nws_zone_home_wind_speed') | float(0)] | max -%}
-          {%- set rh = states('sensor.nws_zone_home_relative_humidity') | float(100) -%}
+          {%- set gust = states('sensor.outdoor_wind_gust') | float(0) -%}
+          {%- set rh = states('sensor.outdoor_humidity') | float(100) -%}
           {%- set gusty = gust >= states('input_number.outdoor_wind_gust_limit') | float(25) -%}
           {%- set pen = (states('input_number.outdoor_wind_penalty') | float(15)) if gusty else 0 -%}
           {%- set fire = (states('input_number.outdoor_fire_weather_penalty') | float(10)) if gusty and rh <= states('input_number.outdoor_fire_weather_rh') | float(15) else 0 -%}
           {{ [base - pen - fire, 0] | max | round(0) | int }}
         attributes:
           aqi: "{{ states('sensor.outdoor_air_aqi') }}"
-          wind_gust: "{{ states('sensor.nws_zone_home_wind_gust') }}"
-          humidity: "{{ states('sensor.nws_zone_home_relative_humidity') }}"
+          wind_gust: "{{ states('sensor.outdoor_wind_gust') }}"
+          humidity: "{{ states('sensor.outdoor_humidity') }}"
 
       - name: Outdoor activity score
         unique_id: outdoor_activity_score
@@ -584,7 +606,7 @@ template:
           riding: "{{ states('input_number.outdoor_riding_score') if is_state('input_boolean.outdoor_include_riding', 'on') else 'not included' }}"
           summary: >-
             {%- set aqi = states('sensor.outdoor_air_aqi') -%}
-            {%- set gust = states('sensor.nws_zone_home_wind_gust') | float(0) -%}
+            {%- set gust = states('sensor.outdoor_wind_gust') | float(0) -%}
             {%- set parts = ['AQI ' ~ aqi ~ ' (' ~ state_attr('sensor.outdoor_air_aqi', 'source') ~ ')'] -%}
             {%- if gust >= states('input_number.outdoor_wind_gust_limit') | float(25) -%}{%- set parts = parts + ['gusts ' ~ gust | round(0) ~ ' mph'] -%}{%- endif -%}
             {{ parts | join(' · ') }}
@@ -731,8 +753,8 @@ template:
           days_since_rain: "{{ dry }}"
           days_since_watered: "{{ since }}"
           today_high: "{{ high }}"
-          next_freeze: "{{ (as_datetime(freeze[0]).strftime('%a %b %-d') ~ ' · ' ~ (freeze[1] | round(0)) ~ '°F') if freeze else 'None in the NWS forecast' }}"
-          next_hard_freeze: "{{ (as_datetime(hard[0]).strftime('%a %b %-d') ~ ' · ' ~ (hard[1] | round(0)) ~ '°F') if hard else 'None in the NWS forecast' }}"
+          next_freeze: "{{ (as_datetime(freeze[0]).strftime('%a %b %-d') ~ ' · ' ~ (freeze[1] | round(0)) ~ '°F') if freeze else 'None forecast' }}"
+          next_hard_freeze: "{{ (as_datetime(hard[0]).strftime('%a %b %-d') ~ ' · ' ~ (hard[1] | round(0)) ~ '°F') if hard else 'None forecast' }}"
 
 script:
   trees_mark_watered:
