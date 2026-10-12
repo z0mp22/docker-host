@@ -1,0 +1,62 @@
+# Basement lights left on at night: between 21:00 and 06:00 (America/Denver), once the Basement
+# camera hasn't seen a person for an hour, turn light.basement off.
+# - "Seen a person" is Frigate's binary_sensor.basement_person_occupancy. It flickers off for a few
+#   seconds to minutes while someone moves around, which the hour absorbs.
+# - It does miss someone sitting still: on 2026-10-11 someone watched Plex on the basement Roku from
+#   18:50 to 20:15 and Frigate saw no person for 79 minutes. So the basement Roku playing or paused
+#   counts as someone being there, and the lights stay on until it stops.
+# - Without a working camera there's no way to tell, so nothing happens while the Basement stream is
+#   off (binary_sensor.basement_stream_active) or Frigate detection is switched off.
+# - The occupancy sensor goes unavailable and back on every HA restart, which restarts the hour.
+
+automation:
+  - id: basement_lights_off_when_empty_at_night
+    alias: "Basement: lights off at night when nobody's been seen for an hour"
+    description: >-
+      21:00-06:00: light.basement off once the Basement camera hasn't seen a person for an hour and
+      the basement Roku isn't playing. Skips while the camera stream or Frigate detection is off.
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.basement_person_occupancy
+        to: "off"
+        for: "01:00:00"
+      - trigger: state
+        entity_id: light.basement
+        to: "on"
+        for: "01:00:00"
+      - trigger: time
+        at: "21:00:00"
+      # Lights left on after a show: check again once the Roku has stopped for 15 minutes.
+      - trigger: state
+        entity_id: media_player.basement_roku
+        from: [playing, paused]
+        for: "00:15:00"
+      # The camera or detection coming back: an hour of it watching before anything turns off.
+      - trigger: state
+        entity_id: [binary_sensor.basement_stream_active, switch.basement_detect]
+        to: "on"
+        for: "01:00:00"
+    conditions:
+      - condition: time
+        after: "21:00:00"
+        before: "06:00:00"
+      - condition: state
+        entity_id: light.basement
+        state: "on"
+      - condition: state
+        entity_id: binary_sensor.basement_person_occupancy
+        state: "off"
+        for: "01:00:00"
+      - condition: state
+        entity_id: [binary_sensor.basement_stream_active, switch.basement_detect]
+        state: "on"
+      - condition: not
+        conditions:
+          - condition: state
+            entity_id: media_player.basement_roku
+            state: [playing, paused]
+    actions:
+      - action: light.turn_off
+        target:
+          entity_id: light.basement
