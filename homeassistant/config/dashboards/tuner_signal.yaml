@@ -82,13 +82,36 @@ views:
               {% elif (t.quality or 0) < 70 %}amber
               {% else %}green{% endif %}
 
+      # Live readings go empty when both tuners are idle (most of the time), so this is
+      # what answers "how did the last recording look?" (plex_recordings ADR 0014).
+      - type: markdown
+        title: Last 7 days by channel
+        content: |
+          {% set r = state_attr('sensor.hdhomerun_tuners', 'recent') %}
+          {% set ch = (r or {}).get('channels') or {} %}
+          {% if r is none %}No summary from the signal poller yet.
+          {% elif not ch %}Nothing recorded in the last 7 days.
+          {% else %}
+          | Channel | Last tuned | Avg quality | Worst minute | Picture errors |
+          |:--|:--|--:|--:|--:|
+          {% for k, v in ch.items() | sort(attribute='1.last_seen', reverse=true) -%}
+          {%- set s = v.last_session -%}
+          {%- set m = s.minutes | int(0) -%}
+          | **{{ k }}** {{ v.channel_name or '' }} | {{ as_timestamp(v.last_seen) | timestamp_custom('%a %b %-d, %-I:%M %p') }} · {{ ([(m // 60) ~ ' h'] if m >= 60 else []) | join }}{{ ' ' if m >= 60 and m % 60 else '' }}{{ ((m % 60) ~ ' min') if m % 60 or m < 60 else '' }} | {{ s.avg_quality | round(0) | int }}% | {{ s.worst_quality }}% | {{ s.error_minutes ~ ' min' if s.error_minutes else 'none' }} |
+          {% endfor %}
+
+          Figures are for the last recording on each channel. Below 70% is weak but can still record cleanly; picture errors are minutes the stream broke up.
+          {% endif %}
+
       - type: custom:mushroom-title-card
         title: By channel
-        subtitle: Signal quality, one line per channel · only days a channel was tuned
+        subtitle: Signal quality, one bar per channel · only days a channel was tuned
 
       - type: statistics-graph
         title: Worst minute each day
-        chart_type: line
+        # Bars, not lines: HA draws line series without point markers, so a channel
+        # tuned on a single day (one point) would be invisible.
+        chart_type: bar
         period: day
         days_to_show: 60
         stat_types:
@@ -113,7 +136,9 @@ views:
 
       - type: statistics-graph
         title: Daily average
-        chart_type: line
+        # Bars, not lines: HA draws line series without point markers, so a channel
+        # tuned on a single day (one point) would be invisible.
+        chart_type: bar
         period: day
         days_to_show: 60
         stat_types:

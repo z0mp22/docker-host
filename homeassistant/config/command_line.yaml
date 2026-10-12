@@ -106,6 +106,7 @@
       - channels
       - weather_condition
       - weather_temperature
+      - recent
 
 # Lift session (garmin-coaching-report/coaching_report/lift_main.py writes
 # lift_session_latest.json to REPORT_OUTPUT_DIR; run-lift-session.sh copies
