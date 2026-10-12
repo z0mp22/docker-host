@@ -265,6 +265,11 @@ h1 { margin: 2px 0 0; font-size: 34px; font-weight: 700; line-height: 1.1; }
 .go { width: 18px; height: 18px; color: #4b5a70; }
 .tile-state { font-size: 20px; font-weight: 600; line-height: 1.2; overflow-wrap: anywhere; }
 .tile-sub { font-size: 14px; color: var(--muted); line-height: 1.35; overflow-wrap: anywhere; margin-top: -4px; }
+/* A tile with a camera still (Garage door): it leads the row and gets the extra width. */
+.tiles.with-ph { grid-template-columns: minmax(0, 1.7fr) repeat(4, minmax(0, 1fr)); }
+.tile.ph { flex-direction: row; align-items: center; gap: 12px; }
+.tile-main { display: flex; flex-direction: column; gap: 10px; flex: 1; min-width: 0; align-self: stretch; }
+.tile-img { flex: none; width: 42%; max-width: 180px; aspect-ratio: 704 / 480; object-fit: cover; border-radius: 12px; border: 1px solid var(--line); background: #0b111c; }
 
 /* Climate trends */
 .a-climate { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; }
@@ -371,7 +376,8 @@ h1 { margin: 2px 0 0; font-size: 34px; font-weight: 700; line-height: 1.1; }
   .switches { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .a-weather { grid-template-columns: minmax(0, 1fr); }
   .wx-days { border-left: 0; border-top: 1px solid var(--line); }
-  .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tiles, .tiles.with-ph { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tile.ph { grid-column: 1 / -1; }
 }
 @container (max-width: 900px) {
   .app, .app.urgent { grid-template-columns: minmax(0, 1fr); }
@@ -585,9 +591,9 @@ class HomePanel extends HTMLElement {
     }
   }
 
-  // Presence history for "since" times. An entity's own last_changed resets on every HA restart.
+  // Presence and garage-door history for "since" times. An entity's own last_changed resets on every HA restart.
   async _loadPresence() {
-    const ids = (this._c.people || []).map((p) => p.entity).filter(Boolean);
+    const ids = [...(this._c.people || []).map((p) => p.entity), this._c.garage?.state].filter(Boolean);
     if (!this._hass || !ids.length) return;
     const start = Date.now() - PRESENCE_DAYS * 864e5;
     try {
@@ -856,6 +862,30 @@ class HomePanel extends HTMLElement {
         photo: p.photo,
         acts: [{ label: "Brought it in", script: p.brought_in, done: "Marked as brought in.", icon: "mdiCheck" }],
       });
+  }
+
+  // Frigate's garage_door classifier (packages/garage_door.yaml). There's no door sensor, so the tile
+  // carries a Garage camera still to check the reading against. Night is the push's window, 21:00–06:00.
+  _garage(attn) {
+    const g = this._c.garage;
+    if (!g) return null;
+    const st = this._hass.states;
+    const s = st[g.state];
+    const pic = st[g.camera]?.attributes?.entity_picture;
+    const img = pic ? `${pic}${pic.includes("?") ? "&" : "?"}v=${Math.floor(Date.now() / 60e3)}` : "";
+    const base = { img, go: `${this._c.links.security}?live=${g.camera}` };
+    if (!s || s.state === "unavailable") return { ...base, level: "", state: "Unavailable", sub: "Frigate isn't reporting the door" };
+    if (s.state === "unknown") return { ...base, level: "", state: "No reading yet", sub: "Waiting for the camera's first call" };
+    const read = s.state === "open" ? "Open" : s.state === "closed" ? "Closed" : nice(s.state);
+    // A dropped stream freezes the classifier at its last answer.
+    if (st[g.stream] && st[g.stream].state !== "on") return { ...base, level: "", state: "Can't tell", sub: `Camera is down · last read ${read.toLowerCase()}` };
+    const since = this._since(s);
+    const tail = since === undefined ? "" : since === null ? `for ${PRESENCE_DAYS}+ days` : `since ${this._sinceLabel(since)}`;
+    if (s.state !== "open") return { ...base, level: "green", state: read, sub: tail || "Read by the Garage camera" };
+    const h = new Date().getHours();
+    const night = h >= 21 || h < 6;
+    if (night) attn.push({ level: "amber", icon: "mdiGarageVariant", title: "Garage door is open", text: `${tail ? `Open ${tail}. ` : ""}Tap the photo to check the camera.`, img, photo: g.camera });
+    return { ...base, level: night ? "amber" : "blue", state: "Open", sub: tail || "Read by the Garage camera" };
   }
 
   _media() {
@@ -1262,7 +1292,9 @@ class HomePanel extends HTMLElement {
 
     this._security(attn);
     this._porch(attn);
+    const garage = this._garage(attn);
     const tiles = [
+      ...(garage ? [{ name: "Garage door", icon: "mdiGarageVariant", ...garage }] : []),
       { name: "Media", icon: "mdiPlayCircleOutline", go: L.media, ...this._media() },
       { name: "Irrigation", icon: "mdiSprinklerVariant", go: L.irrigation, ...(this._irrigation(attn, agenda) || { level: "", state: "—", sub: "" }) },
       { name: "Recordings", icon: "mdiTelevisionClassic", go: L.recordings, ...(this._recordings(attn, agenda) || { level: "", state: "—", sub: "" }) },
@@ -1330,12 +1362,13 @@ class HomePanel extends HTMLElement {
         .join("")}</div>
     </section>`;
 
-    const tileHtml = `<div class="tiles a-tiles">${tiles
+    const tileHtml = `<div class="tiles a-tiles${garage ? " with-ph" : ""}">${tiles
       .map((t) => {
         const tag = t.go ? "button" : "div";
-        return `<${tag} class="tile ${t.level}" ${t.go ? `data-action="nav" data-path="${esc(t.go)}"` : ""}>
-          <div class="tile-top"><div class="tic">${svg(t.icon)}</div><span class="tile-name">${esc(t.name)}</span>${t.go ? svg("mdiChevronRight", "go") : ""}</div>
-          <div class="tile-state">${esc(t.state)}</div>${t.sub ? `<div class="tile-sub">${esc(t.sub)}</div>` : ""}
+        const body = `<div class="tile-top"><div class="tic">${svg(t.icon)}</div><span class="tile-name">${esc(t.name)}</span>${t.go ? svg("mdiChevronRight", "go") : ""}</div>
+          <div class="tile-state">${esc(t.state)}</div>${t.sub ? `<div class="tile-sub">${esc(t.sub)}</div>` : ""}`;
+        return `<${tag} class="tile ${t.level}${t.img ? " ph" : ""}" ${t.go ? `data-action="nav" data-path="${esc(t.go)}"` : ""}>
+          ${t.img ? `<div class="tile-main">${body}</div><img class="tile-img" src="${esc(t.img)}" alt="">` : body}
         </${tag}>`;
       })
       .join("")}</div>`;

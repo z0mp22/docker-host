@@ -408,7 +408,7 @@ panel_custom:
     url_path: house
     sidebar_title: Home
     sidebar_icon: mdi:home
-    module_url: /local/home/home-panel.js?v=10
+    module_url: /local/home/home-panel.js?v=11
     config:
       person: person.cody
       # Header "who's home" chips: a person.* (phone app GPS) or a presence binary_sensor
@@ -437,6 +437,12 @@ panel_custom:
         photo: camera.porch_package
         brought_in: script.porch_package_brought_in
         dismiss: script.porch_package_dismiss_taken
+      # Garage door tile: Frigate's garage_door classifier (packages/garage_door.yaml), since there's
+      # no door sensor. It carries a Garage camera still so a misread is easy to spot.
+      garage:
+        state: sensor.garage_garage_garage_door_classification
+        stream: binary_sensor.garage_stream_active
+        camera: camera.garage
       weather: weather.home
       # Greys out a room whose thermometer has gone quiet (packages/bluetooth_health.yaml).
       thermometer_health: binary_sensor.bluetooth_thermometers_stale
