@@ -42,6 +42,7 @@
       - recent_checked_at
       - completed_recent
       - pruned_subscriptions
+      - retention_forecast
       - health
       - awaiting_index_count
       - library_healthy
