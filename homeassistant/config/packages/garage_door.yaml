@@ -9,6 +9,18 @@
 # - A dropped camera stream freezes the sensor at its last value, so the 21:00 check pushes
 #   "can't check" when the Garage stream is down instead of trusting it.
 
+# The classifier's nightly retraining (frigate repo, .github/workflows/garage-door-trainer.yml)
+# publishes a retained status after every run: state training / stopped (the model is reliable) /
+# ended (hit its end date), plus a ready-made weekly message and what conditions it hasn't seen yet.
+mqtt:
+  sensor:
+    - name: Garage door trainer
+      unique_id: garage_door_trainer_status
+      state_topic: home/garage_door_trainer/status
+      value_template: "{{ value_json.state }}"
+      json_attributes_topic: home/garage_door_trainer/status
+      icon: mdi:school-outline
+
 automation:
   - id: garage_door_open_at_night
     alias: "Garage: push when the door is open at night"
@@ -77,3 +89,62 @@ automation:
         data:
           message: clear_notification
           tag: garage-door-open
+
+  - id: garage_door_trainer_weekly
+    alias: "Garage: weekly push on how the door model's training is going"
+    description: >-
+      Sundays at 9:00 while it's still training. If the job hasn't reported for 2 days, say that
+      instead (the minipc runner or the workflow stopped).
+    mode: single
+    triggers:
+      - trigger: time
+        at: "09:00:00"
+    conditions:
+      - condition: time
+        weekday: sun
+      - condition: state
+        entity_id: sensor.garage_door_trainer
+        state: training
+    actions:
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: >-
+                  {{ as_datetime(state_attr('sensor.garage_door_trainer', 'updated')) is not none
+                     and now() - as_datetime(state_attr('sensor.garage_door_trainer', 'updated')) > timedelta(days=2) }}
+            sequence:
+              - action: script.notify_phones
+                data:
+                  title: Garage door model isn't training
+                  message: >-
+                    The nightly retraining last reported
+                    {{ as_local(as_datetime(state_attr('sensor.garage_door_trainer', 'updated'))).strftime('%a %b %-d') }}.
+                    Check the "Garage door trainer" workflow in the frigate repo.
+                  tag: garage-door-trainer-stale
+                  channel: Garage
+        default:
+          - action: script.notify_phones
+            data:
+              title: Garage door model this week
+              message: "{{ state_attr('sensor.garage_door_trainer', 'message') }}"
+              tag: garage-door-trainer-weekly
+              channel: Garage
+
+  - id: garage_door_trainer_finished
+    alias: "Garage: push when the door model's training stops"
+    description: Once, when the trainer reports stopped (reliable) or ended (hit its end date).
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id: sensor.garage_door_trainer
+        from: training
+        to:
+          - stopped
+          - ended
+    actions:
+      - action: script.notify_phones
+        data:
+          title: "{{ 'Garage door model is trained' if trigger.to_state.state == 'stopped' else 'Garage door training ended' }}"
+          message: "{{ state_attr('sensor.garage_door_trainer', 'message') }}"
+          tag: garage-door-trainer-done
+          channel: Garage
