@@ -91,6 +91,8 @@ data = {
     "recent_recordings": recent_recordings,
     "recent_checked_at": recent_checked_at,
     "pruned_subscriptions": status_json.get("pruned_subscriptions") or [],
+    # Which recordings retention will delete next, and when (plex_recordings ADR 0013).
+    "retention_forecast": status_json.get("retention_forecast") or {},
     "completed_recent": status_json.get("completed_recent") or [],
     "health": health,
     "awaiting_index_count": int(awaiting or 0),

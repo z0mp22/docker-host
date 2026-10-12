@@ -54,6 +54,14 @@ function dayLabel(ms) {
   return new Date(ms).toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
 }
 
+// "today", "tomorrow", "Sun" within the week, else "Oct 25": short enough for a tag.
+function shortDay(ms) {
+  const diff = Math.round((startOfDay(ms) - startOfDay(Date.now())) / 864e5);
+  if (diff <= 0) return "today";
+  if (diff === 1) return "tomorrow";
+  return new Date(ms).toLocaleDateString([], diff < 7 ? { weekday: "short" } : { month: "short", day: "numeric" });
+}
+
 function until(ms) {
   const m = Math.round((ms - Date.now()) / 60000);
   if (m < 60) return `in ${Math.max(1, m)} min`;
@@ -68,6 +76,12 @@ function agoText(ms) {
   if (m < 60) return `${Math.max(1, m)} min ago`;
   const h = Math.round(m / 60);
   return h < 48 ? `${h} h ago` : `${Math.round(h / 24)} days ago`;
+}
+
+// "4" when every bucket keeps the same number, else "4–14".
+function keepText(deletions) {
+  const ns = [...new Set(deletions.map((d) => Number(d.keep_last)).filter(Number.isFinite))].sort((a, b) => a - b);
+  return ns.length === 1 ? String(ns[0]) : `${ns[0]}–${ns[ns.length - 1]}`;
 }
 
 const CSS = `
@@ -106,9 +120,9 @@ h1 { margin: 0; font-size: 34px; font-weight: 700; line-height: 1.1; }
 .icon-btn { width: 48px; height: 48px; border-radius: 16px; display: grid; place-items: center; background: var(--card-2); border: 1px solid var(--line); flex: none; }
 
 .grid { display: grid; gap: 22px; align-items: start; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
-  grid-template-areas: "hero ready" "sched ready" "sched tuners" "sched storage" "sched attn"; }
+  grid-template-areas: "hero ready" "sched ready" "sched tuners" "sched storage" "sched attn" "del del"; }
 .card { background: linear-gradient(180deg, var(--card-2), var(--card)); border: 1px solid var(--line); border-radius: 30px; padding: 24px 26px; min-width: 0; }
-.a-hero { grid-area: hero; } .a-sched { grid-area: sched; } .a-ready { grid-area: ready; } .a-tuners { grid-area: tuners; } .a-storage { grid-area: storage; } .a-attn { grid-area: attn; }
+.a-hero { grid-area: hero; } .a-sched { grid-area: sched; } .a-ready { grid-area: ready; } .a-tuners { grid-area: tuners; } .a-storage { grid-area: storage; } .a-attn { grid-area: attn; } .a-del { grid-area: del; }
 .eyebrow { font-size: 13px; letter-spacing: .12em; font-weight: 600; color: var(--muted); text-transform: uppercase; }
 .head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
 
@@ -140,6 +154,23 @@ h1 { margin: 0; font-size: 34px; font-weight: 700; line-height: 1.1; }
 .ev-tags { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
 .footer { margin-top: 18px; font-size: 14px; color: var(--muted); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .footer .ic { width: 18px; height: 18px; }
+
+/* Channel: network logo (white Gracenote artwork, made for dark backgrounds) + number and call sign */
+.chan { display: inline-flex; align-items: center; gap: 7px; color: #c3cedd; white-space: nowrap; vertical-align: middle; }
+.chan img { height: 24px; width: 32px; object-fit: contain; flex: none; }
+.chan .net { font-weight: 600; color: var(--text); }
+.chan .num { font-variant-numeric: tabular-nums; }
+.hero-meta .chan img { height: 30px; width: 40px; }
+.ev-sub { display: flex; align-items: center; gap: 4px 10px; flex-wrap: wrap; }
+
+/* Deleting soon */
+.del-cols { columns: 2; column-gap: 22px; }
+.del-cols .day { break-inside: avoid; margin-top: 0; padding-top: 18px; }
+.footer.note { flex-wrap: nowrap; align-items: flex-start; }
+.footer.note span { min-width: 0; }
+.ev.del .ev-time { color: #f7c47a; }
+.ev.del.due { border-color: rgba(245,176,65,.45); }
+.ev-actions { display: flex; gap: 8px; align-items: center; justify-content: flex-end; flex-wrap: wrap; }
 
 /* Ready to watch */
 .recs { margin-top: 12px; display: flex; flex-direction: column; }
@@ -185,7 +216,8 @@ h1 { margin: 0; font-size: 34px; font-weight: 700; line-height: 1.1; }
 .empty { margin-top: 14px; padding: 18px; border-radius: 14px; border: 1px dashed var(--line); color: var(--muted); font-size: 15px; text-align: center; }
 
 @container (max-width: 980px) {
-  .grid { grid-template-columns: minmax(0, 1fr); grid-template-areas: "hero" "attn" "sched" "ready" "tuners" "storage"; }
+  .grid { grid-template-columns: minmax(0, 1fr); grid-template-areas: "hero" "attn" "sched" "ready" "tuners" "storage" "del"; }
+  .del-cols { columns: 1; }
 }
 @container (max-width: 640px) {
   .app { padding: 14px 14px 24px; }
@@ -198,7 +230,7 @@ h1 { margin: 0; font-size: 34px; font-weight: 700; line-height: 1.1; }
   .hero-title { font-size: 23px; } .hero-meta { font-size: 14.5px; gap: 6px 14px; }
   .countdown b { font-size: 32px; } .countdown span { font-size: 14px; }
   .ev { grid-template-columns: 74px minmax(0, 1fr); padding: 10px 12px; gap: 4px 10px; }
-  .ev-tags { grid-column: 2; justify-content: flex-start; }
+  .ev-tags, .ev-actions { grid-column: 2; justify-content: flex-start; }
   .ev-time { font-size: 15px; } .ev-title { font-size: 15px; }
   .rec-title { font-size: 15px; }
   .watch { height: 36px; padding: 0 10px; font-size: 13px; }
@@ -278,6 +310,21 @@ class RecordingsPanel extends HTMLElement {
     return `<span class="tag" ${color ? `style="--tc:${esc(color)}"` : ""}>${esc(label)}</span>`;
   }
 
+  // Logo + "22.1 KFCT". The logo stands for the network; without one (or if it fails to load) the
+  // network is spelled out instead.
+  _channel(ch, fallbackTitles = []) {
+    if (!ch) {
+      const t = fallbackTitles[0];
+      return t ? `<span class="chan">${svg("mdiAntenna")}<span class="num">${esc(t)}${fallbackTitles.length > 1 ? ` +${fallbackTitles.length - 1}` : ""}</span></span>` : "";
+    }
+    const call = String(ch.call_sign || "").replace(/DT\d*$/, "");
+    const net = ch.network ? `<span class="net">${esc(ch.network)}</span>` : "";
+    const logo = ch.logo
+      ? `<img src="${esc(ch.logo)}" alt="${esc(ch.network || "")}" title="${esc(ch.network || "")}" loading="lazy" referrerpolicy="no-referrer" onerror="this.nextElementSibling.hidden=false;this.remove()"><span hidden>${net}</span>`
+      : net;
+    return `<span class="chan">${logo}<span class="num">${esc([ch.number, call].filter(Boolean).join(" "))}</span></span>`;
+  }
+
   _model() {
     const c = this._config;
     const metaSt = this._hass.states[c.meta];
@@ -292,6 +339,7 @@ class RecordingsPanel extends HTMLElement {
       lands: q.lands_after ? Date.parse(q.lands_after) : null,
       team: teamByGuid[q.guid]?.team,
       channels: teamByGuid[q.guid]?.channels || [],
+      channel: q.channel && typeof q.channel === "object" ? q.channel : null,
       isNew: newGuids.has(q.guid),
     }));
     const upcoming = queue.filter((q) => q.at && (q.lands ?? q.at) > now).sort((x, y) => x.at - y.at);
@@ -307,6 +355,11 @@ class RecordingsPanel extends HTMLElement {
       return { name: `Tuner ${i + 1}`, ok: live(s), busy, channel: busy ? s.state : null, strength: num("_signal_strength"), quality: num("_signal_quality") };
     });
     const disk = a.disk || {};
+    const fc = a.retention_forecast && typeof a.retention_forecast === "object" ? a.retention_forecast : null;
+    const deletions = arr(fc?.deletions)
+      .map((d) => ({ ...d, at: d.delete_after ? Date.parse(d.delete_after) : null, day: isoDay(d.air_date) }))
+      .filter((d) => d.at)
+      .sort((x, y) => x.at - y.at);
     return {
       ok: live(metaSt) && !!a.ran_at,
       ranAt: a.ran_at ? Date.parse(a.ran_at) : null,
@@ -326,6 +379,7 @@ class RecordingsPanel extends HTMLElement {
       orphans,
       tuners,
       disk,
+      forecast: fc && fc.generated_at ? { deletions, unmanaged: arr(fc.unmanaged), at: Date.parse(fc.generated_at) } : null,
     };
   }
 
@@ -395,7 +449,7 @@ class RecordingsPanel extends HTMLElement {
         <div class="hero-meta">
           <span>${svg("mdiClockOutline")}Started ${this._fmtTime(q.at)}</span>
           ${q.lands ? `<span>${svg("mdiCheckCircleOutline")}Ready to watch about ${this._fmtTime(q.lands)}</span>` : ""}
-          ${ev.busyTuners.length ? `<span>${svg("mdiAntenna")}${esc(ev.busyTuners.map((t) => t.channel).join(" · "))}</span>` : ""}
+          ${q.channel ? this._channel(q.channel) : ev.busyTuners.length ? `<span>${svg("mdiAntenna")}${esc(ev.busyTuners.map((t) => t.channel).join(" · "))}</span>` : ""}
         </div>
         <div class="progress"><div style="width:${pct.toFixed(1)}%"></div></div>
         ${m.airing.length > 1 ? `<div class="footer">Also recording: ${esc(m.airing.slice(1).map((x) => x.title).join(", "))}</div>` : ""}
@@ -409,7 +463,7 @@ class RecordingsPanel extends HTMLElement {
         <div class="countdown"><b>${esc(until(q.at))}</b><span>${esc(dayLabel(q.at))} · ${this._fmtTime(q.at)}</span></div>
         <div class="hero-meta">
           ${q.lands ? `<span>${svg("mdiCheckCircleOutline")}Ready to watch about ${esc(dayLabel(q.lands))} ${this._fmtTime(q.lands)}</span>` : ""}
-          ${q.channels.length ? `<span>${svg("mdiAntenna")}${esc(q.channels[0])}${q.channels.length > 1 ? ` +${q.channels.length - 1}` : ""}</span>` : ""}
+          ${this._channel(q.channel, q.channels)}
         </div>
         ${sameSlot.length ? `<div class="footer">Same time: ${esc(sameSlot.map((x) => x.title).join(", "))}</div>` : ""}
       </section>`;
@@ -436,7 +490,7 @@ class RecordingsPanel extends HTMLElement {
                   .map(
                     (q) => `<div class="ev ${q.at <= now ? "now" : ""}">
                   <div class="ev-time">${this._fmtTime(q.at)}<small>${q.at <= now ? "recording" : esc(until(q.at).replace("in ", ""))}</small></div>
-                  <div><div class="ev-title">${esc(q.title)}</div>${q.show && q.show !== q.title && shows.size > 1 ? `<div class="ev-sub">${esc(q.show)}</div>` : ""}</div>
+                  <div><div class="ev-title">${esc(q.title)}</div><div class="ev-sub">${this._channel(q.channel, q.channels)}${q.show && q.show !== q.title && shows.size > 1 ? `<span>${esc(q.show)}</span>` : ""}</div></div>
                   <div class="ev-tags">${q.isNew ? `<span class="tag new">New</span>` : ""}${this._teamTag(q.team)}</div>
                 </div>`,
                   )
@@ -461,6 +515,7 @@ class RecordingsPanel extends HTMLElement {
       c.plex_server && r.rating_key
         ? `https://app.plex.tv/desktop/#!/server/${encodeURIComponent(c.plex_server)}/details?key=${encodeURIComponent(`/library/metadata/${r.rating_key}`)}`
         : null;
+    const leaving = new Map((m.forecast?.deletions || []).filter((d) => d.rating_key).map((d) => [String(d.rating_key), d]));
     const ready = `<section class="card a-ready">
       <div class="head"><span class="eyebrow">Ready to watch</span><span class="muted">${checkedAt ? `checked ${esc(agoText(checkedAt))}` : ""}</span></div>
       ${
@@ -471,7 +526,7 @@ class RecordingsPanel extends HTMLElement {
                 const d = r.day ? new Date(r.day) : null;
                 return `<div class="rec">
                   <div><div class="rec-title">${esc(r.title)}</div>
-                    <div class="rec-sub">${d ? esc(d.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })) : ""}${r.in_plex === false ? `<span class="tag warn">Waiting for Plex</span>` : ""}</div></div>
+                    <div class="rec-sub">${d ? esc(d.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })) : ""}${r.in_plex === false ? `<span class="tag warn">Waiting for Plex</span>` : ""}${leaving.has(String(r.rating_key)) ? `<span class="tag warn">Deletes ${esc(shortDay(leaving.get(String(r.rating_key)).at))}</span>` : ""}</div></div>
                   ${url && r.in_plex !== false ? `<a class="watch" href="${esc(url)}" target="_blank" rel="noopener">${svg("mdiPlay")}Watch</a>` : "<span></span>"}
                 </div>`;
               })
@@ -530,6 +585,53 @@ class RecordingsPanel extends HTMLElement {
       }
     </section>`;
 
+    // Deleting soon: retention keeps the newest N per team, so each game that lands pushes the oldest one out.
+    let del;
+    if (!m.ok) del = "";
+    else if (!m.forecast)
+      del = `<section class="card a-del"><div class="eyebrow">Deleting soon</div><div class="empty">The deletion forecast arrives with the next recordings sync (every 2 hours).</div></section>`;
+    else {
+      const f = m.forecast;
+      const ddays = [];
+      for (const d of f.deletions) {
+        const key = startOfDay(Math.max(d.at, now));
+        let g = ddays.find((x) => x.key === key);
+        if (!g) ddays.push((g = { key, items: [] }));
+        g.items.push(d);
+      }
+      const span = f.deletions.length ? Math.max(1, Math.round((startOfDay(f.deletions[f.deletions.length - 1].at) - startOfDay(now)) / 864e5)) : 0;
+      del = `<section class="card a-del">
+      <div class="head"><span class="eyebrow">Deleting soon</span><span class="muted">${f.deletions.length ? `${plural(f.deletions.length, "recording")}${span ? ` · next ${plural(span, "day")}` : ""}` : ""}</span></div>
+      ${
+        f.deletions.length
+          ? `<div class="del-cols">${ddays
+              .map(
+                (g) => `<div class="day"><div class="day-label">${esc(dayLabel(g.key))}</div>${g.items
+                  .map((d) => {
+                    const due = d.at <= now;
+                    const url = watchUrl(d);
+                    const aired = d.day ? `Aired ${new Date(d.day).toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}` : "";
+                    const by = d.replaced_by?.title ? `makes room for ${d.replaced_by.title}` : "over the keep limit";
+                    return `<div class="ev del ${due ? "due" : ""}">
+                  <div class="ev-time">${due ? "Next sync" : `~${this._fmtTime(d.at)}`}<small>${due ? "due now" : esc(until(d.at).replace("in ", ""))}</small></div>
+                  <div><div class="ev-title">${esc(d.title)}</div><div class="ev-sub"><span>${esc([aired, by].filter(Boolean).join(" · "))}</span></div></div>
+                  <div class="ev-actions">${this._teamTag(d.team)}${url ? `<a class="watch" href="${esc(url)}" target="_blank" rel="noopener">${svg("mdiPlay")}Watch</a>` : ""}</div>
+                </div>`;
+                  })
+                  .join("")}</div>`,
+              )
+              .join("")}</div>`
+          : `<div class="allgood">${svg("mdiCheckCircleOutline")} The games booked now won't push anything out.</div>`
+      }
+      ${f.deletions.length ? `<div class="footer note">${svg("mdiClockOutline")}<span>Each team keeps its newest ${esc(keepText(f.deletions))} games, so a new one pushes out the oldest at the next sync (every 2 h) after it lands. Times are estimates.</span></div>` : ""}
+      ${
+        f.unmanaged.length
+          ? `<div class="footer note">${svg("mdiAlertCircleOutline")}<span>Never deleted automatically (no retention rule covers ${f.unmanaged.length === 1 ? "it" : "them"}): ${esc(f.unmanaged.map((u) => u.title).join(", "))}</span></div>`
+          : ""
+      }
+    </section>`;
+    }
+
     const s = ev.status;
     const html = `
       <style>${CSS}</style>
@@ -540,7 +642,7 @@ class RecordingsPanel extends HTMLElement {
           <div class="titles"><h1>Recordings</h1>
             <div class="status"><span class="dot ${s.dot}"></span><b>${esc(s.label)}</b><span class="muted">·</span><span class="muted detail">${esc(s.detail)}</span></div></div>
         </header>
-        <main class="grid">${hero}${sched}${ready}${tuners}${storage}${attn}</main>
+        <main class="grid">${hero}${sched}${ready}${tuners}${storage}${attn}${del}</main>
       </div>`;
     if (html !== this._html) {
       this._html = html;

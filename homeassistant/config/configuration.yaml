@@ -38,6 +38,8 @@ recorder:
       - sensor.mountain_project_feed
       # ~7 KB of attributes every 15 min; the panel only needs the latest (MQTT retains it).
       - sensor.network_traffic
+      # ~14 KB of attributes, rewritten every 5 min; panels and automations only read the live state.
+      - sensor.plex_recordings_sync_meta
 
 # Load frontend themes from the themes folder
 frontend:
@@ -579,7 +581,7 @@ panel_custom:
     url_path: recordings
     sidebar_title: Recordings
     sidebar_icon: mdi:television-classic
-    module_url: /local/recordings/recordings-panel.js?v=2
+    module_url: /local/recordings/recordings-panel.js?v=3
     config:
       meta: sensor.plex_recordings_sync_meta
       tuners: [sensor.tuner0, sensor.tuner1]
