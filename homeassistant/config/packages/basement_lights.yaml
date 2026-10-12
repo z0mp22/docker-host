@@ -1,4 +1,4 @@
-# Basement lights left on at night: between 21:00 and 06:00 (America/Denver), once the Basement
+# Basement lights left on at night: between 22:00 and 03:00 (America/Denver), once the Basement
 # camera hasn't seen a person for an hour, turn light.basement off.
 # - "Seen a person" is Frigate's binary_sensor.basement_person_occupancy. It flickers off for a few
 #   seconds to minutes while someone moves around, which the hour absorbs.
@@ -13,7 +13,7 @@ automation:
   - id: basement_lights_off_when_empty_at_night
     alias: "Basement: lights off at night when nobody's been seen for an hour"
     description: >-
-      21:00-06:00: light.basement off once the Basement camera hasn't seen a person for an hour and
+      22:00-03:00: light.basement off once the Basement camera hasn't seen a person for an hour and
       the basement Roku isn't playing. Skips while the camera stream or Frigate detection is off.
     mode: single
     triggers:
@@ -26,7 +26,7 @@ automation:
         to: "on"
         for: "01:00:00"
       - trigger: time
-        at: "21:00:00"
+        at: "22:00:00"
       # Lights left on after a show: check again once the Roku has stopped for 15 minutes.
       - trigger: state
         entity_id: media_player.basement_roku
@@ -39,8 +39,8 @@ automation:
         for: "01:00:00"
     conditions:
       - condition: time
-        after: "21:00:00"
-        before: "06:00:00"
+        after: "22:00:00"
+        before: "03:00:00"
       - condition: state
         entity_id: light.basement
         state: "on"
