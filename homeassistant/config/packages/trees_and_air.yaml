@@ -18,6 +18,13 @@
 #   Data: Open-Meteo REST (past rainfall, soil temperature, snow depth: the core Open-Meteo
 #   integration exposes none of these) and the Open-Meteo weather.home hourly forecast (overnight
 #   lows / first freeze).
+#   Fort Collins winters are freeze-thaw, not one long freeze. In Open-Meteo history for
+#   2020-2026, soil at 2 in was frozen at 7 AM on ~90 days per Nov-Mar but frozen all day on
+#   only ~30-48, and highs reached 40 F on 89-128 of 151 days. So winter is a date window (it
+#   doesn't wait for, or end with, a cold snap), "frozen" means frozen all day, and "dry" means
+#   little total precipitation rather than no single 0.1 in day (light snows used to reset that
+#   counter). Replayed over those winters, the old rules called for 2-6 winter soaks; these give
+#   8-10, i.e. CSU's once or twice a month.
 #
 # PROJECT 2 - smoke and air gate
 #   0-100 outdoor activity score with a green/yellow/red level.
@@ -128,14 +135,22 @@ input_number:
     unit_of_measurement: days
     mode: box
     icon: mdi:calendar-month
-  trees_dry_spell_days:
-    name: "Trees: dry spell length for winter watering"
-    min: 3
-    max: 60
-    step: 1
-    unit_of_measurement: days
+  trees_winter_dry_in:
+    name: "Trees: winter counts as dry below this much precipitation per interval"
+    min: 0
+    max: 3
+    step: 0.05
+    unit_of_measurement: in
     mode: box
     icon: mdi:weather-sunny-alert
+  trees_bucket_fill_seconds:
+    name: "Trees: seconds for the hose to fill a 5-gal bucket"
+    min: 5
+    max: 600
+    step: 1
+    unit_of_measurement: s
+    mode: box
+    icon: mdi:bucket-outline
   trees_snow_cover_in:
     name: "Trees: snow cover at or above"
     min: 0
@@ -297,7 +312,7 @@ input_boolean:
     name: "Outdoor: include riding score"
     icon: mdi:bike
   # Bump the suffix to re-apply the defaults below (e.g. after adding a helper).
-  trees_air_defaults_v2:
+  trees_air_defaults_v3:
     name: "Trees & air: defaults applied"
     icon: mdi:check-decagram
 
@@ -321,6 +336,12 @@ input_datetime:
     has_date: true
     has_time: true
     icon: mdi:watering-can
+  # What "last watered" was before the latest "I watered", so a mistaken tap can be undone.
+  trees_previous_watered:
+    name: "Trees: previous watering"
+    has_date: true
+    has_time: true
+    icon: mdi:undo
 
 input_text:
   purpleair_sensor_index:
@@ -344,6 +365,23 @@ rest:
         json_attributes:
           - daily
           - current
+
+  # Open-Meteo: today's hourly soil temperature at 6 cm (~2 in). Its warmest hour decides
+  # "frozen": frosty mornings that thaw by midday are the usual Fort Collins winter day, and
+  # the 7:30 reading alone called those frozen. Separate call so the 60-day history above
+  # doesn't pull 1,500 hourly values into attributes.
+  - resource_template: >-
+      https://api.open-meteo.com/v1/forecast?latitude={{ state_attr('zone.home', 'latitude') | round(3) }}&longitude={{ state_attr('zone.home', 'longitude') | round(3) }}&timezone=America%2FDenver&temperature_unit=fahrenheit&forecast_days=1&hourly=soil_temperature_6cm
+    scan_interval: 1800
+    timeout: 20
+    sensor:
+      - name: Trees soil temperature today max
+        unique_id: trees_soil_temperature_today_max
+        unit_of_measurement: "°F"
+        device_class: temperature
+        icon: mdi:thermometer-chevron-up
+        availability: "{{ value_json is defined and value_json.hourly is defined and value_json.hourly.soil_temperature_6cm | select('number') | list | count > 0 }}"
+        value_template: "{{ value_json.hourly.soil_temperature_6cm | select('number') | max }}"
 
   # PurpleAir: one sensor's A/B CF=1 PM2.5 + humidity (about 10 points per call; a new key's
   # 1,000,000 free points last ~2 years at this interval). Pick the sensor with
@@ -483,9 +521,14 @@ template:
         unique_id: trees_season
         icon: mdi:calendar-weather
         state: >-
+          {#- Dormant Nov 1 to Apr 14 whatever the weather (a warm week in January is still
+              winter for a leafless maple, and spring returns at leaf-out rather than 60 days
+              after the last cold snap). In Sep-Oct the first hard freeze starts it early. -#}
           {% set mode = states('input_select.trees_season_mode') %}
+          {% set m = now().month %}
           {% if mode in ['Growing season', 'Winter'] %}{{ mode }}
-          {% else %}
+          {% elif m in [11, 12, 1, 2, 3] or (m == 4 and now().day < 15) %}Winter
+          {% elif m in [9, 10] %}
             {% set d = state_attr('sensor.trees_open_meteo', 'daily') %}
             {% set hard = states('input_number.trees_hard_freeze_temp') | float(28) %}
             {% if d %}
@@ -494,11 +537,11 @@ template:
               {% set lows = d.temperature_2m_min[0:i] | reject('none') | list %}
               {{ 'Winter' if lows and (lows | min) <= hard else 'Growing season' }}
             {% else %}Growing season{% endif %}
-          {% endif %}
+          {% else %}Growing season{% endif %}
         attributes:
           reason: >-
             {% if states('input_select.trees_season_mode') != 'Auto' %}Set manually.
-            {% else %}Winter once a hard freeze has happened in the last 60 days.{% endif %}
+            {% else %}Winter from Nov 1 (or the first fall hard freeze, if earlier) to Apr 14.{% endif %}
 
       # ---------------- Outdoor: PurpleAir with EPA correction ----------------
       - name: PurpleAir PM2.5 corrected
@@ -636,6 +679,7 @@ template:
           - sensor.trees_open_meteo
           - sensor.trees_overnight_low
           - sensor.trees_season
+          - sensor.trees_soil_temperature_today_max
           - sensor.tree_soil_moisture
           - input_datetime.trees_last_watered
           - input_boolean.trees_use_moisture_sensor
@@ -652,7 +696,8 @@ template:
           - input_number.trees_final_watering_lead_days
           - input_number.trees_winter_min_air_temp
           - input_number.trees_winter_interval_days
-          - input_number.trees_dry_spell_days
+          - input_number.trees_winter_dry_in
+          - input_number.trees_bucket_fill_seconds
           - input_number.trees_snow_cover_in
           - input_number.trees_caliper_hot_wings
           - input_number.trees_caliper_sensation
@@ -663,6 +708,8 @@ template:
       wet_pct: "{{ states('input_number.trees_moisture_wet_pct') | float(35) }}"
       use_moist: "{{ is_state('input_boolean.trees_use_moisture_sensor', 'on') }}"
       soil: "{{ states('sensor.trees_soil_temperature') | float(none) }}"
+      # Warmest hour today; falls back to the current reading if that call failed.
+      soil_max: "{{ states('sensor.trees_soil_temperature_today_max') | float(soil) }}"
       frozen_t: "{{ states('input_number.trees_soil_frozen_temp') | float(32) }}"
       rain7: "{{ states('sensor.trees_rain_last_7_days') | float(0) }}"
       rain2: "{{ states('sensor.trees_rain_last_48_hours') | float(0) }}"
@@ -671,15 +718,28 @@ template:
       snow: "{{ states('sensor.trees_snow_depth') | float(0) }}"
       snow_t: "{{ states('input_number.trees_snow_cover_in') | float(0.5) }}"
       dry: "{{ states('sensor.trees_days_since_rain') | int(0) }}"
-      dry_t: "{{ states('input_number.trees_dry_spell_days') | int(14) }}"
+      win_dry: "{{ states('input_number.trees_winter_dry_in') | float(0.5) }}"
       season: "{{ states('sensor.trees_season') }}"
       lead: "{{ states('input_number.trees_final_watering_lead_days') | int(2) }}"
       win_t: "{{ states('input_number.trees_winter_min_air_temp') | float(40) }}"
-      since: >-
+      lw: >-
         {% set lw = as_datetime(states('input_datetime.trees_last_watered'), none) %}
-        {{ (now().date() - lw.date()).days if lw is not none and lw.year > 2000 else none }}
+        {{ as_local(lw).isoformat() if lw is not none and lw.year > 2000 else none }}
+      since: "{{ (now().date() - as_datetime(lw).date()).days if lw else none }}"
       interval: >-
         {{ states('input_number.trees_interval_days') | int(3) if season == 'Growing season' else states('input_number.trees_winter_interval_days') | int(14) }}
+      # Rain + snowmelt over the winter interval: Fort Collins winters bring frequent light
+      # snows, so total water says more about the root zone than days since the last one.
+      rain_win: >-
+        {% set d = state_attr('sensor.trees_open_meteo', 'daily') %}
+        {% set n = states('input_number.trees_winter_interval_days') | int(14) %}
+        {% if d %}
+          {% set today = now().strftime('%Y-%m-%d') %}
+          {% set i = d.time.index(today) if today in d.time else d.time | count - 1 %}
+          {% set lo = [i - n + 1, 0] | max %}
+          {{ (d.precipitation_sum[lo:i + 1] | map('float', 0) | sum) | round(2) }}
+        {% else %}0{% endif %}
+      next_due: "{{ (as_datetime(lw) + timedelta(days=interval | int)).strftime('%a %b %-d') if lw else none }}"
       hard: >-
         {% set t = states('input_number.trees_hard_freeze_temp') | float(28) %}
         {% set ns = namespace(n=none) %}
@@ -700,38 +760,42 @@ template:
           {% set today = now().strftime('%Y-%m-%d') %}
           {{ d.temperature_2m_max[d.time.index(today)] if d and today in d.time else none }}
         {% endif %}
-      final_due: "{{ season == 'Growing season' and hard_days is not none and hard_days <= lead }}"
+      # Fall only: a hard freeze in a late-April cold snap isn't the run-up to winter.
+      final_due: "{{ season == 'Growing season' and now().month in [8, 9, 10] and hard_days is not none and hard_days <= lead }}"
       decision: >-
-        {%- if use_moist and moist is not none and moist >= wet_pct -%}skip_wet
-        {%- elif soil is not none and soil <= frozen_t -%}skip_frozen
+        {%- if since == 0 -%}done_today
+        {%- elif use_moist and moist is not none and moist >= wet_pct -%}skip_wet
+        {%- elif soil_max is not none and soil_max <= frozen_t -%}skip_frozen
         {%- elif season == 'Winter' and snow >= snow_t -%}skip_snow
         {%- elif rain2 >= t2 or rain7 >= t7 -%}skip_rain
         {%- elif final_due and (since is none or since >= 1) -%}water_final
         {%- elif season == 'Growing season' and (since is none or since >= interval) -%}water
         {%- elif season == 'Growing season' -%}skip_recent
         {%- elif high is number and high < win_t -%}skip_cold
-        {%- elif dry >= dry_t and (since is none or since >= interval) -%}water_winter
+        {%- elif rain_win < win_dry and (since is none or since >= interval) -%}water_winter
         {%- else -%}skip_winter{%- endif -%}
       ago: >-
         {{ ('last watered ' ~ since ~ (' day ago' if since == 1 else ' days ago')) if since is not none else 'no watering logged yet' }}
       reason: >-
-        {%- if decision == 'skip_wet' -%}Soil sensor reads {{ moist | round(0) }}% (wet at {{ wet_pct | round(0) }}%), so the root zone still has water.
-        {%- elif decision == 'skip_frozen' -%}Ground is frozen ({{ soil | round(0) }}°F at 2 in deep), so water would run off or ice over.
+        {%- if decision == 'done_today' -%}Watered today at {{ as_datetime(lw).strftime('%-I:%M %p') }}. Next one due around {{ next_due }}{{ ', on a day above ' ~ (win_t | round(0)) ~ '°F if it stays dry' if season == 'Winter' else '' }}.
+        {%- elif decision == 'skip_wet' -%}Soil sensor reads {{ moist | round(0) }}% (wet at {{ wet_pct | round(0) }}%), so the root zone still has water.
+        {%- elif decision == 'skip_frozen' -%}Ground stays frozen all day (warmest {{ soil_max | round(0) }}°F at 2 in deep), so water would run off or ice over.
         {%- elif decision == 'skip_snow' -%}{{ snow }} in of snow on the ground; it will melt into the root zone.
         {%- elif decision == 'skip_rain' -%}{{ rain2 if rain2 >= t2 else rain7 }} in of rain in the last {{ '48 hours' if rain2 >= t2 else '7 days' }}{{ (', so the soil is already moist ahead of the hard freeze ' ~ hard_when) if final_due else '' }}.
         {%- elif decision == 'water_final' -%}Hard freeze ({{ hard[1] | round(0) }}°F) expected {{ hard_when }}. Give them a final deep soak so the roots go into winter moist.
         {%- elif decision == 'water' -%}Only {{ rain7 }} in of rain in 7 days, and {{ ago }} (new trees: every {{ interval }} days).
         {%- elif decision == 'skip_recent' -%}{{ ago | capitalize }}; next watering due in {{ interval - since }} day{{ '' if interval - since == 1 else 's' }}. {{ rain7 }} in of rain this week.
         {%- elif decision == 'skip_cold' -%}Today's high is only {{ high | round(0) }}°F; winter watering needs a day above {{ win_t | round(0) }}°F so it soaks in.
-        {%- elif decision == 'water_winter' -%}{{ dry }} days without real precipitation, no snow cover, and a high of {{ high | round(0) if high is number else '?' }}°F: a good winter watering day.
-        {%- else -%}Winter: {{ ago }}, {{ dry }} days since real precipitation. Only needed every {{ interval }}+ days during a dry spell of {{ dry_t }}+ days.
+        {%- elif decision == 'water_winter' -%}Only {{ rain_win }} in of rain or snowmelt in {{ interval }} days, {{ ago }}, the ground thaws today, and the high is {{ high | round(0) if high is number else '?' }}°F: a good winter watering day.
+        {%- elif since is not none and since < interval -%}Winter: {{ ago }}; next soak due around {{ next_due }} on a day above {{ win_t | round(0) }}°F if it stays dry.
+        {%- else -%}Winter: {{ rain_win }} in of rain or snowmelt in the last {{ interval }} days is enough for now ({{ ago }}).
         {%- endif -%}
     sensor:
       - name: Trees watering decision
         unique_id: trees_watering_decision_v2
         icon: "{{ 'mdi:watering-can' if decision.startswith('water') else 'mdi:watering-can-outline' }}"
         state: >-
-          {{ {'water': 'Water', 'water_final': 'Water (final deep watering)', 'water_winter': 'Water (winter)'}.get(decision, 'Skip') }}
+          {{ {'water': 'Water', 'water_final': 'Water (final deep watering)', 'water_winter': 'Water (winter)', 'done_today': 'Watered'}.get(decision, 'Skip') }}
         attributes:
           code: "{{ decision }}"
           reason: "{{ reason }}"
@@ -740,7 +804,15 @@ template:
             {%- set per = states('input_number.trees_gal_per_inch_deep') | float(10) if deep else states('input_number.trees_gal_per_inch_regular') | float(1.5) -%}
             {%- set hw = states('input_number.trees_caliper_hot_wings') | float(1) -%}
             {%- set se = states('input_number.trees_caliper_sensation') | float(1) -%}
-            {%- if decision.startswith('water') -%}About {{ (hw * per) | round(1) }} gal for the Hot Wings maple and {{ (se * per) | round(1) }} gal for the Sensation boxelder, slowly at the root ball{{ ' and out toward the drip line' if deep else '' }}.{%- else -%}None today.{%- endif -%}
+            {#- Hose time from a bucket test: seconds to fill 5 gal at the flow you'll use. -#}
+            {%- set bucket = states('input_number.trees_bucket_fill_seconds') | float(30) -%}
+            {%- macro hose(g) -%}{%- set s = (g / 5 * bucket) | round(0) | int -%}{{ (s ~ ' s') if s < 90 else ((s // 60) ~ ' min' ~ ((' ' ~ (s % 60) ~ ' s') if s % 60 else '')) }}{%- endmacro -%}
+            {%- set where = 'at the root ball' ~ (' and out toward the drip line' if deep else '') -%}
+            {%- if not decision.startswith('water') -%}None today.
+            {%- elif hw == se -%}{{ (hw * per) | round(1) }} gal per tree: about {{ hose(hw * per) }} of hose on each, {{ where }}.
+            {%- else -%}Hot Wings maple {{ (hw * per) | round(1) }} gal (about {{ hose(hw * per) }} of hose), Sensation boxelder {{ (se * per) | round(1) }} gal (about {{ hose(se * per) }}), {{ where }}.
+            {%- endif -%}
+            {%- if decision.startswith('water') and ([hw, se] | max) * per / 5 * bucket > 30 %} Split it into 2-3 passes a few minutes apart so it soaks in instead of running off.{%- endif -%}
           when: >-
             {%- if not decision.startswith('water') -%}—
             {%- elif decision == 'water_winter' -%}Midday once it's above freezing, so it soaks in before tonight (CSU 7.211).
@@ -750,8 +822,12 @@ template:
           rain_7d: "{{ rain7 }}"
           rain_48h: "{{ rain2 }}"
           soil_temp: "{{ soil }}"
+          soil_today_max: "{{ soil_max }}"
           days_since_rain: "{{ dry }}"
+          precip_winter_window: "{{ rain_win }}"
           days_since_watered: "{{ since }}"
+          last_watered: "{{ lw }}"
+          next_due: "{{ next_due }}"
           today_high: "{{ high }}"
           next_freeze: "{{ (as_datetime(freeze[0]).strftime('%a %b %-d') ~ ' · ' ~ (freeze[1] | round(0)) ~ '°F') if freeze else 'None forecast' }}"
           next_hard_freeze: "{{ (as_datetime(hard[0]).strftime('%a %b %-d') ~ ' · ' ~ (hard[1] | round(0)) ~ '°F') if hard else 'None forecast' }}"
@@ -760,28 +836,52 @@ script:
   trees_mark_watered:
     alias: "Trees: mark watered now"
     icon: mdi:watering-can
+    mode: single
     sequence:
+      # Keep the earlier watering for Undo, unless this is a second tap the same day.
+      - if:
+          - condition: template
+            value_template: >-
+              {% set lw = as_datetime(states('input_datetime.trees_last_watered'), none) %}
+              {{ lw is none or lw.date() != now().date() }}
+        then:
+          - action: input_datetime.set_datetime
+            target:
+              entity_id: input_datetime.trees_previous_watered
+            data:
+              datetime: "{{ states('input_datetime.trees_last_watered') if has_value('input_datetime.trees_last_watered') else '1970-01-01 00:00:00' }}"
       - action: input_datetime.set_datetime
         target:
           entity_id: input_datetime.trees_last_watered
         data:
           datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
 
+  trees_undo_watered:
+    alias: "Trees: undo today's watering"
+    icon: mdi:undo
+    mode: single
+    sequence:
+      - action: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.trees_last_watered
+        data:
+          datetime: "{{ states('input_datetime.trees_previous_watered') if has_value('input_datetime.trees_previous_watered') else '1970-01-01 00:00:00' }}"
+
 automation:
   - id: trees_air_apply_defaults
     alias: "Trees & air: apply default settings"
     description: >-
       One-time defaults for the tuning helpers. Helpers keep their own value across restarts,
-      so this runs once (until input_boolean.trees_air_defaults_v2 is turned off again).
+      so this runs once (until input_boolean.trees_air_defaults_v3 is turned off again).
     triggers:
       - trigger: homeassistant
         event: start
       - trigger: state
-        entity_id: input_boolean.trees_air_defaults_v2
+        entity_id: input_boolean.trees_air_defaults_v3
         to: "off"
     conditions:
       - condition: state
-        entity_id: input_boolean.trees_air_defaults_v2
+        entity_id: input_boolean.trees_air_defaults_v3
         state: "off"
     actions:
       - variables:
@@ -804,7 +904,10 @@ automation:
             input_number.trees_winter_min_air_temp: 40
             # CSU 7.211: about once or twice a month in dry spells; new trees are most susceptible.
             input_number.trees_winter_interval_days: 14
-            input_number.trees_dry_spell_days: 14
+            # Under half an inch of rain/snowmelt in the 14-day window counts as a dry spell.
+            input_number.trees_winter_dry_in: 0.5
+            # 30 s per 5 gal = 10 gal/min, a typical 3/4" hose fully open; replace with a bucket test.
+            input_number.trees_bucket_fill_seconds: 30
             input_number.trees_snow_cover_in: 0.5
             input_number.trees_caliper_hot_wings: 1.0
             input_number.trees_caliper_sensation: 1.0
@@ -842,12 +945,23 @@ automation:
         data:
           time: "07:30:00"
       # A new date+time helper starts at "today 00:00", which would read as "watered today".
-      # 1970 means "no watering logged yet" to the decision logic.
-      - action: input_datetime.set_datetime
-        target:
-          entity_id: input_datetime.trees_last_watered
-        data:
-          datetime: "1970-01-01 00:00:00"
+      # 1970 means "no watering logged yet" to the decision logic. Real waterings are kept.
+      - repeat:
+          for_each:
+            - input_datetime.trees_last_watered
+            - input_datetime.trees_previous_watered
+          sequence:
+            - if:
+                - condition: template
+                  value_template: >-
+                    {% set v = as_datetime(states(repeat.item), none) %}
+                    {{ v is none or v.year < 2000 or (v.date() == now().date() and v.hour == 0 and v.minute == 0) }}
+              then:
+                - action: input_datetime.set_datetime
+                  target:
+                    entity_id: "{{ repeat.item }}"
+                  data:
+                    datetime: "1970-01-01 00:00:00"
       - action: input_boolean.turn_on
         target:
           entity_id:
@@ -855,41 +969,99 @@ automation:
             - input_boolean.trees_city_hours
       - action: input_boolean.turn_on
         target:
-          entity_id: input_boolean.trees_air_defaults_v2
+          entity_id: input_boolean.trees_air_defaults_v3
     mode: single
 
   - id: trees_daily_watering_notification
-    alias: "Trees: daily watering decision"
-    description: Pushes today's water/skip decision to every mobile app at the chosen time.
+    alias: "Trees: watering push"
+    description: >-
+      One phone notification per day (tag trees-watering) that always shows where things stand.
+      Morning: today's decision; on a watering day it is pinned (can't be swiped away) until
+      "I watered" or "Not today". Logging a watering from the phone or the Home dashboard
+      replaces it with a check mark that stays until swiped; Undo clears it.
     triggers:
       - trigger: time
         at: input_datetime.trees_notify_time
+        id: morning
+      - trigger: state
+        entity_id: input_datetime.trees_last_watered
+        not_from: [unknown, unavailable]
+        id: logged
+      - trigger: event
+        event_type: mobile_app_notification_action
+        event_data:
+          action: TREES_NOT_TODAY
+        id: not_today
     conditions:
       - condition: state
         entity_id: input_boolean.trees_notifications
         state: "on"
     actions:
-      - variables:
-          code: "{{ state_attr('sensor.trees_watering_decision', 'code') or 'skip' }}"
-          water: "{{ code.startswith('water') }}"
-          title: >-
-            {%- if code == 'water_final' -%}Trees: final deep watering today
-            {%- elif code == 'water_winter' -%}Trees: winter watering today
-            {%- elif water -%}Trees: water today
-            {%- else -%}Trees: skip watering today{%- endif -%}
-          message: >-
-            {{ state_attr('sensor.trees_watering_decision', 'reason') }}{% if water %} {{ state_attr('sensor.trees_watering_decision', 'how_much') }} {{ state_attr('sensor.trees_watering_decision', 'when') }}{% endif %}
-      # Falls back to a persistent notification (id trees-watering) when no phone is registered.
-      - action: script.notify_phones
-        data:
-          title: "{{ title }}"
-          message: "{{ message }}"
-          tag: trees-watering
-          channel: Trees
-          data:
-            actions: >-
-              {{ [{'action': 'TREES_WATERED', 'title': 'I watered'}] if water else [] }}
-    mode: single
+      - choose:
+          - conditions:
+              - condition: trigger
+                id: morning
+            sequence:
+              - variables:
+                  code: "{{ state_attr('sensor.trees_watering_decision', 'code') or 'skip' }}"
+                  water: "{{ code.startswith('water') }}"
+                  title: >-
+                    {%- if code == 'water_final' -%}Trees: final deep watering today
+                    {%- elif code == 'water_winter' -%}Trees: winter watering today
+                    {%- elif code == 'done_today' -%}Trees: watered ✓
+                    {%- elif water -%}Trees: water today
+                    {%- else -%}Trees: skip watering today{%- endif -%}
+                  message: >-
+                    {{ state_attr('sensor.trees_watering_decision', 'reason') }}{% if water %} {{ state_attr('sensor.trees_watering_decision', 'how_much') }} {{ state_attr('sensor.trees_watering_decision', 'when') }}{% endif %}
+              # Falls back to a persistent notification (id trees-watering) when no phone is registered.
+              - action: script.notify_phones
+                data:
+                  title: "{{ title }}"
+                  message: "{{ message }}"
+                  tag: trees-watering
+                  channel: Trees
+                  data: >-
+                    {{ {'persistent': true, 'sticky': true,
+                        'actions': [{'action': 'TREES_WATERED', 'title': 'I watered'},
+                                    {'action': 'TREES_NOT_TODAY', 'title': 'Not today'}]}
+                       if water else {} }}
+          - conditions:
+              - condition: trigger
+                id: logged
+              - condition: template
+                value_template: >-
+                  {% set v = as_datetime(trigger.to_state.state, none) %}
+                  {{ v is not none and v.date() == now().date() }}
+            sequence:
+              - variables:
+                  logged_at: "{{ as_datetime(trigger.to_state.state).strftime('%-I:%M %p') }}"
+                  next_due: >-
+                    {% set n = states('input_number.trees_interval_days') | int(3) if is_state('sensor.trees_season', 'Growing season') else states('input_number.trees_winter_interval_days') | int(14) %}
+                    {{ (now() + timedelta(days=n)).strftime('%a %b %-d') }}
+              - action: script.notify_phones
+                data:
+                  title: "Trees: watered ✓"
+                  message: "Logged at {{ logged_at }}. Next watering due around {{ next_due }}."
+                  tag: trees-watering
+                  channel: Trees
+                  # Replaces the pinned morning alert quietly; stays until swiped away.
+                  data:
+                    alert_once: true
+                    sticky: true
+          # Undo (last watered moved back off today) or "Not today": drop the alert.
+          - conditions:
+              - condition: or
+                conditions:
+                  - condition: trigger
+                    id: not_today
+                  - condition: trigger
+                    id: logged
+            sequence:
+              - action: script.notify_phones
+                data:
+                  message: clear_notification
+                  tag: trees-watering
+    mode: queued
 
   - id: trees_watered_from_notification
     alias: "Trees: log watering from the notification"

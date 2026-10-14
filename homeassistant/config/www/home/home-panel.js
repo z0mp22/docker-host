@@ -314,6 +314,9 @@ h1 { margin: 2px 0 0; font-size: 34px; font-weight: 700; line-height: 1.1; }
 .btn { height: 42px; padding: 0 16px; border-radius: 14px; background: linear-gradient(180deg, #3fb6ff, #1b82e0); color: #fff; font-weight: 600; font-size: 15px; display: inline-flex; align-items: center; gap: 8px; }
 .btn .ic { width: 20px; height: 20px; }
 .btn:disabled { background: #243044; color: #6f7d92; }
+.btn.ghost { background: #243044; color: #dbe3ee; }
+.logged { display: inline-flex; align-items: center; gap: 6px; color: #6ee7a8; font-weight: 600; }
+.logged .ic { width: 18px; height: 18px; }
 
 /* Outdoor */
 .score-row { display: flex; align-items: center; gap: 18px; margin-top: 12px; flex-wrap: wrap; }
@@ -719,13 +722,16 @@ class HomePanel extends HTMLElement {
     else if (a === "range") {
       this._range = el.dataset.range;
       this._render();
-    } else if (a === "watered") {
+    } else if (a === "watered" || a === "unwatered") {
       const t = this._c.trees || {};
+      const undo = a === "unwatered";
       try {
-        await this._hass.callService("script", "turn_on", { entity_id: t.mark_watered || "script.trees_mark_watered" });
-        this._showToast(`Watering logged at ${this._fmtTime(Date.now())}.`, true);
+        await this._hass.callService("script", "turn_on", {
+          entity_id: undo ? t.undo_watered || "script.trees_undo_watered" : t.mark_watered || "script.trees_mark_watered",
+        });
+        this._showToast(undo ? "Today's watering removed." : `Watering logged at ${this._fmtTime(Date.now())}.`, true);
       } catch (err) {
-        this._showToast(`Couldn't log watering: ${err.message || err}`);
+        this._showToast(`Couldn't ${undo ? "undo" : "log"} watering: ${err.message || err}`);
       }
     } else if (a === "run-script") {
       try {
@@ -1200,10 +1206,15 @@ class HomePanel extends HTMLElement {
     const code = a.code || "skip";
     const water = code.startsWith("water");
     const cls = code === "water_final" ? "final" : water ? "water" : "skip";
-    const title = { water: "Water today", water_final: "Final deep watering", water_winter: "Winter watering today" }[code] || "Skip today";
+    const title = { water: "Water today", water_final: "Final deep watering", water_winter: "Winter watering today", done_today: "Watered today" }[code] || "Skip today";
     const lw = st[t.last_watered]?.state;
     const lwMs = lw ? Date.parse(lw.replace(" ", "T")) : NaN;
-    const lwText = !Number.isFinite(lwMs) || new Date(lwMs).getFullYear() < 2000 ? "No watering logged yet" : `Last watered ${dayLabel(lwMs).toLowerCase()} at ${this._fmtTime(lwMs)}`;
+    const logged = Number.isFinite(lwMs) && new Date(lwMs).getFullYear() >= 2000;
+    const today = logged && new Date(lwMs).toDateString() === new Date().toDateString();
+    // Watered today stays on the card until midnight, with Undo for a mistaken tap.
+    const foot = today
+      ? `<span class="logged">${svg("mdiCheckCircleOutline")}Watered at ${esc(this._fmtTime(lwMs))}</span><button class="btn ghost" data-action="unwatered">Undo</button>`
+      : `<span>${esc(logged ? `Last watered ${dayLabel(lwMs).toLowerCase()} at ${this._fmtTime(lwMs)}` : "No watering logged yet")}</span><button class="btn" data-action="watered">${svg("mdiCheck")}I watered</button>`;
     const num1 = (v, u) => (v === undefined || v === null || v === "" || v === "None" ? "—" : `${Math.round(parseFloat(v) * 100) / 100}${u}`);
     const notify = st[t.notify_time]?.state;
     return `<section class="card a-trees">
@@ -1214,10 +1225,10 @@ class HomePanel extends HTMLElement {
       <div class="facts">
         <div class="fact"><b>${esc(num1(a.rain_7d, " in"))}</b><span>Rain, 7 days</span></div>
         <div class="fact"><b>${esc(a.days_since_rain ?? "—")}</b><span>Days since rain</span></div>
-        <div class="fact"><b>${esc(num1(a.soil_temp, "°F"))}</b><span>Soil at 2 in</span></div>
+        <div class="fact"><b>${esc(num1(a.soil_today_max ?? a.soil_temp, "°F"))}</b><span>Soil high today</span></div>
         <div class="fact"><b>${esc(String(a.next_hard_freeze || "—").replace("None in the NWS forecast", "None forecast"))}</b><span>Next hard freeze</span></div>
       </div>
-      <div class="trees-foot"><span>${esc(lwText)}</span><button class="btn" data-action="watered">${svg("mdiCheck")}I watered</button></div>
+      <div class="trees-foot">${foot}</div>
     </section>`;
   }
 
