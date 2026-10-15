@@ -1,5 +1,5 @@
 # Basement workout: one tap sets the basement up so it's ready by the time Cody walks down.
-# Lights to 80%, and the Roku opens Spotify straight into the workout playlist (the TV wakes over
+# Lights to 35%, and the Roku opens Spotify straight into the workout playlist (the TV wakes over
 # HDMI-CEC). The button is on the Coaching panel (/coach, Basement card); the script also works
 # from the companion app or a home-screen shortcut.
 #
@@ -30,7 +30,7 @@ rest_command:
 script:
   basement_workout:
     alias: "Basement: workout"
-    description: Basement lights to 80% and the workout playlist on the basement Roku.
+    description: Basement lights to 35% and the workout playlist on the basement Roku.
     icon: mdi:dumbbell
     mode: single
     sequence:
@@ -40,7 +40,7 @@ script:
         target:
           entity_id: light.basement
         data:
-          brightness_pct: 80
+          brightness_pct: 35
       - action: rest_command.basement_roku_workout_playlist
         response_variable: roku
       - if:
