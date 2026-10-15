@@ -31,7 +31,7 @@ const PANEL_STATE = "input_text.coach_panel_state";
 const SLOW_MS = 15 * 60e3;
 const EXPIRE_MS = 60 * 60e3;
 const REPORT_BUSY_MS = 10 * 60e3;
-// Basement set-up (packages/workout.yaml): lights to 80% + workout playlist on the basement Roku,
+// Basement set-up (packages/workout.yaml): lights to 35% + workout playlist on the basement Roku,
 // and the wind-down: Spotify closed, Roku (and TV) off, lights off, feedback prompt.
 const WORKOUT = { script: "script.basement_workout", end: "script.basement_workout_end", light: "light.basement", roku: "media_player.basement_roku" };
 const WORKOUT_DONE_MS = 8000;
@@ -623,7 +623,7 @@ class CoachPanel extends HTMLElement {
       "workout",
       `<div class="wk">
         <div class="wk-t"><div class="eyebrow">Basement workout</div>
-          <h3>${active ? "Workout in progress" : "Lights 80% · workout playlist"}</h3>
+          <h3>${active ? "Workout in progress" : "Lights 35% · workout playlist"}</h3>
           <div class="sub">Now: ${esc(lightText)} · ${esc(tvText)}</div>
           ${active ? `<div class="sub">End turns off Spotify, the TV and the lights, then asks how it went.</div>` : ""}</div>
         <div class="wk-btns">
