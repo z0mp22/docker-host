@@ -19,29 +19,31 @@ template:
         unique_id: bluetooth_thermometers_stale
         device_class: problem
         icon: mdi:thermometer-off
-        # Main signal: HA marks a passive BLE sensor unavailable after 15 min with no advert at all
-        # (that's how the 2026-10-06 outage showed up). last_reported is only a backstop: HA skips
-        # identical adverts, so a healthy thermometer can go 20-30 min without a new report.
+        # Only signal: HA marks a passive BLE sensor unavailable after 15 min with no advert at all
+        # (that's how the 2026-10-06 outage showed up). Don't use last_reported: HA doesn't write
+        # the state for identical adverts, so a thermometer in a steady room goes hours without a
+        # report while still advertising. A 1 h last_reported backstop caused 42 false "stale"
+        # episodes (and ~25 needless scanner reloads) in 2026-10-08..15 with zero real outages.
         state: >-
           {% set ns = namespace(n=0) %}
           {% for id in ['sensor.tp358s_1c99_temperature', 'sensor.tp358s_f429_temperature'] %}
             {% set s = states[id] %}
-            {% if s is none or s.state in ['unavailable', 'unknown'] or (now() - s.last_reported).total_seconds() > 3600 %}
+            {% if s is none or s.state in ['unavailable', 'unknown'] %}
               {% set ns.n = ns.n + 1 %}
             {% endif %}
           {% endfor %}
           {{ ns.n > 0 }}
         attributes:
-          # [{entity_id, name, since}] for each quiet thermometer; since = last advert (or when
-          # it went unavailable), ISO timestamp.
+          # [{entity_id, name, since}] for each quiet thermometer; since = when it went
+          # unavailable, ISO timestamp.
           stale: >-
             {% set ns = namespace(out=[]) %}
             {% for id in ['sensor.tp358s_1c99_temperature', 'sensor.tp358s_f429_temperature'] %}
               {% set s = states[id] %}
               {% if s is none %}
                 {% set ns.out = ns.out + [{'entity_id': id, 'name': id, 'since': none}] %}
-              {% elif s.state in ['unavailable', 'unknown'] or (now() - s.last_reported).total_seconds() > 3600 %}
-                {% set since = s.last_changed if s.state in ['unavailable', 'unknown'] else s.last_reported %}
+              {% elif s.state in ['unavailable', 'unknown'] %}
+                {% set since = s.last_changed %}
                 {% set ns.out = ns.out + [{'entity_id': id, 'name': s.name | replace(' Thermometer', '') | replace(' Temperature', '') | replace(' temperature', ''), 'since': since.isoformat()}] %}
               {% endif %}
             {% endfor %}
@@ -50,7 +52,7 @@ template:
             {% set ns = namespace(n=0) %}
             {% for id in ['sensor.tp358s_1c99_temperature', 'sensor.tp358s_f429_temperature'] %}
               {% set s = states[id] %}
-              {% if s is none or s.state in ['unavailable', 'unknown'] or (now() - s.last_reported).total_seconds() > 3600 %}
+              {% if s is none or s.state in ['unavailable', 'unknown'] %}
                 {% set ns.n = ns.n + 1 %}
               {% endif %}
             {% endfor %}
