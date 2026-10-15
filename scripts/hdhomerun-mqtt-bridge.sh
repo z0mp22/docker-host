@@ -86,6 +86,9 @@ data = {
     "channels": channels,
     "weather_condition": weather.get("condition"),
     "weather_temperature": weather.get("temperature"),
+    # 7-day per-channel summary of logged samples, so the dashboard has something to say
+    # while both tuners are idle (plex_recordings ADR 0014).
+    "recent": status.get("recent") or {},
 }
 
 out = Path(os.environ["OUT"])
