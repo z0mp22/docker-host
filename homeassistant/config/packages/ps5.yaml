@@ -1,0 +1,47 @@
+# Basement PS5: is it on, and for how long.
+# - sensor.ps5_power comes from shell/ps5_status.py, which asks the PS5 over the LAN (Sony's
+#   discovery protocol, no pairing or account): on / standby (rest mode) / off. "off" is also what
+#   rest mode looks like when the PS5's "Stay connected to the internet" setting is off.
+# - binary_sensor.ps5_on waits a minute before going off, so a dropped Wi-Fi reply doesn't end a
+#   session. The basement lights automation counts it as someone being downstairs.
+# - The hours come from recorder history, so they start from when this was deployed.
+
+command_line:
+  - sensor:
+      name: PS5 power
+      unique_id: ps5_power
+      command: python3 /config/shell/ps5_status.py
+      scan_interval: 30
+      value_template: "{{ value_json.state }}"
+      json_attributes:
+        - host_name
+        - ip
+        - checked_at
+      icon: mdi:sony-playstation
+
+template:
+  - binary_sensor:
+      - name: PS5 on
+        unique_id: ps5_on
+        icon: mdi:sony-playstation
+        availability: "{{ states('sensor.ps5_power') in ['on', 'standby', 'off'] }}"
+        state: "{{ is_state('sensor.ps5_power', 'on') }}"
+        delay_off: "00:01:00"
+
+sensor:
+  - platform: history_stats
+    name: PS5 on today
+    unique_id: ps5_on_today
+    entity_id: binary_sensor.ps5_on
+    state: "on"
+    type: time
+    start: "{{ today_at() }}"
+    end: "{{ now() }}"
+  - platform: history_stats
+    name: PS5 on last 7 days
+    unique_id: ps5_on_last_7_days
+    entity_id: binary_sensor.ps5_on
+    state: "on"
+    type: time
+    start: "{{ today_at() - timedelta(days=6) }}"
+    end: "{{ now() }}"

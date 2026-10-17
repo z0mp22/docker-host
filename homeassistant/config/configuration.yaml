@@ -514,7 +514,7 @@ panel_custom:
     url_path: tv
     sidebar_title: TV
     sidebar_icon: mdi:television-play
-    module_url: /local/tv/tv-panel.js?v=3
+    module_url: /local/tv/tv-panel.js?v=4
     config:
       # Each room: the Roku (core roku integration), its remote, and the Plex client on it, which
       # supplies titles, artwork and seeking. Icons: mdiSofa, mdiStairsDown, mdiTelevision.
@@ -529,6 +529,12 @@ panel_custom:
           roku: media_player.basement_roku
           remote: remote.basement_roku
           plex: media_player.plex_plex_for_roku_basement_roku
+          # PS5 (packages/ps5.yaml): power and hours from the LAN check. psn/game_sensor come from
+          # the PlayStation Network integration and are optional; without them there are no titles.
+          ps5:
+            power: sensor.ps5_power
+            today: sensor.ps5_on_today
+            week: sensor.ps5_on_last_7_days
       recordings: sensor.plex_recordings_sync_meta
       links:
         recordings: /recordings
