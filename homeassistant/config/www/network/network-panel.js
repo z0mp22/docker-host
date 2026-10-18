@@ -3,6 +3,9 @@
 // sensor names come from panel_custom `config` in configuration.yaml.
 
 const ICONS = {
+  mdiAirplane: "M20.56 3.91C21.15 4.5 21.15 5.45 20.56 6.03L16.67 9.92L18.79 19.11L17.38 20.53L13.5 13.1L9.6 17L9.96 19.47L8.89 20.53L7.13 17.35L3.94 15.58L5 14.5L7.5 14.87L11.37 11L3.94 7.09L5.36 5.68L14.55 7.8L18.44 3.91C19 3.33 20 3.33 20.56 3.91Z",
+  mdiLock: "M12,17A2,2 0 0,0 14,15C14,13.89 13.1,13 12,13A2,2 0 0,0 10,15A2,2 0 0,0 12,17M18,8A2,2 0 0,1 20,10V20A2,2 0 0,1 18,22H6A2,2 0 0,1 4,20V10C4,8.89 4.9,8 6,8H7V6A5,5 0 0,1 12,1A5,5 0 0,1 17,6V8H18M12,3A3,3 0 0,0 9,6V8H15V6A3,3 0 0,0 12,3Z",
+  mdiLockOpenVariant: "M18 1C15.24 1 13 3.24 13 6V8H4C2.9 8 2 8.89 2 10V20C2 21.11 2.9 22 4 22H16C17.11 22 18 21.11 18 20V10C18 8.9 17.11 8 16 8H15V6C15 4.34 16.34 3 18 3C19.66 3 21 4.34 21 6V8H23V6C23 3.24 20.76 1 18 1M10 13C11.1 13 12 13.89 12 15C12 16.11 11.11 17 10 17C8.9 17 8 16.11 8 15C8 13.9 8.9 13 10 13Z",
   mdiAccessPointOff: "M20.84 22.73L12.1 14C12.06 14 12.03 14 12 14C10.9 14 10 13.11 10 12C10 11.97 10 11.94 10 11.9L8.4 10.29C8.15 10.81 8 11.38 8 12C8 13.11 8.45 14.11 9.17 14.83L7.76 16.24C6.67 15.15 6 13.65 6 12C6 10.83 6.34 9.74 6.93 8.82L5.5 7.37C4.55 8.67 4 10.27 4 12C4 14.22 4.89 16.22 6.34 17.66L4.93 19.07C3.12 17.26 2 14.76 2 12C2 9.72 2.77 7.63 4.06 5.95L1.11 3L2.39 1.73L22.11 21.46L20.84 22.73M15.93 12.73L17.53 14.33C17.83 13.61 18 12.83 18 12C18 10.35 17.33 8.85 16.24 7.76L14.83 9.17C15.55 9.89 16 10.89 16 12C16 12.25 15.97 12.5 15.93 12.73M19.03 15.83L20.5 17.28C21.44 15.75 22 13.94 22 12C22 9.24 20.88 6.74 19.07 4.93L17.66 6.34C19.11 7.78 20 9.79 20 12C20 13.39 19.65 14.7 19.03 15.83Z",
   mdiAccountArrowRight: "M18 16H14V18H18V20L21 17L18 14V16M11 4C8.8 4 7 5.8 7 8S8.8 12 11 12 15 10.2 15 8 13.2 4 11 4M11 14C6.6 14 3 15.8 3 18V20H12.5C12.2 19.2 12 18.4 12 17.5C12 16.3 12.3 15.2 12.9 14.1C12.3 14.1 11.7 14 11 14",
   mdiAlertOutline: "M12,2L1,21H23M12,6L19.53,19H4.47M11,10V14H13V10M11,16V18H13V16",
@@ -39,6 +42,13 @@ const HISTORY_HOURS = 24;
 const TRAFFIC_STALE_MIN = 45;
 // Below this much free memory, earlyoom starts stopping the UniFi Network app (the Oct 2026 outage).
 const MEM_LOW_PCT = 12;
+// cloudflare-edge.py publishes every 5 min; past this the Cloudflare half says its data is old.
+const EDGE_STALE_MIN = 20;
+// Cloudflare custom rules by role. Matched by description (panel config edge_rules), named here.
+const EDGE_ROLES = { us_only: "Outside the US", hosting: "Hosting networks", junk: "Junk paths", lockdown: "Lockdown" };
+const TRAVEL_DAYS = [[3, "3 days"], [7, "1 week"], [14, "2 weeks"]];
+// After a tap, wait this long for Cloudflare's rule state to change before calling it failed.
+const EDGE_PENDING_MS = 30e3;
 const PORT_NAMES = { 21: "FTP", 22: "SSH", 23: "Telnet", 25: "mail", 80: "web", 443: "web", 445: "Windows sharing", 3389: "Remote Desktop", 5900: "VNC", 8080: "web" };
 
 const svg = (name) => `<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="${ICONS[name] || ""}"/></svg>`;
@@ -282,6 +292,35 @@ h1 { margin: 0; font-size: 34px; font-weight: 700; line-height: 1.1; }
 a.link { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
 a.link .ic { width: 16px; height: 16px; }
 
+/* Cloudflare edge: funnel + controls */
+.funnel { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-top: 16px; }
+.step { position: relative; border-radius: 18px; background: #121a28; border: 1px solid var(--line); padding: 14px 16px; min-width: 0; }
+.step .v { font-size: 30px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+.step .l { font-size: 14px; color: #c3cedd; margin-top: 2px; }
+.step .s { font-size: 13px; color: var(--muted); margin-top: 4px; }
+.step.edge { border-color: rgba(45,212,191,.35); } .step.edge .v { color: var(--teal); }
+.step.bad { border-color: rgba(240,97,109,.5); } .step.bad .v { color: var(--red); }
+.step.next::before { content: "›"; position: absolute; left: -12px; top: 50%; transform: translate(-50%, -50%); color: var(--muted); font-size: 22px; }
+.split { display: flex; height: 10px; border-radius: 5px; overflow: hidden; margin-top: 14px; gap: 2px; background: #172234; }
+.split .e { background: var(--teal); } .split .p { background: #3b4a61; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.chip { font-size: 13.5px; padding: 6px 10px; border-radius: 10px; background: #172234; color: #c3cedd; }
+.chip b { font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; margin-right: 4px; }
+.chip.zero { color: var(--muted); } .chip.zero b { color: var(--muted); }
+.chip.off { background: rgba(245,176,65,.12); color: #f7c77a; }
+.ctls { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+.ctl { display: grid; grid-template-columns: 46px minmax(0, 1fr) auto; gap: 12px 14px; align-items: center; padding: 12px 14px; border-radius: 18px; background: #121a28; border: 1px solid var(--line); }
+.ctl .nic .ic { width: 24px; height: 24px; }
+.ctl.on { border-color: rgba(245,176,65,.4); } .ctl.on .nic { background: linear-gradient(160deg, #fcd58a, #d98b16); }
+.ctl b { display: block; font-size: 17px; font-weight: 600; }
+.ctl .t span { display: block; font-size: 14px; color: var(--muted); line-height: 1.4; }
+.ctl .t .err { color: var(--red); }
+.ctl .a { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.btn { min-height: 44px; padding: 0 16px; border-radius: 14px; font-size: 15px; font-weight: 600; background: #1b2638; border: 1px solid var(--line); white-space: nowrap; }
+.btn.primary { background: linear-gradient(180deg, #2bb8a8, #0f7f74); border-color: transparent; color: #fff; }
+.btn.danger { background: linear-gradient(180deg, #e2525e, #b0303c); border-color: transparent; color: #fff; }
+.btn:disabled { opacity: .45; cursor: default; }
+
 /* Traffic */
 .a-traffic { grid-area: traffic; } .a-blocks { grid-area: blocks; }
 .metric .u { font-size: 13px; color: var(--muted); margin-top: 4px; }
@@ -333,6 +372,14 @@ a.link .ic { width: 16px; height: 16px; }
   .ap { padding: 12px; } .ap-name { font-size: 16px; } .ap-clients { font-size: 22px; }
   .counts .total { font-size: 36px; }
   .big.four { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .funnel { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .step { padding: 12px; } .step .v { font-size: 22px; } .step .l { font-size: 13px; } .step .s { font-size: 12px; }
+  .step.next::before { display: none; }
+  .ctl { grid-template-columns: 40px minmax(0, 1fr); padding: 12px; }
+  .ctl .nic { width: 40px; height: 40px; }
+  .ctl b { font-size: 15.5px; } .ctl .t span { font-size: 13px; }
+  .ctl .a { grid-column: 1 / -1; justify-content: stretch; }
+  .ctl .a .btn { flex: 1 1 0; padding: 0 10px; }
   .row { font-size: 14px; }
   .dev .n { font-size: 14px; } .dev .v { font-size: 15px; }
   .rule-n { font-size: 17px; } .rule-top b { font-size: 15px; }
@@ -436,10 +483,29 @@ class NetworkPanel extends HTMLElement {
     const el = e.target.closest?.("[data-action]");
     if (!el) return;
     if (el.dataset.action === "menu") this.dispatchEvent(new Event("hass-toggle-menu", { bubbles: true, composed: true }));
+    if (el.dataset.action === "edge-travel") this._edgeCall("us_only", false, "cloudflare_travel_start", { days: Number(el.dataset.days) });
+    if (el.dataset.action === "edge-travel-end") this._edgeCall("us_only", true, "cloudflare_travel_end", {});
+    if (el.dataset.action === "edge-lock") this._edgeCall("lockdown", el.dataset.lock === "1", "cloudflare_lockdown", { lock: el.dataset.lock === "1" });
     if (el.dataset.action === "all") {
       this._showAll = !this._showAll;
       this._render();
     }
+  }
+
+  // Runs one of the packages/cloudflare_edge.yaml scripts; the control stays "Updating…" until
+  // sensor.cloudflare_edge_rules shows the rule in the asked-for state (the script refreshes it).
+  async _edgeCall(role, enabled, script, data) {
+    if (this._edgePending) return;
+    this._edgeError = null;
+    this._edgePending = { role, enabled, until: Date.now() + EDGE_PENDING_MS };
+    this._render();
+    try {
+      await this._hass.callService("script", script, data);
+    } catch (err) {
+      this._edgePending = null;
+      this._edgeError = { role, text: `Couldn't change it: ${err?.message || err}` };
+    }
+    this._render();
   }
 
   _model() {
@@ -478,6 +544,7 @@ class NetworkPanel extends HTMLElement {
       totalClients: live(clientSensor) ? num(clientSensor.state) : null,
       latency,
       exposure: this._exposure(),
+      edge: this._edge(),
       traffic: this._traffic(),
       netwatch: c.netwatch && live(st[c.netwatch]) ? st[c.netwatch] : null,
       down: num(st[c.download]?.state),
@@ -503,6 +570,7 @@ class NetworkPanel extends HTMLElement {
     return {
       ok: true,
       probes: total("probes"),
+      requests: total("requests"),
       gotThrough: total("got_through"),
       unrecognized: total("unrecognized"),
       // Only counted once NPM logs real client IPs; null until then.
@@ -510,6 +578,41 @@ class NetworkPanel extends HTMLElement {
       failed: total("failed_signins"),
       sites: Object.entries(sites).sort((a, b) => b[1].requests - a[1].requests),
       signIn: live(si) ? { at: Date.parse(si.state), ...si.attributes } : null,
+    };
+  }
+
+  // Cloudflare edge (packages/cloudflare_edge.yaml): what Cloudflare stopped before NPM, and the
+  // custom rules the controls flip, as Cloudflare reports them. null = not configured.
+  _edge() {
+    const c = this._config;
+    if (!c.edge) return null;
+    const st = this._hass.states;
+    const s = st[c.edge];
+    const at = s ? Date.parse(s.state) : NaN;
+    const summary =
+      live(s) && Number.isFinite(at) && Array.isArray(s.attributes?.by_rule)
+        ? { at, stale: Date.now() - at > EDGE_STALE_MIN * 60e3, ...s.attributes }
+        : null;
+    const rs = st[c.edge_rules_sensor];
+    const list = live(rs) && Array.isArray(rs.attributes?.rules) ? rs.attributes.rules : null;
+    const names = c.edge_rules || {};
+    const rules = Object.fromEntries(Object.keys(EDGE_ROLES).map((k) => [k, list?.find((r) => r.description === names[k]) || null]));
+    // A tap is pending until Cloudflare shows the rule in the state it asked for.
+    let p = this._edgePending;
+    if (p && (rules[p.role]?.enabled === p.enabled || Date.now() > p.until)) {
+      if (rules[p.role]?.enabled !== p.enabled && !this._edgeError) this._edgeError = { role: p.role, text: "Cloudflare didn't confirm the change. Check your phone for an error push." };
+      p = this._edgePending = null;
+    }
+    const until = num(st[c.edge_travel_until]?.attributes?.timestamp);
+    return {
+      summary,
+      rulesOk: !!list,
+      rules,
+      names,
+      travelOn: st[c.edge_travel]?.state === "on",
+      travelUntil: until ? until * 1000 : null,
+      pending: p,
+      error: this._edgeError || null,
     };
   }
 
@@ -583,6 +686,19 @@ class NetworkPanel extends HTMLElement {
     else wifi = { level: "green", word: "Online", sub: `${plural(activeAps.length, "access point")} · ${wireless} on Wi-Fi` };
 
     const exposure = this._evaluateExposure(m.exposure);
+    const eg = m.edge;
+    const locked = !!eg?.rules.lockdown?.enabled;
+    const abroad = !!eg?.rules.us_only && !eg.rules.us_only.enabled;
+    // A standing Cloudflare rule that's off (or gone) without travel mode explaining it.
+    const edgeDrift = [];
+    if (eg?.rulesOk) {
+      if (abroad && !eg.travelOn) edgeDrift.push({ label: "US-only is off", detail: "Visitors from any country can reach your sites" });
+      for (const k of ["us_only", "hosting", "junk"]) {
+        const r = eg.rules[k];
+        if (!r) edgeDrift.push({ label: "Cloudflare rule missing", detail: `No "${eg.names[k] || EDGE_ROLES[k]}" rule` });
+        else if (!r.enabled && k !== "us_only") edgeDrift.push({ label: "Cloudflare rule off", detail: `"${r.description}" is switched off` });
+      }
+    }
 
     // Headline: a possible break-in first, then the most upstream network problem; "can't read
     // data" is never reported as "down".
@@ -591,7 +707,9 @@ class NetworkPanel extends HTMLElement {
     else if (internet.level === "red") status = { dot: "red", label: "Internet down", detail: internet.sub };
     else if (gateway.level === "red") status = { dot: "red", label: "Gateway offline", detail: gateway.sub };
     else if (wifi.level === "red") status = { dot: "red", label: "Wi-Fi down", detail: wifi.sub };
+    else if (locked) status = { dot: "amber", label: "Locked down", detail: "Only your home connection and T-Mobile can reach your sites" };
     else if (exposure?.level === "amber") status = { dot: "amber", label: exposure.word, detail: exposure.sub };
+    else if (edgeDrift.length) status = { dot: "amber", ...edgeDrift[0] };
     else if (flagged.length) status = { dot: "amber", ...flagged[0] };
     else if (internet.level === "amber") status = { dot: "amber", label: "Internet slow", detail: internet.sub };
     else if (wifi.level === "amber") status = { dot: "amber", label: "Wi-Fi degraded", detail: wifi.sub };
@@ -602,6 +720,28 @@ class NetworkPanel extends HTMLElement {
     const items = [];
     if (exposure && ["red", "amber"].includes(exposure.level))
       items.push({ level: exposure.level, icon: "mdiShieldAlertOutline", title: exposure.word, text: `${exposure.sub}. Details on the Internet Exposure dashboard (Grafana).` });
+    if (eg) {
+      const rn = (k) => `"${eg.names[k] || EDGE_ROLES[k]}"`;
+      if (locked)
+        items.push({ level: "amber", icon: "mdiLock", title: "Locked down at Cloudflare", text: "Only your home connection and T-Mobile get through, so everyone else (Plex friends, other carriers, any VPN) is blocked. Unlock on the exposure card." });
+      if (!eg.rulesOk)
+        items.push({ level: "info", icon: "mdiInformationOutline", title: "Can't read Cloudflare's rules", text: "Travel mode and Lockdown are paused until HA can reach Cloudflare again. If the token was rolled, update cloudflare_api_auth in secrets.yaml on docker-host." });
+      else {
+        if (abroad && !eg.travelOn)
+          items.push({ level: "amber", icon: "mdiWeb", title: "US-only is off, but travel mode isn't on", text: "Visitors from any country can reach your sites, and nothing will turn it back on. Use End travel mode on the exposure card." });
+        for (const k of ["us_only", "hosting", "junk"]) {
+          const r = eg.rules[k];
+          if (!r) items.push({ level: "amber", icon: "mdiShieldAlertOutline", title: `No ${rn(k)} rule in Cloudflare`, text: "It was renamed or deleted in the Cloudflare dashboard. The panel and HA find rules by name, so give it back that exact name." });
+          else if (!r.enabled && k !== "us_only") items.push({ level: "amber", icon: "mdiShieldAlertOutline", title: `${rn(k)} is off in Cloudflare`, text: "Turn it back on in the Cloudflare dashboard (Security → WAF → Custom rules)." });
+        }
+        if (!eg.rules.lockdown)
+          items.push({ level: "info", icon: "mdiLock", title: "Lockdown isn't set up in Cloudflare yet", text: `Add a custom rule named ${rn("lockdown")} (switched off) and the Lock down button starts working.` });
+      }
+      if (abroad && eg.travelOn)
+        items.push({ level: "info", icon: "mdiAirplane", title: `Travel mode until ${clock(new Date(eg.travelUntil).toISOString())}`, text: "Visitors from any country get through. US-only turns itself back on then, and you'll get a push." });
+      if (!eg.summary || eg.summary.stale)
+        items.push({ level: "info", icon: "mdiInformationOutline", title: eg.summary ? `Cloudflare summary is ${ago(new Date(eg.summary.at).toISOString()).replace(" ago", "")} old` : "No Cloudflare summary yet", text: `cloudflare-edge on docker-host isn't reporting (see /var/log/cloudflare-edge.log).${eg.rulesOk ? " The controls still work." : ""}` });
+    }
     for (const a of downAps)
       items.push({ level: "amber", icon: "mdiAccessPointOff", title: `${a.name} is offline${a.lastSeen ? ` since ${since(a.lastSeen)}` : ""}`, text: a.lastSeen && Date.now() - a.lastSeen > 7 * 864e5 ? "Out for a while. If it's been removed on purpose, mark it retired so it stops counting against Wi-Fi status." : "Anything that relied on this access point is on a weaker signal or disconnected." });
     for (const d of m.devices.filter((x) => x.firmwareUpdatable)) items.push({ level: "info", icon: "mdiUpdate", title: `Firmware update for ${d.name}`, text: `Running ${d.firmwareVersion}. Update from the UniFi app when convenient.` });
@@ -744,6 +884,76 @@ class NetworkPanel extends HTMLElement {
       <div class="note">Most-tried ports: ${esc(ports)}. Ports 80/443 only accept Cloudflare, so direct tries are dropped too.</div>`;
   }
 
+  // Stopped at Cloudflare | reached NPM -> attack probes -> got through. Every number is an exact
+  // count: Cloudflare's events (one per stopped request) and NPM's own log lines in Loki.
+  _funnel(x, eg) {
+    const sm = eg?.summary;
+    const stopped = sm ? sm.stopped : null;
+    const reached = x.ok ? x.requests : null;
+    const both = stopped !== null && reached !== null && stopped + reached > 0;
+    const pct = both ? Math.round((stopped / (stopped + reached)) * 100) : null;
+    const step = (cls, v, l, sub) => `<div class="step ${cls}"><div class="v">${v}</div><div class="l">${esc(l)}</div>${sub ? `<div class="s">${esc(sub)}</div>` : ""}</div>`;
+    const label = (desc) => EDGE_ROLES[Object.keys(EDGE_ROLES).find((k) => eg.names[k] === desc)] || desc;
+    let why = "";
+    if (sm) {
+      const rows = sm.by_rule.map(([d, n]) => [label(d), n, eg.rules && Object.values(eg.rules).some((r) => r?.description === d && !r.enabled)]);
+      for (const k of ["us_only", "hosting", "junk"])
+        if (eg.rules[k] && !sm.by_rule.some(([d]) => d === eg.names[k])) rows.push([EDGE_ROLES[k], 0, !eg.rules[k].enabled]);
+      const top = (sm.countries || []).slice(0, 3).map(([c, n]) => `${country(c)} ${count(n)}`).join(" · ");
+      why = `<div class="group">Why Cloudflare stopped them</div>
+        <div class="chips">${rows.map(([l, n, off]) => `<span class="chip${n ? "" : " zero"}${off ? " off" : ""}"><b>${count(n)}</b>${esc(l)}${off ? " (off now)" : ""}</span>`).join("")}${sm.solved ? `<span class="chip"><b>${count(sm.solved)}</b>passed a challenge</span>` : ""}</div>
+        ${top ? `<div class="note">Most came from ${esc(top)}.${sm.truncated ? " Over 50,000 in 24 h, so only the newest are counted." : ""}</div>` : ""}`;
+    }
+    return `<div class="funnel">
+        ${step("edge", stopped === null ? "—" : count(stopped), "Stopped at Cloudflare", sm ? (pct === null ? "never reached the house" : `${pct}% of all requests, never reached the house`) : "No Cloudflare data yet")}
+        ${step("", reached === null ? "—" : count(reached), "Reached your proxy", "requests NPM let in to the apps")}
+        ${step("next", x.ok ? count(x.probes) : "—", "Attack probes among them", x.attackerIps ? `from ${count(x.attackerIps)} address${x.attackerIps === 1 ? "" : "es"}` : "")}
+        ${step(`next${x.gotThrough > 0 ? " bad" : ""}`, x.ok ? count(x.gotThrough) : "—", "Got real content back", x.ok ? (x.gotThrough > 0 ? "see the alert above" : "every probe was turned away") : "")}
+      </div>
+      ${both ? `<div class="split" aria-hidden="true"><div class="e" style="flex:${stopped}"></div><div class="p" style="flex:${reached}"></div></div>` : ""}
+      ${why}`;
+  }
+
+  // Travel mode and Lockdown. State is Cloudflare's own (sensor.cloudflare_edge_rules); a control
+  // is disabled with the reason when it can't work, and says "Updating…" until Cloudflare confirms.
+  // alarm: the card is showing a problem, so Lock down becomes the red, obvious next step.
+  _edgeControls(eg, alarm) {
+    const r = eg.rules;
+    const busy = (role) => eg.pending?.role === role;
+    const err = (role) => (eg.error?.role === role ? `<span class="err">${esc(eg.error.text)}</span>` : "");
+    const row = (on, icon, title, sub, role, actions) =>
+      `<div class="ctl${on ? " on" : ""}"><div class="nic">${svg(icon)}</div><div class="t"><b>${esc(title)}</b><span>${esc(sub)}</span>${err(role)}</div><div class="a">${actions}</div></div>`;
+    const btn = (cls, label, attrs, disabled) => `<button class="btn ${cls}" ${attrs}${disabled ? " disabled" : ""}>${esc(label)}</button>`;
+    const off = !eg.rulesOk ? "Can't read Cloudflare's rules right now" : null;
+
+    let travel;
+    const abroad = r.us_only && !r.us_only.enabled;
+    if (off || !r.us_only)
+      travel = row(false, "mdiAirplane", "Travel mode", off || `No "${eg.names.us_only}" rule in Cloudflare`, "us_only", btn("", "1 week", "", true));
+    else if (busy("us_only"))
+      travel = row(abroad, "mdiAirplane", "Travel mode", abroad ? "Turning US-only back on…" : "Letting other countries in…", "us_only", btn("", "Updating…", "", true));
+    else if (abroad)
+      travel = row(true, "mdiAirplane", "Travel mode",
+        eg.travelOn && eg.travelUntil ? `On · any country until ${clock(new Date(eg.travelUntil).toISOString())}, then US-only again` : "US-only is off in Cloudflare (not by travel mode)",
+        "us_only", btn("primary", "End travel mode", 'data-action="edge-travel-end"'));
+    else
+      travel = row(false, "mdiAirplane", "Travel mode", "Off · only visitors in the US get through. Turn on before a trip abroad.", "us_only",
+        TRAVEL_DAYS.map(([d, l]) => btn("", l, `data-action="edge-travel" data-days="${d}"`)).join(""));
+
+    let lock;
+    const locked = r.lockdown?.enabled;
+    if (off || !r.lockdown)
+      lock = row(false, "mdiLock", "Lockdown", off || `Not set up: add a "${eg.names.lockdown}" rule in Cloudflare (switched off)`, "lockdown", btn("", "Lock down", "", true));
+    else if (busy("lockdown"))
+      lock = row(locked, locked ? "mdiLock" : "mdiLockOpenVariant", "Lockdown", locked ? "Unlocking…" : "Locking down…", "lockdown", btn("", "Updating…", "", true));
+    else if (locked)
+      lock = row(true, "mdiLock", "Lockdown", "On · only your home connection and T-Mobile get through", "lockdown", btn("primary", "Unlock", 'data-action="edge-lock" data-lock="0"'));
+    else
+      lock = row(false, "mdiLockOpenVariant", "Lockdown", `Off · anyone${abroad ? "" : " in the US"} can reach your sign-in pages. Lock down if something looks wrong.`, "lockdown", btn(alarm ? "danger" : "", "Lock down", 'data-action="edge-lock" data-lock="1"'));
+
+    return `<div class="group">Cloudflare controls</div><div class="ctls">${travel}${lock}</div>`;
+  }
+
   _render() {
     if (!this._hass) return;
     const c = this._config;
@@ -864,32 +1074,29 @@ class NetworkPanel extends HTMLElement {
     const x = m.exposure;
     const xe = ev.exposure;
     const signIn = x?.signIn;
+    const eg = m.edge;
+    const sm = eg?.summary;
     const expo = !xe
       ? ""
       : `
       <section class="card a-expo">
         <div class="head"><span class="eyebrow">Internet exposure</span><span class="muted">last 24 h</span></div>
         <div class="item expo-status ${xe.level === "green" ? "info" : xe.level}">${svg(xe.icon)}<div><b>${esc(xe.word)}</b><span>${esc(xe.sub)}</span></div></div>
+        ${x.ok || sm ? this._funnel(x, eg) : ""}
         ${
           x.ok
-            ? `<div class="big four">
-          ${metric("Attack probes", "mdiShieldSearch", count(x.probes), "")}
-          ${metric("Attacker addresses", "mdiWeb", count(x.attackerIps), "")}
-          ${metric("Got through", "mdiShieldAlertOutline", count(x.gotThrough), "", x.gotThrough > 0 ? "bad" : "")}
-          ${metric("Failed sign-ins", "mdiLogin", count(x.failed), "", x.failed >= FAILED_SIGNIN_WARN ? "warn" : "")}
-        </div>
-        ${x.attackerIps === null ? `<div class="note">Attacker addresses appear once NPM logs real visitor IPs.</div>` : ""}
-        <div class="group">Reachable from the internet</div>
+            ? `<div class="group">Reachable from the internet</div>
         <div class="hosts">${x.sites
-          .map(([site, v]) => `<div class="host"><b>${esc(SITE_NAMES[site] || site)}</b><span>${count(v.requests)} requests · ${count(v.probes)} probes</span></div>`)
+          .map(([site, v]) => `<div class="host"><b>${esc(SITE_NAMES[site] || site)}</b><span>${count(v.requests)} reached · ${count(v.probes)} probe${v.probes === 1 ? "" : "s"}${sm ? ` · ${count(sm.hosts?.[site] ?? 0)} stopped at Cloudflare` : ""}</span></div>`)
           .join("")}</div>
-        ${
+        <div class="kv"><span>Failed sign-ins <b>${count(x.failed)}</b></span>${
           signIn
-            ? `<div class="kv"><span>Last Frigate sign-in <b>${esc(ago(new Date(signIn.at).toISOString()))} · ${esc(signIn.client_family || "unknown device")}${signIn.country && !["unknown", "LAN"].includes(signIn.country) ? ` · ${esc(signIn.country)}` : ""}</b></span></div>`
+            ? `<span>Last Frigate sign-in <b>${esc(ago(new Date(signIn.at).toISOString()))} · ${esc(signIn.client_family || "unknown device")}${signIn.country && !["unknown", "LAN"].includes(signIn.country) ? ` · ${esc(signIn.country)}` : ""}</b></span>`
             : ""
-        }`
+        }</div>`
             : ""
         }
+        ${eg ? this._edgeControls(eg, ["red", "amber"].includes(xe.level)) : ""}
         ${this._inbound(m.traffic, metric)}
         ${c.exposure_dashboard ? `<a class="link" href="${esc(c.exposure_dashboard)}" target="_blank" rel="noopener">Open the full dashboard (home network) ${svg("mdiOpenInNew")}</a>` : ""}
       </section>`;

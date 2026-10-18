@@ -403,6 +403,19 @@ install_udm_traffic() {
   fi
 }
 
+install_cloudflare_edge() {
+  log "installing cloudflare-edge (what Cloudflare stopped, for the Network panel)"
+  install_file "${REPO_ROOT}/scripts/cloudflare-edge.py" "/usr/local/bin/cloudflare-edge.py" 755
+  install_file "${REPO_ROOT}/cron/cloudflare-edge" "/etc/cron.d/cloudflare-edge" 644
+  # Same token as HA's edge controls (packages/cloudflare_edge.yaml), set once in secrets.yaml.
+  if sudo grep -q '^cloudflare_api_auth: *"Bearer ' "${DEPLOY_ROOT}/homeassistant/secrets.yaml"; then
+    sudo /usr/bin/python3 /usr/local/bin/cloudflare-edge.py >>/tmp/cloudflare-edge-deploy.log 2>&1 \
+      || log "WARN: cloudflare-edge initial run failed (see /tmp/cloudflare-edge-deploy.log)"
+  else
+    log "WARN: no cloudflare_api_auth in secrets.yaml yet; the Network panel's Cloudflare half stays empty"
+  fi
+}
+
 main() {
   require_docker
   ensure_networks
@@ -426,6 +439,7 @@ main() {
   install_bluetooth_watchdog
   install_netwatch
   install_udm_traffic
+  install_cloudflare_edge
   deploy_mountain_project_feed
   deploy_hvac_prices
   deploy_alloy

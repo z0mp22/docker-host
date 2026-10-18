@@ -91,3 +91,7 @@ automation:
           data:
             clickAction: /network
             url: /network
+            # One tap shuts the public hosts to everyone but you (packages/cloudflare_edge.yaml).
+            actions:
+              - action: CLOUDFLARE_LOCKDOWN
+                title: Lock down
