@@ -38,7 +38,7 @@
             {{ state_attr(ns.plex, 'media_title') | default('Plex') }}
           {% endif %}
         {% elif is_state(roku, 'playing') or is_state(roku, 'paused') %}
-          {{ state_attr(roku, 'app_name') | default(states(roku)) }}
+          {{ state_attr(roku, 'app_name') or states(roku) | title }}
         {% elif states(roku) not in ['unavailable', 'unknown'] %}
           Idle
         {% else %}
@@ -85,7 +85,7 @@
             {{ state_attr(ns.plex, 'media_title') | default('Plex') }}
           {% endif %}
         {% elif is_state(roku, 'playing') or is_state(roku, 'paused') %}
-          {{ state_attr(roku, 'app_name') | default(states(roku)) }}
+          {{ state_attr(roku, 'app_name') or states(roku) | title }}
         {% elif states(roku) not in ['unavailable', 'unknown'] %}
           Idle
         {% else %}
