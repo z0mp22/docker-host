@@ -15,15 +15,25 @@ The API token is the one HA uses for the edge controls: `cloudflare_api_auth: "B
 in /docker/homeassistant/secrets.yaml (Zone Read, Zone WAF Edit, Analytics Read on tacoman.us).
 One copy, so rolling the token is one edit on this host.
 
+Also checked here, because they decide whether Cloudflare's filtering can be trusted:
+  * certs: Cloudflare's edge certificate (what visitors see) and NPM's origin certificates, plus
+    Let's Encrypt validations Cloudflare blocked (they make origin renewals fail).
+  * router: the UDM port forwards for 80/443 only accept Cloudflare's published ranges. If one
+    doesn't, anyone can skip Cloudflare's rules by going straight to the house. Uses HA's
+    unifi_api_key from the same secrets.yaml.
+Each part fails on its own (listed in "errors"), so the summary still publishes.
+
 Events are counted per rule by the rule's *description*, which is how the panel and HA's scripts
 find the rules too (rule ids change if a rule is recreated in the dashboard).
 """
 from __future__ import annotations
 
 import collections
+import glob
 import json
 import os
 import re
+import ssl
 import subprocess
 import sys
 import urllib.request
@@ -32,6 +42,10 @@ from datetime import datetime, timedelta, timezone
 ZONE = os.environ.get("CF_EDGE_ZONE", "3c624b8f3df1a6358b501adf5c82b349")
 SECRETS = os.environ.get("CF_EDGE_SECRETS", "/docker/homeassistant/secrets.yaml")
 API = "https://api.cloudflare.com/client/v4"
+UDM = os.environ.get("CF_EDGE_UDM", "https://10.0.0.1")
+NPM_HOSTS = os.environ.get("CF_EDGE_NPM_HOSTS", "/docker/npm/data/nginx/proxy_host")
+NPM_LE = os.environ.get("CF_EDGE_NPM_LE", "/docker/npm/letsencrypt/live")
+ACME = "/.well-known/acme-challenge/"
 TOPIC = "home/cloudflare/edge"
 WINDOW_H = 24
 PAGE = 10000
@@ -61,13 +75,17 @@ def iso(t: datetime) -> str:
     return t.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def token() -> str:
+def secret(name: str, prefix: str = "") -> str:
     with open(SECRETS) as f:
         for line in f:
-            m = re.match(r"\s*cloudflare_api_auth:\s*['\"]?Bearer\s+([^'\"\s]+)", line)
+            m = re.match(rf"\s*{name}:\s*['\"]?{prefix}([^'\"\s]+)", line)
             if m:
                 return m.group(1)
-    raise RuntimeError(f"no cloudflare_api_auth in {SECRETS}")
+    raise RuntimeError(f"no {name} in {SECRETS}")
+
+
+def token() -> str:
+    return secret("cloudflare_api_auth", r"Bearer\s+")
 
 
 def call(tok: str, path: str, body: dict | None = None) -> dict:
@@ -146,6 +164,64 @@ def summarize(rs: list[dict], evs: list[dict], truncated: bool, now: datetime) -
     }
 
 
+def days_until(ts: str) -> int:
+    t = datetime.strptime(ts[:19], "%Y-%m-%dT%H:%M:%S").replace(tzinfo=timezone.utc)
+    return int((t - datetime.now(timezone.utc)).total_seconds() // 86400)
+
+
+def certs(tok: str, evs: list[dict]) -> dict:
+    """Edge certificate (Cloudflare's, what visitors see) and NPM's origin certificates."""
+    packs = call(tok, f"/zones/{ZONE}/ssl/certificate_packs?status=active").get("result") or []
+    ends = [c["expires_on"] for p in packs for c in p.get("certificates", []) if c.get("expires_on")]
+    edge = {"expires": min(ends)[:10], "days": days_until(min(ends)), "type": packs[0].get("type")} if ends else None
+    origin = {}
+    for conf in sorted(glob.glob(f"{NPM_HOSTS}/*.conf")):
+        text = open(conf).read()
+        host = re.search(r"server_name\s+([^;\s]+)", text)
+        name = re.search(r"/etc/letsencrypt/live/([^/]+)/", text)
+        if not host or not name:
+            continue
+        end = subprocess.run(["openssl", "x509", "-noout", "-enddate", "-in", f"{NPM_LE}/{name.group(1)}/cert.pem"],
+                             capture_output=True, text=True, timeout=10).stdout.strip().removeprefix("notAfter=")
+        if end:
+            t = datetime.strptime(end, "%b %d %H:%M:%S %Y %Z").replace(tzinfo=timezone.utc)
+            origin[site(host.group(1))] = {"expires": t.strftime("%Y-%m-%d"),
+                                           "days": int((t - datetime.now(timezone.utc)).total_seconds() // 86400)}
+    acme = collections.Counter(site(e["clientRequestHTTPHost"]) for e in evs
+                               if e["action"] in STOPPED and e["clientRequestPath"].startswith(ACME))
+    return {"edge": edge, "origin": origin, "acme_blocked": dict(acme)}
+
+
+def router() -> dict:
+    """Do the UDM's 80/443 port forwards only accept Cloudflare's published ranges?"""
+    key = secret("unifi_api_key")
+    ctx = ssl.create_default_context()
+    ctx.check_hostname, ctx.verify_mode = False, ssl.CERT_NONE  # the UDM's own self-signed cert, LAN only
+
+    def udm(path: str) -> list[dict]:
+        req = urllib.request.Request(f"{UDM}/proxy/network/api/s/default/rest/{path}", headers={"X-API-KEY": key})
+        with urllib.request.urlopen(req, timeout=15, context=ctx) as r:
+            return json.load(r)["data"]
+
+    groups = {g["_id"]: g for g in udm("firewallgroup")}
+    with urllib.request.urlopen(f"{API}/ips", timeout=15) as r:
+        published = set(json.load(r)["result"]["ipv4_cidrs"])
+    out = []
+    for f in udm("portforward"):
+        if not f.get("enabled") or str(f.get("dst_port")) not in ("80", "443"):
+            continue
+        g = groups.get(f.get("src_firewall_group_id")) if f.get("src_limiting_enabled") else None
+        members = set(g.get("group_members", [])) if g else set()
+        out.append({"name": f.get("name"), "port": int(f["dst_port"]), "to": f"{f.get('fwd')}:{f.get('fwd_port')}",
+                    "limited_to": g.get("name") if g else None,
+                    # Ranges Cloudflare publishes that the group lacks (Cloudflare traffic dropped) and
+                    # ones it has that Cloudflare doesn't (something else can reach the Pi directly).
+                    "missing": sorted(published - members) if g else [],
+                    "extra": sorted(members - published) if g else []})
+    return {"forwards": out, "cloudflare_ranges": len(published),
+            "ok": bool(out) and all(f["limited_to"] and not f["missing"] and not f["extra"] for f in out)}
+
+
 def publish(payload: dict) -> None:
     subprocess.run(["docker", "exec", "-i", "mosquitto", "mosquitto_pub", "-h", "127.0.0.1", "-t", TOPIC, "-r", "-s"],
                    input=json.dumps(payload, separators=(",", ":")), text=True,
@@ -159,6 +235,14 @@ def main() -> int:
     rs = rules(tok)
     evs, truncated = events(tok, since, now)
     payload = summarize(rs, evs, truncated, now)
+    payload["errors"] = []
+    for name, fn in (("certs", lambda: certs(tok, evs)), ("router", router)):
+        try:
+            payload[name] = fn()
+        except Exception as e:  # one broken check shouldn't hide the rest
+            payload[name] = None
+            payload["errors"].append(f"{name}: {e}")
+            log(f"WARN {name}: {e}")
     if "--print" in sys.argv:
         print(json.dumps(payload, indent=1))
         return 0

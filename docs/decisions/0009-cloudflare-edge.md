@@ -44,3 +44,21 @@ Free plan.
 - Free keeps about 7 days of events; the summary covers 24 h and there's no long history yet.
 - Rolling the token means updating `secrets.yaml` on docker-host (and `~/.config/cloudflare`
   on the workstation).
+
+## Amendment (2026-10-18, after deploy)
+
+- **A missing secret took HA down.** #42 was merged before `cloudflare_api_auth` was on the Pi, so
+  the restart hit "Secret … not defined" and HA came up in recovery mode until the secret was
+  added. `deploy.sh` now runs `preflight_ha_secrets` first: every `!secret` the repo's config
+  uses must be in the host's `secrets.yaml`, or the deploy stops before syncing anything.
+- **The connection path starts at Cloudflare.** Its node is Filtering / Travel mode / Locked down /
+  Rule off / Bypassable, taken from the same data as the exposure card.
+- **The router claim is checked, not assumed.** The collector compares the UDM's enabled 80/443
+  port forwards (source limit and group members) with Cloudflare's published IPv4 ranges. A
+  forward that accepts more than Cloudflare means the WAF rules can be skipped, which makes the
+  headline amber ("Cloudflare can be bypassed").
+- **Origin certificates are shown honestly.** "Block non-US traffic" blocks Let's Encrypt's
+  multi-perspective validation (Sweden/Singapore), so `media` and `opensprinkler` renewals fail.
+  `ha`'s origin cert expired in Mar 2025 and still serves traffic, which shows Cloudflare isn't
+  verifying origin certs: none of this affects visitors unless SSL mode becomes Full (strict).
+  The fix is a `/.well-known/acme-challenge/` exemption in that rule, like the other rules have.

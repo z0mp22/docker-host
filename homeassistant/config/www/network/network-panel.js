@@ -11,7 +11,9 @@ const ICONS = {
   mdiAlertOutline: "M12,2L1,21H23M12,6L19.53,19H4.47M11,10V14H13V10M11,16V18H13V16",
   mdiArrowDown: "M11,4H13V16L18.5,10.5L19.92,11.92L12,19.84L4.08,11.92L5.5,10.5L11,16V4Z",
   mdiArrowUp: "M13,20H11V8L5.5,13.5L4.08,12.08L12,4.16L19.92,12.08L18.5,13.5L13,8V20Z",
+  mdiCertificateOutline: "M13 21L15 20L17 21V14H13M17 9V7L15 8L13 7V9L11 10L13 11V13L15 12L17 13V11L19 10M20 3H4A2 2 0 0 0 2 5V15A2 2 0 0 0 4 17H11V15H4V5H20V15H19V17H20A2 2 0 0 0 22 15V5A2 2 0 0 0 20 3M11 8H5V6H11M9 11H5V9H9M11 14H5V12H11Z",
   mdiCheckCircleOutline: "M12 2C6.5 2 2 6.5 2 12S6.5 22 12 22 22 17.5 22 12 17.5 2 12 2M12 20C7.59 20 4 16.41 4 12S7.59 4 12 4 20 7.59 20 12 16.41 20 12 20M16.59 7.58L10 14.17L7.41 11.59L6 13L10 17L18 9L16.59 7.58Z",
+  mdiCloudLockOutline: "M6.5 18H13V20H6.5C5 20 3.69 19.5 2.61 18.43C1.54 17.38 1 16.09 1 14.58C1 13.28 1.39 12.12 2.17 11.1S4 9.43 5.25 9.15C5.67 7.62 6.5 6.38 7.75 5.43S10.42 4 12 4C13.95 4 15.6 4.68 16.96 6.04C18.08 7.16 18.73 8.5 18.93 10C18.23 10 17.56 10.19 16.95 10.46C16.84 9.31 16.38 8.31 15.54 7.46C14.56 6.5 13.38 6 12 6S9.44 6.5 8.46 7.46C7.5 8.44 7 9.62 7 11H6.5C5.53 11 4.71 11.34 4.03 12.03C3.34 12.71 3 13.53 3 14.5S3.34 16.29 4.03 17C4.71 17.66 5.53 18 6.5 18M23 17.3V20.8C23 21.4 22.4 22 21.7 22H16.2C15.6 22 15 21.4 15 20.7V17.2C15 16.6 15.6 16 16.2 16V14.5C16.2 13.1 17.6 12 19 12S21.8 13.1 21.8 14.5V16C22.4 16 23 16.6 23 17.3M20.5 14.5C20.5 13.7 19.8 13.2 19 13.2S17.5 13.7 17.5 14.5V16H20.5V14.5Z",
   mdiEthernet: "M7,15H9V18H11V15H13V18H15V15H17V18H19V9H15V6H9V9H5V18H7V15M4.38,3H19.63C20.94,3 22,4.06 22,5.38V19.63A2.37,2.37 0 0,1 19.63,22H4.38C3.06,22 2,20.94 2,19.63V5.38C2,4.06 3.06,3 4.38,3Z",
   mdiInformationOutline: "M11,9H13V7H11M12,20C7.59,20 4,16.41 4,12C4,7.59 7.59,4 12,4C16.41,4 20,7.59 20,12C20,16.41 16.41,20 12,20M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M11,17H13V11H11V17Z",
   mdiLanDisconnect: "M4,1C2.89,1 2,1.89 2,3V7C2,8.11 2.89,9 4,9H1V11H13V9H10C11.11,9 12,8.11 12,7V3C12,1.89 11.11,1 10,1H4M4,3H10V7H4V3M14,13C12.89,13 12,13.89 12,15V19C12,20.11 12.89,21 14,21H11V23H23V21H20C21.11,21 22,20.11 22,19V15C22,13.89 21.11,13 20,13H14M3.88,13.46L2.46,14.88L4.59,17L2.46,19.12L3.88,20.54L6,18.41L8.12,20.54L9.54,19.12L7.41,17L9.54,14.88L8.12,13.46L6,15.59L3.88,13.46M14,15H20V19H14V15Z",
@@ -49,6 +51,10 @@ const EDGE_ROLES = { us_only: "Outside the US", hosting: "Hosting networks", jun
 const TRAVEL_DAYS = [[3, "3 days"], [7, "1 week"], [14, "2 weeks"]];
 // After a tap, wait this long for Cloudflare's rule state to change before calling it failed.
 const EDGE_PENDING_MS = 30e3;
+// NPM renews origin certificates 30 days out; under this many days left, renewal has been failing.
+const CERT_RENEW_WARN_DAYS = 21;
+// Cloudflare renews its own edge certificate; this close to expiry means something is wrong.
+const EDGE_CERT_WARN_DAYS = 14;
 const PORT_NAMES = { 21: "FTP", 22: "SSH", 23: "Telnet", 25: "mail", 80: "web", 443: "web", 445: "Windows sharing", 3389: "Remote Desktop", 5900: "VNC", 8080: "web" };
 
 const svg = (name) => `<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="${ICONS[name] || ""}"/></svg>`;
@@ -200,7 +206,7 @@ h1 { margin: 0; font-size: 34px; font-weight: 700; line-height: 1.1; }
 .head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
 
 /* Path: Internet -> Gateway -> Wi-Fi */
-.path { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 44px; margin-top: 16px; }
+.path { display: grid; grid-template-columns: repeat(var(--n, 3), minmax(0, 1fr)); gap: 44px; margin-top: 16px; }
 .node { position: relative; border-radius: 22px; padding: 18px 18px 16px; background: #121a28; border: 1.5px solid var(--line); min-width: 0; }
 .node:not(:last-child)::after { content: ""; position: absolute; top: 50%; right: -46px; width: 44px; height: 3px; border-radius: 2px; background: var(--c, var(--grey)); }
 .node.green { --c: var(--green); border-color: rgba(34,197,94,.35); }
@@ -300,6 +306,11 @@ a.link .ic { width: 16px; height: 16px; }
 .step .s { font-size: 13px; color: var(--muted); margin-top: 4px; }
 .step.edge { border-color: rgba(45,212,191,.35); } .step.edge .v { color: var(--teal); }
 .step.bad { border-color: rgba(240,97,109,.5); } .step.bad .v { color: var(--red); }
+a.step { display: block; color: inherit; text-decoration: none; }
+a.step .s { color: var(--teal); }
+.certs { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; font-size: 14.5px; color: #c3cedd; }
+.certs b { font-weight: 600; color: var(--text); }
+.certs .warn { color: var(--amber); }
 .step.next::before { content: "›"; position: absolute; left: -12px; top: 50%; transform: translate(-50%, -50%); color: var(--muted); font-size: 22px; }
 .split { display: flex; height: 10px; border-radius: 5px; overflow: hidden; margin-top: 14px; gap: 2px; background: #172234; }
 .split .e { background: var(--teal); } .split .p { background: #3b4a61; }
@@ -626,6 +637,23 @@ class NetworkPanel extends HTMLElement {
     return { ok: true, at, stale: Date.now() - at > TRAFFIC_STALE_MIN * 60e3, ...s.attributes };
   }
 
+  // Connection path's first node: is Cloudflare filtering what comes in, and can it be skipped?
+  _evaluateCloudflare(eg) {
+    if (!eg) return null;
+    const sm = eg.summary;
+    const r = eg.rules;
+    if (!eg.rulesOk && !sm) return { level: "grey", word: "No data", sub: "Can't read Cloudflare right now" };
+    const stopped = sm ? `${count(sm.stopped)} stopped in 24 h` : "No summary yet";
+    if (sm?.router && !sm.router.ok) return { level: "amber", word: "Bypassable", sub: "The router lets more than Cloudflare reach the Pi" };
+    if (r.lockdown?.enabled) return { level: "amber", word: "Locked down", sub: `Only home and T-Mobile · ${stopped}` };
+    const offRule = eg.rulesOk && ["hosting", "junk"].find((k) => !r[k]?.enabled);
+    if (offRule) return { level: "amber", word: "Rule off", sub: `${EDGE_ROLES[offRule]} ${r[offRule] ? "is off" : "rule is missing"} · ${stopped}` };
+    const abroad = r.us_only && !r.us_only.enabled;
+    if (abroad) return eg.travelOn ? { level: "green", word: "Travel mode", sub: `Any country until ${clock(new Date(eg.travelUntil).toISOString())}` } : { level: "amber", word: "Rule off", sub: `US-only is off · ${stopped}` };
+    const on = eg.rulesOk ? Object.values(r).filter((x) => x?.enabled).length : null;
+    return { level: "green", word: "Filtering", sub: `${stopped}${on !== null ? ` · ${plural(on, "rule")} on` : ""}` };
+  }
+
   _evaluateExposure(x) {
     if (!x) return null;
     if (!x.ok) return { level: "grey", icon: "mdiShieldSearch", word: "No data", sub: "Can't read the access-log pipeline (Loki on minipc) right now" };
@@ -686,11 +714,14 @@ class NetworkPanel extends HTMLElement {
     else wifi = { level: "green", word: "Online", sub: `${plural(activeAps.length, "access point")} · ${wireless} on Wi-Fi` };
 
     const exposure = this._evaluateExposure(m.exposure);
+    const cloudflare = this._evaluateCloudflare(m.edge);
     const eg = m.edge;
     const locked = !!eg?.rules.lockdown?.enabled;
     const abroad = !!eg?.rules.us_only && !eg.rules.us_only.enabled;
     // A standing Cloudflare rule that's off (or gone) without travel mode explaining it.
     const edgeDrift = [];
+    const rt = eg?.summary?.router;
+    if (rt && !rt.ok) edgeDrift.push({ label: "Cloudflare can be bypassed", detail: "Ports 80/443 accept more than Cloudflare's ranges" });
     if (eg?.rulesOk) {
       if (abroad && !eg.travelOn) edgeDrift.push({ label: "US-only is off", detail: "Visitors from any country can reach your sites" });
       for (const k of ["us_only", "hosting", "junk"]) {
@@ -739,6 +770,20 @@ class NetworkPanel extends HTMLElement {
       }
       if (abroad && eg.travelOn)
         items.push({ level: "info", icon: "mdiAirplane", title: `Travel mode until ${clock(new Date(eg.travelUntil).toISOString())}`, text: "Visitors from any country get through. US-only turns itself back on then, and you'll get a push." });
+      if (rt && !rt.ok) {
+        const bad = (rt.forwards || []).filter((f) => !f.limited_to || f.missing.length || f.extra.length);
+        const why = (f) => (!f.limited_to ? `port ${f.port} accepts anyone` : f.extra.length ? `port ${f.port} also accepts ${plural(f.extra.length, "range")} Cloudflare doesn't publish` : `port ${f.port} is missing ${plural(f.missing.length, "of Cloudflare's ranges")}`);
+        items.push({ level: "amber", icon: "mdiShieldAlertOutline", title: rt.forwards?.length ? "Cloudflare can be bypassed" : "No 80/443 port forwards found", text: rt.forwards?.length ? `On the UDM, ${bad.map(why).join(" and ")}. ${bad.some((f) => !f.limited_to || f.extra.length) ? "Anyone can then reach the Pi directly and skip Cloudflare's rules. Limit the forward's source to the Cloudflare group in the UniFi app." : "Cloudflare's own traffic from those ranges is dropped. Add them to the Cloudflare group in the UniFi app."}` : "Nothing forwards 80/443 to the Pi, so the public sites can't be reached at all." });
+      }
+      const ct = eg.summary?.certs;
+      if (ct) {
+        const failing = Object.entries(ct.origin || {}).filter(([, v]) => v.days >= 0 && v.days < CERT_RENEW_WARN_DAYS);
+        const blocked = Object.values(ct.acme_blocked || {}).reduce((a, n) => a + n, 0);
+        if (failing.length)
+          items.push({ level: "info", icon: "mdiCertificateOutline", title: `Certificate renewal failing for ${failing.map(([k]) => SITE_NAMES[k] || k).join(" and ")}`, text: `${blocked ? `Cloudflare blocked ${plural(blocked, "Let's Encrypt check")} in 24 h (they come partly from outside the US). Exempt /.well-known/acme-challenge/ in "${eg.names.us_only}" to fix it. ` : ""}Visitors don't see these certificates; see Certificates on the exposure card.` });
+        if (ct.edge && ct.edge.days < EDGE_CERT_WARN_DAYS)
+          items.push({ level: "amber", icon: "mdiCertificateOutline", title: `Cloudflare's certificate expires in ${plural(Math.max(0, ct.edge.days), "day")}`, text: "Cloudflare renews it on its own, so this means something is stuck. Check SSL/TLS → Edge Certificates in the Cloudflare dashboard." });
+      }
       if (!eg.summary || eg.summary.stale)
         items.push({ level: "info", icon: "mdiInformationOutline", title: eg.summary ? `Cloudflare summary is ${ago(new Date(eg.summary.at).toISOString()).replace(" ago", "")} old` : "No Cloudflare summary yet", text: `cloudflare-edge on docker-host isn't reporting (see /var/log/cloudflare-edge.log).${eg.rulesOk ? " The controls still work." : ""}` });
     }
@@ -786,7 +831,7 @@ class NetworkPanel extends HTMLElement {
       const who = Object.entries(nw.attributes?.devices || {}).filter(([, v]) => v.off_allowlist_24h > 0).map(([k]) => k);
       items.push({ level: "amber", icon: "mdiShieldSearch", title: `Off-list lookups by ${who.join(" and ") || "a watched device"}`, text: `${plural(num(nw.state), "lookup")} in 24 h for domains outside its allowlist. You got a push for each new one.` });
     }
-    return { internet, gateway, wifi, exposure, status, items };
+    return { internet, gateway, wifi, exposure, cloudflare, status, items };
   }
 
   _trafficCards(t) {
@@ -869,7 +914,7 @@ class NetworkPanel extends HTMLElement {
   }
 
   // Connection attempts from the internet that the UDM dropped (exposure card's router half).
-  _inbound(t, metric) {
+  _inbound(t, metric, rt) {
     const i = t?.ok ? t.inbound : null;
     if (!i || !i.dropped) return "";
     const ports = i.ports.map(([p]) => `${p}${PORT_NAMES[p] ? ` ${PORT_NAMES[p]}` : ""}`).join(", ");
@@ -881,7 +926,13 @@ class NetworkPanel extends HTMLElement {
         ${metric("Direct tries on 80/443", "mdiWebOff", count(i.web), "")}
         ${metric(top ? `Most from ${country(top[0])}` : "Top country", "mdiWeb", top ? count(top[1]) : "—", "")}
       </div>
-      <div class="note">Most-tried ports: ${esc(ports)}. Ports 80/443 only accept Cloudflare, so direct tries are dropped too.</div>`;
+      <div class="note">Most-tried ports: ${esc(ports)}. ${
+        !rt
+          ? "Ports 80/443 are meant to accept only Cloudflare (not checked yet)."
+          : rt.ok
+          ? `Checked: 80/443 forward to the Pi only from Cloudflare's ${rt.cloudflare_ranges} published ranges, so direct tries are dropped.`
+          : "80/443 accept more than Cloudflare right now, see Needs attention."
+      }</div>`;
   }
 
   // Stopped at Cloudflare | reached NPM -> attack probes -> got through. Every number is an exact
@@ -908,10 +959,37 @@ class NetworkPanel extends HTMLElement {
         ${step("edge", stopped === null ? "—" : count(stopped), "Stopped at Cloudflare", sm ? (pct === null ? "never reached the house" : `${pct}% of all requests, never reached the house`) : "No Cloudflare data yet")}
         ${step("", reached === null ? "—" : count(reached), "Reached your proxy", "requests NPM let in to the apps")}
         ${step("next", x.ok ? count(x.probes) : "—", "Attack probes among them", x.attackerIps ? `from ${count(x.attackerIps)} address${x.attackerIps === 1 ? "" : "es"}` : "")}
-        ${step(`next${x.gotThrough > 0 ? " bad" : ""}`, x.ok ? count(x.gotThrough) : "—", "Got real content back", x.ok ? (x.gotThrough > 0 ? "see the alert above" : "every probe was turned away") : "")}
+        ${(() => {
+          const c = this._config;
+          const html = step(`next${x.gotThrough > 0 ? " bad" : ""}`, x.ok ? count(x.gotThrough) : "—", "Got real content back", x.ok ? (x.gotThrough > 0 ? "see which requests in Grafana" : "every probe was turned away") : "");
+          const href = c.exposure_dashboard && c.exposure_got_through_panel ? `${c.exposure_dashboard}?viewPanel=${encodeURIComponent(c.exposure_got_through_panel)}` : "";
+          return href ? html.replace('<div class="step', `<a href="${esc(href)}" target="_blank" rel="noopener" class="step`).replace(/<\/div>$/, "</a>") : html;
+        })()}
       </div>
       ${both ? `<div class="split" aria-hidden="true"><div class="e" style="flex:${stopped}"></div><div class="p" style="flex:${reached}"></div></div>` : ""}
       ${why}`;
+  }
+
+  // Edge certificate (what visitors get) vs NPM's origin certificates behind it. Whether the origin
+  // ones matter is shown from evidence: an expired one that still gets traffic means Cloudflare
+  // isn't verifying them.
+  _certs(ct, x) {
+    const day = (iso) => new Date(`${iso}T12:00:00Z`).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
+    const origin = Object.entries(ct.origin || {}).sort((a, b) => a[1].days - b[1].days);
+    const reached = Object.fromEntries((x?.sites || []).map(([k, v]) => [k, v.requests]));
+    const expiredInUse = origin.find(([k, v]) => v.days < 0 && reached[k] > 0);
+    const o = origin.map(([k, v]) => {
+      const name = SITE_NAMES[k] || k;
+      if (v.days < 0) return `<span class="warn">${esc(name)} expired ${esc(day(v.expires))}</span>`;
+      const failing = v.days < CERT_RENEW_WARN_DAYS;
+      return `${failing ? '<span class="warn">' : ""}${esc(name)} ${esc(day(v.expires))}${failing ? ` (renewal failing${ct.acme_blocked?.[k] ? `, ${count(ct.acme_blocked[k])} checks blocked` : ""})</span>` : ""}`;
+    });
+    return `<div class="group">Certificates</div>
+      <div class="certs">
+        ${ct.edge ? `<span>Visitors get <b>Cloudflare's certificate</b>, valid until ${esc(day(ct.edge.expires))}${ct.edge.days < EDGE_CERT_WARN_DAYS ? ' <span class="warn">(renewal overdue)</span>' : " (renews itself)"}</span>` : ""}
+        ${o.length ? `<span>Behind it, NPM's: ${o.join(" · ")}</span>` : ""}
+      </div>
+      ${o.length ? `<div class="note">${expiredInUse ? `Cloudflare isn't checking these: ${esc(SITE_NAMES[expiredInUse[0]] || expiredInUse[0])}'s expired and still gets traffic. So none of them affect visitors, unless Cloudflare is switched to Full (strict).` : "If Cloudflare is set to Full (strict), an expired one here takes that site offline."}</div>` : ""}`;
   }
 
   // Travel mode and Lockdown. State is Cloudflare's own (sensor.cloudflare_edge_rules); a control
@@ -969,7 +1047,8 @@ class NetworkPanel extends HTMLElement {
     const path = `
       <section class="card a-path">
         <div class="eyebrow">Connection path</div>
-        <div class="path">
+        <div class="path" style="--n:${ev.cloudflare ? 4 : 3}">
+          ${ev.cloudflare ? node("mdiCloudLockOutline", "Cloudflare", ev.cloudflare) : ""}
           ${node("mdiWeb", "Internet", ev.internet)}
           ${node("mdiRouterNetwork", "Gateway", ev.gateway)}
           ${node("mdiWifi", "Wi-Fi", ev.wifi)}
@@ -1097,7 +1176,8 @@ class NetworkPanel extends HTMLElement {
             : ""
         }
         ${eg ? this._edgeControls(eg, ["red", "amber"].includes(xe.level)) : ""}
-        ${this._inbound(m.traffic, metric)}
+        ${eg?.summary?.certs ? this._certs(eg.summary.certs, x) : ""}
+        ${this._inbound(m.traffic, metric, eg?.summary?.router)}
         ${c.exposure_dashboard ? `<a class="link" href="${esc(c.exposure_dashboard)}" target="_blank" rel="noopener">Open the full dashboard (home network) ${svg("mdiOpenInNew")}</a>` : ""}
       </section>`;
 
