@@ -8,6 +8,19 @@ DEPLOY_ROOT="${DEPLOY_ROOT:-/docker}"
 log() { echo "[deploy] $*"; }
 die() { echo "[deploy] ERROR: $*" >&2; exit 1; }
 
+# HA treats a !secret that secrets.yaml doesn't define as fatal and restarts into recovery mode
+# (2026-10-18, #42). Check before syncing anything, so a missing secret fails the deploy instead.
+preflight_ha_secrets() {
+  local secrets="${DEPLOY_ROOT}/homeassistant/secrets.yaml" name missing=()
+  # First deploy on a fresh host: sync_homeassistant creates it from the example.
+  [ -f "${secrets}" ] || return 0
+  for name in $(grep -rhoE '!secret [A-Za-z0-9_]+' "${REPO_ROOT}/homeassistant/config" --include='*.yaml' | awk '{print $2}' | sort -u); do
+    grep -qE "^${name}:" "${secrets}" || missing+=("${name}")
+  done
+  [ "${#missing[@]}" -eq 0 ] || die "${secrets} is missing: ${missing[*]}. Add them (see homeassistant/config/secrets.yaml.example) and re-run. Nothing was deployed."
+  log "secrets.yaml has all $(grep -rhoE '!secret [A-Za-z0-9_]+' "${REPO_ROOT}/homeassistant/config" --include='*.yaml' | sort -u | wc -l) secrets the config uses"
+}
+
 install_file() {
   local src="$1"
   local dest="$2"
@@ -417,6 +430,7 @@ install_cloudflare_edge() {
 }
 
 main() {
+  preflight_ha_secrets
   require_docker
   ensure_networks
   sync_homeassistant

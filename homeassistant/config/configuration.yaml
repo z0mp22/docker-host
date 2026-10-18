@@ -558,7 +558,7 @@ panel_custom:
     url_path: network
     sidebar_title: Network
     sidebar_icon: mdi:router-wireless
-    module_url: /local/network/network-panel.js?v=4
+    module_url: /local/network/network-panel.js?v=5
     config:
       gateway: a765e99e-5f8c-3c5a-b264-0770b4d1030a
       # UniFi device id -> its stats sensor (see the UniFi rest resources above).
@@ -578,6 +578,8 @@ panel_custom:
       exposure: sensor.internet_exposure
       exposure_sign_in: sensor.internet_exposure_last_sign_in
       exposure_dashboard: http://10.0.0.6:3000/d/npm-exposure/internet-exposure
+      # Grafana panel "Got-through requests (empty is good)"; the funnel's last step links to it.
+      exposure_got_through_panel: 23
       # Cloudflare half of the exposure card + edge controls (packages/cloudflare_edge.yaml).
       # Rules are matched by description; keep in step with that package's scripts.
       edge: sensor.cloudflare_edge
