@@ -1,0 +1,1 @@
+*/5 * * * * root /usr/bin/python3 /usr/local/bin/cloudflare-edge.py >>/var/log/cloudflare-edge.log 2>&1

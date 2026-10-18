@@ -1,0 +1,244 @@
+# Cloudflare edge: what Cloudflare stops in front of the public hosts, and one-tap controls for
+# its WAF custom rules. Shown on the Network panel's Internet exposure card.
+#
+#   sensor.cloudflare_edge        scripts/cloudflare-edge.py (cron, 5 min) via retained MQTT:
+#                                 stopped requests per rule / host / country, last 24 h
+#   sensor.cloudflare_edge_rules  the zone's custom rules as Cloudflare has them right now
+#                                 (refreshed after every change, so switches show the truth)
+#
+# Rules are found by their Cloudflare description, not id, so recreating one in the dashboard
+# doesn't break anything. Keep these names in step with panel_custom network-panel `edge_rules`.
+#   "Block non-US traffic"                  always on, except in travel mode
+#   "Challenge hosting networks"            always on (cloud/VPS ASNs get a managed challenge)
+#   "Block junk paths"                      always on (.env, .php, /wp-, /cgi-bin, ...)
+#   "Lockdown: home and phone carrier only" off; on = only Fort Collins Connexion (AS397142) and
+#                                           T-Mobile (AS21928) get through, i.e. your own devices
+#
+# Token: cloudflare_api_auth in secrets.yaml ("Bearer <token>"; Zone Read, Zone WAF Edit and
+# Analytics Read on tacoman.us). The collector reads the same line.
+
+mqtt:
+  sensor:
+    - name: Cloudflare edge
+      unique_id: cloudflare_edge_summary
+      state_topic: home/cloudflare/edge
+      value_template: "{{ value_json.updated }}"
+      device_class: timestamp
+      json_attributes_topic: home/cloudflare/edge
+      icon: mdi:cloud-lock-outline
+
+rest:
+  - resource: https://api.cloudflare.com/client/v4/zones/3c624b8f3df1a6358b501adf5c82b349/rulesets/phases/http_request_firewall_custom/entrypoint
+    headers:
+      Authorization: !secret cloudflare_api_auth
+    scan_interval: 300
+    timeout: 20
+    sensor:
+      - name: Cloudflare edge rules
+        unique_id: cloudflare_edge_rules
+        icon: mdi:wall-fire
+        # State: how many custom rules are on. Attributes: id (the ruleset) and rules.
+        availability: "{{ value_json is defined and value_json.success == true }}"
+        value_template: "{{ value_json.result.rules | selectattr('enabled') | list | count }}"
+        json_attributes_path: "$.result"
+        json_attributes:
+          - id
+          - rules
+
+rest_command:
+  # Cloudflare's rule PATCH replaces the rule, so it always sends the rule's current description,
+  # action and expression back with the new `enabled` (edits made in the dashboard survive).
+  cloudflare_rule_update:
+    url: "https://api.cloudflare.com/client/v4/zones/3c624b8f3df1a6358b501adf5c82b349/rulesets/{{ ruleset }}/rules/{{ rule.id }}"
+    method: patch
+    headers:
+      Authorization: !secret cloudflare_api_auth
+    content_type: application/json
+    timeout: 20
+    payload: >-
+      {% set body = {'description': rule.description, 'action': rule.action,
+                     'expression': rule.expression, 'enabled': enabled | bool} %}
+      {% if rule.action_parameters is defined %}{% set body = dict(body, action_parameters=rule.action_parameters) %}{% endif %}
+      {{ body | to_json }}
+
+input_boolean:
+  cloudflare_travel_mode:
+    name: Travel mode (visitors from any country)
+    icon: mdi:airplane
+
+input_datetime:
+  cloudflare_travel_until:
+    name: Travel mode ends
+    has_date: true
+    has_time: true
+    icon: mdi:airplane-clock
+
+script:
+  cloudflare_rule_set:
+    alias: "Cloudflare: turn an edge rule on or off"
+    description: >-
+      Finds the rule by its Cloudflare description and flips `enabled`. Pushes and stops with an
+      error when the rule is missing or Cloudflare refuses, so a caller never reports a change
+      that didn't happen.
+    mode: queued
+    fields:
+      rule:
+        description: The rule's description in Cloudflare
+        required: true
+        example: Block non-US traffic
+        selector:
+          text:
+      enabled:
+        description: On or off
+        required: true
+        selector:
+          boolean:
+    sequence:
+      - variables:
+          found: >-
+            {{ (state_attr('sensor.cloudflare_edge_rules', 'rules') or [])
+               | selectattr('description', 'eq', rule) | list }}
+      - if: "{{ found | count == 0 }}"
+        then:
+          - action: script.notify_phones
+            data:
+              title: Cloudflare
+              message: >-
+                Couldn't turn "{{ rule }}" {{ 'on' if enabled else 'off' }}: there's no rule with
+                that name in Cloudflare{{ '' if has_value('sensor.cloudflare_edge_rules') else ' (or HA cannot read the rules right now)' }}. Nothing changed.
+              tag: cloudflare-edge-error
+              channel: Security
+          - stop: No Cloudflare rule with that description
+            error: true
+      - action: rest_command.cloudflare_rule_update
+        continue_on_error: true
+        response_variable: resp
+        data:
+          ruleset: "{{ state_attr('sensor.cloudflare_edge_rules', 'id') }}"
+          rule: "{{ found[0] }}"
+          enabled: "{{ enabled }}"
+      - action: homeassistant.update_entity
+        target:
+          entity_id: sensor.cloudflare_edge_rules
+      - if: "{{ resp is not defined or resp.status != 200 }}"
+        then:
+          - action: script.notify_phones
+            data:
+              title: Cloudflare
+              message: >-
+                Couldn't turn "{{ rule }}" {{ 'on' if enabled else 'off' }}
+                ({{ 'HTTP ' ~ resp.status if resp is defined else 'no response' }}). Nothing changed.
+              tag: cloudflare-edge-error
+              channel: Security
+          - stop: Cloudflare refused the change
+            error: true
+
+  cloudflare_travel_start:
+    alias: "Cloudflare: travel mode on"
+    description: Lets visitors from any country through until the end time, then turns US-only back on.
+    mode: single
+    fields:
+      days:
+        description: How many days
+        default: 7
+        selector:
+          number:
+            min: 1
+            max: 30
+    sequence:
+      - action: script.cloudflare_rule_set
+        data:
+          rule: Block non-US traffic
+          enabled: false
+      - action: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.cloudflare_travel_until
+        data:
+          timestamp: "{{ now().timestamp() + (days | default(7) | int) * 86400 }}"
+      - action: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.cloudflare_travel_mode
+
+  cloudflare_travel_end:
+    alias: "Cloudflare: travel mode off"
+    mode: single
+    sequence:
+      - action: script.cloudflare_rule_set
+        data:
+          rule: Block non-US traffic
+          enabled: true
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.cloudflare_travel_mode
+
+  cloudflare_lockdown:
+    alias: "Cloudflare: lockdown on or off"
+    description: Lockdown lets only your home connection and T-Mobile reach the public hosts.
+    mode: single
+    fields:
+      lock:
+        description: true locks down, false unlocks
+        required: true
+        selector:
+          boolean:
+    sequence:
+      - action: script.cloudflare_rule_set
+        data:
+          rule: "Lockdown: home and phone carrier only"
+          enabled: "{{ lock }}"
+
+automation:
+  - id: cloudflare_travel_mode_end
+    alias: "Cloudflare: travel mode ends on time"
+    description: >-
+      Turns US-only back on at the end time. The start and 15-minute triggers catch an end time
+      that passed while HA was down or Cloudflare refused the first try.
+    mode: single
+    triggers:
+      - trigger: time
+        at: input_datetime.cloudflare_travel_until
+      - trigger: homeassistant
+        event: start
+      - trigger: time_pattern
+        minutes: /15
+    conditions:
+      - condition: state
+        entity_id: input_boolean.cloudflare_travel_mode
+        state: "on"
+      - condition: template
+        value_template: >-
+          {{ now().timestamp() >= (state_attr('input_datetime.cloudflare_travel_until', 'timestamp') or 0) }}
+    actions:
+      - action: script.cloudflare_travel_end
+      - action: script.notify_phones
+        data:
+          title: Travel mode ended
+          message: Only visitors in the US can reach your sites again.
+          tag: cloudflare-travel-ended
+          channel: Security
+          data:
+            clickAction: /network
+            url: /network
+
+  # The "Lock down" button on Internet exposure pushes (packages/internet_exposure.yaml).
+  - id: cloudflare_lockdown_from_push
+    alias: "Cloudflare: lock down from a push"
+    mode: single
+    triggers:
+      - trigger: event
+        event_type: mobile_app_notification_action
+        event_data:
+          action: CLOUDFLARE_LOCKDOWN
+    actions:
+      - action: script.cloudflare_lockdown
+        data:
+          lock: true
+      - action: script.notify_phones
+        data:
+          title: Locked down
+          message: Only your home connection and T-Mobile can reach your sites. Unlock on the Network panel.
+          tag: cloudflare-lockdown
+          channel: Security
+          data:
+            clickAction: /network
+            url: /network

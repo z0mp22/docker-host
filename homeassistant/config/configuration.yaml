@@ -40,6 +40,9 @@ recorder:
       - sensor.network_traffic
       # ~14 KB of attributes, rewritten every 5 min; panels and automations only read the live state.
       - sensor.plex_recordings_sync_meta
+      # Cloudflare summaries: rewritten every 5 min (MQTT retains the latest); rule expressions.
+      - sensor.cloudflare_edge
+      - sensor.cloudflare_edge_rules
 
 # Load frontend themes from the themes folder
 frontend:
@@ -555,7 +558,7 @@ panel_custom:
     url_path: network
     sidebar_title: Network
     sidebar_icon: mdi:router-wireless
-    module_url: /local/network/network-panel.js?v=3
+    module_url: /local/network/network-panel.js?v=4
     config:
       gateway: a765e99e-5f8c-3c5a-b264-0770b4d1030a
       # UniFi device id -> its stats sensor (see the UniFi rest resources above).
@@ -575,6 +578,17 @@ panel_custom:
       exposure: sensor.internet_exposure
       exposure_sign_in: sensor.internet_exposure_last_sign_in
       exposure_dashboard: http://10.0.0.6:3000/d/npm-exposure/internet-exposure
+      # Cloudflare half of the exposure card + edge controls (packages/cloudflare_edge.yaml).
+      # Rules are matched by description; keep in step with that package's scripts.
+      edge: sensor.cloudflare_edge
+      edge_rules_sensor: sensor.cloudflare_edge_rules
+      edge_travel: input_boolean.cloudflare_travel_mode
+      edge_travel_until: input_datetime.cloudflare_travel_until
+      edge_rules:
+        us_only: Block non-US traffic
+        hosting: Challenge hosting networks
+        junk: Block junk paths
+        lockdown: "Lockdown: home and phone carrier only"
       # Traffic + Blocked by your rules cards (packages/udm_traffic.yaml) and netwatch findings.
       traffic: sensor.network_traffic
       netwatch: sensor.network_watch_off_allowlist_lookups
