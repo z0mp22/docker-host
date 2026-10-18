@@ -99,12 +99,14 @@ loki.process "npm" {
     replace    = "REDACTED"
   }
 
-  // 3. What the request was after. First match wins: the apps' own static bundles, then attack
+  // 3. What the request was after. First match wins: the apps' own static bundles and HA's
+  //    integration icons (their domain names, e.g. onvif, look like attack paths), then attack
   //    patterns (whole URI, query included), then each site's real paths.
   stage.template {
     source   = "category"
     template = `{{- $u := ToLower .uri -}}{{- $p := ToLower .path -}}
 {{- if and (regexMatch "^/(assets|static|frontend_latest|frontend_es5|hacsfiles|locales|fonts)/[a-z0-9._/-]+\\.(js|mjs|css|map|woff2?|ttf|png|svg|ico|json|webp|jpg)$" $p) (not (regexMatch "\\.\\." $p)) -}}app
+{{- else if and (eq .site "ha") (regexMatch "^/api/brands/(integration|hardware)/[a-z0-9_]+/[a-z0-9_@-]+\\.png$" $p) -}}app
 {{- else if regexMatch "/@fs/|__vite|/@id/|\\?raw\\?|[?&]import&raw" $u -}}vite_fileread
 {{- else if regexMatch "169\\.254\\.|metadata\\.google|100\\.100\\.100\\.200|fd00:ec2|[?&][a-z_]*=(file|gopher|dict|ftp)(:|%3a)|[?&](url|uri|dest|target|proxy|load|fetch|src|path)=https?(:|%3a)" $u -}}ssrf
 {{- else if regexMatch "\\.\\./|\\.\\.%2f|%2e%2e|\\.\\.%25|\\.\\.\\\\|etc/passwd|etc%2fpasswd|win\\.ini|boot\\.ini|/proc/self" $u -}}traversal
