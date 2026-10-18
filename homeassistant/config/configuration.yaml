@@ -529,12 +529,15 @@ panel_custom:
           roku: media_player.basement_roku
           remote: remote.basement_roku
           plex: media_player.plex_plex_for_roku_basement_roku
-          # PS5 (packages/ps5.yaml): power and hours from the LAN check. psn/game_sensor come from
-          # the PlayStation Network integration and are optional; without them there are no titles.
+          # PS5 (packages/ps5.yaml): power and hours from the LAN check. psn (title, art) and
+          # game_sensor (per-game history) come from the PlayStation Network integration and are
+          # optional; without them the panel shows no titles.
           ps5:
             power: sensor.ps5_power
             today: sensor.ps5_on_today
             week: sensor.ps5_on_last_7_days
+            psn: media_player.playstation_5
+            game_sensor: sensor.basement_ps5_now_playing
       recordings: sensor.plex_recordings_sync_meta
       links:
         recordings: /recordings
