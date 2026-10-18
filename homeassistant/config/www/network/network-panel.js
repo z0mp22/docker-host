@@ -13,6 +13,8 @@ const ICONS = {
   mdiArrowUp: "M13,20H11V8L5.5,13.5L4.08,12.08L12,4.16L19.92,12.08L18.5,13.5L13,8V20Z",
   mdiCertificateOutline: "M13 21L15 20L17 21V14H13M17 9V7L15 8L13 7V9L11 10L13 11V13L15 12L17 13V11L19 10M20 3H4A2 2 0 0 0 2 5V15A2 2 0 0 0 4 17H11V15H4V5H20V15H19V17H20A2 2 0 0 0 22 15V5A2 2 0 0 0 20 3M11 8H5V6H11M9 11H5V9H9M11 14H5V12H11Z",
   mdiCheckCircleOutline: "M12 2C6.5 2 2 6.5 2 12S6.5 22 12 22 22 17.5 22 12 17.5 2 12 2M12 20C7.59 20 4 16.41 4 12S7.59 4 12 4 20 7.59 20 12 16.41 20 12 20M16.59 7.58L10 14.17L7.41 11.59L6 13L10 17L18 9L16.59 7.58Z",
+  mdiChevronDown: "M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z",
+  mdiServerNetwork: "M13,18H14A1,1 0 0,1 15,19H22V21H15A1,1 0 0,1 14,22H10A1,1 0 0,1 9,21H2V19H9A1,1 0 0,1 10,18H11V16H4A1,1 0 0,1 3,15V11A1,1 0 0,1 4,10H20A1,1 0 0,1 21,11V15A1,1 0 0,1 20,16H13V18M4,2H20A1,1 0 0,1 21,3V7A1,1 0 0,1 20,8H4A1,1 0 0,1 3,7V3A1,1 0 0,1 4,2M9,6H10V4H9V6M9,14H10V12H9V14M5,4V6H7V4H5M5,12V14H7V12H5Z",
   mdiCloudLockOutline: "M6.5 18H13V20H6.5C5 20 3.69 19.5 2.61 18.43C1.54 17.38 1 16.09 1 14.58C1 13.28 1.39 12.12 2.17 11.1S4 9.43 5.25 9.15C5.67 7.62 6.5 6.38 7.75 5.43S10.42 4 12 4C13.95 4 15.6 4.68 16.96 6.04C18.08 7.16 18.73 8.5 18.93 10C18.23 10 17.56 10.19 16.95 10.46C16.84 9.31 16.38 8.31 15.54 7.46C14.56 6.5 13.38 6 12 6S9.44 6.5 8.46 7.46C7.5 8.44 7 9.62 7 11H6.5C5.53 11 4.71 11.34 4.03 12.03C3.34 12.71 3 13.53 3 14.5S3.34 16.29 4.03 17C4.71 17.66 5.53 18 6.5 18M23 17.3V20.8C23 21.4 22.4 22 21.7 22H16.2C15.6 22 15 21.4 15 20.7V17.2C15 16.6 15.6 16 16.2 16V14.5C16.2 13.1 17.6 12 19 12S21.8 13.1 21.8 14.5V16C22.4 16 23 16.6 23 17.3M20.5 14.5C20.5 13.7 19.8 13.2 19 13.2S17.5 13.7 17.5 14.5V16H20.5V14.5Z",
   mdiEthernet: "M7,15H9V18H11V15H13V18H15V15H17V18H19V9H15V6H9V9H5V18H7V15M4.38,3H19.63C20.94,3 22,4.06 22,5.38V19.63A2.37,2.37 0 0,1 19.63,22H4.38C3.06,22 2,20.94 2,19.63V5.38C2,4.06 3.06,3 4.38,3Z",
   mdiInformationOutline: "M11,9H13V7H11M12,20C7.59,20 4,16.41 4,12C4,7.59 7.59,4 12,4C16.41,4 20,7.59 20,12C20,16.41 16.41,20 12,20M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M11,17H13V11H11V17Z",
@@ -57,6 +59,8 @@ const CERT_RENEW_WARN_DAYS = 21;
 const EDGE_CERT_WARN_DAYS = 14;
 const PORT_NAMES = { 21: "FTP", 22: "SSH", 23: "Telnet", 25: "mail", 80: "web", 443: "web", 445: "Windows sharing", 3389: "Remote Desktop", 5900: "VNC", 8080: "web" };
 
+// Does the US-only rule let Let's Encrypt's validators (some outside the US) through?
+const acmeExempt = (eg) => (eg?.rules?.us_only?.expression || "").includes("/.well-known/acme-challenge/");
 const svg = (name) => `<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="${ICONS[name] || ""}"/></svg>`;
 const esc = (s) =>
   String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -289,48 +293,46 @@ h1 { margin: 0; font-size: 34px; font-weight: 700; line-height: 1.1; }
 
 /* Internet exposure */
 .a-expo { grid-area: expo; }
-.big.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .expo-status { margin-top: 14px; }
-.hosts { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; margin-top: 10px; }
-.host { border-radius: 16px; background: #121a28; border: 1px solid var(--line); padding: 10px 14px; min-width: 0; }
-.host b { display: block; font-size: 16px; font-weight: 600; }
-.host span { font-size: 13px; color: var(--muted); }
 a.link { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
 a.link .ic { width: 16px; height: 16px; }
+.inbound { margin-top: 14px; }
+a.node { display: block; color: inherit; text-decoration: none; }
+a.node .node-name .ic { width: 14px; height: 14px; vertical-align: -2px; margin-left: 4px; }
 
-/* Cloudflare edge: funnel + controls */
-.funnel { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-top: 16px; }
-.step { position: relative; border-radius: 18px; background: #121a28; border: 1px solid var(--line); padding: 14px 16px; min-width: 0; }
-.step .v { font-size: 30px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
-.step .l { font-size: 14px; color: #c3cedd; margin-top: 2px; }
-.step .s { font-size: 13px; color: var(--muted); margin-top: 4px; }
-.step.edge { border-color: rgba(45,212,191,.35); } .step.edge .v { color: var(--teal); }
-.step.bad { border-color: rgba(240,97,109,.5); } .step.bad .v { color: var(--red); }
-a.step { display: block; color: inherit; text-decoration: none; }
-a.step .s { color: var(--teal); }
-.certs { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; font-size: 14.5px; color: #c3cedd; }
-.certs b { font-weight: 600; color: var(--text); }
-.certs .warn { color: var(--amber); }
-.step.next::before { content: "›"; position: absolute; left: -12px; top: 50%; transform: translate(-50%, -50%); color: var(--muted); font-size: 22px; }
-.split { display: flex; height: 10px; border-radius: 5px; overflow: hidden; margin-top: 14px; gap: 2px; background: #172234; }
-.split .e { background: var(--teal); } .split .p { background: #3b4a61; }
+/* Cloudflare controls, details */
 .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .chip { font-size: 13.5px; padding: 6px 10px; border-radius: 10px; background: #172234; color: #c3cedd; }
 .chip b { font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; margin-right: 4px; }
 .chip.zero { color: var(--muted); } .chip.zero b { color: var(--muted); }
 .chip.off { background: rgba(245,176,65,.12); color: #f7c77a; }
-.ctls { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
-.ctl { display: grid; grid-template-columns: 46px minmax(0, 1fr) auto; gap: 12px 14px; align-items: center; padding: 12px 14px; border-radius: 18px; background: #121a28; border: 1px solid var(--line); }
+.ctls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 16px; }
+.ctl { display: grid; grid-template-columns: 46px minmax(0, 1fr); gap: 12px 14px; align-items: center; padding: 14px 16px; border-radius: 20px; background: #121a28; border: 1px solid var(--line); }
 .ctl .nic .ic { width: 24px; height: 24px; }
 .ctl.on { border-color: rgba(245,176,65,.4); } .ctl.on .nic { background: linear-gradient(160deg, #fcd58a, #d98b16); }
 .ctl b { display: block; font-size: 17px; font-weight: 600; }
 .ctl .t span { display: block; font-size: 14px; color: var(--muted); line-height: 1.4; }
 .ctl .t .err { color: var(--red); }
-.ctl .a { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.ctl .a { grid-column: 1 / -1; display: flex; gap: 8px; }
+.ctl .a .btn { flex: 1 1 0; }
 .btn { min-height: 44px; padding: 0 16px; border-radius: 14px; font-size: 15px; font-weight: 600; background: #1b2638; border: 1px solid var(--line); white-space: nowrap; }
 .btn.primary { background: linear-gradient(180deg, #2bb8a8, #0f7f74); border-color: transparent; color: #fff; }
 .btn.danger { background: linear-gradient(180deg, #e2525e, #b0303c); border-color: transparent; color: #fff; }
 .btn:disabled { opacity: .45; cursor: default; }
+.foot { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 18px; }
+.foot .link { margin-top: 0; }
+.more { display: flex; align-items: center; gap: 6px; color: var(--teal); font-weight: 600; font-size: 15px; }
+.more .ic { width: 20px; height: 20px; transition: transform .15s; }
+.more.open .ic { transform: rotate(180deg); }
+.details { border-top: 1px solid var(--line); margin-top: 14px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 40px; align-items: start; }
+.tbl { display: grid; grid-template-columns: minmax(0, 1.4fr) repeat(3, minmax(0, 1fr)); margin-top: 8px; font-size: 14.5px; }
+.tbl > span { padding: 8px 0; border-top: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+.tbl > span:not(.s) { text-align: right; }
+.tbl > .h { color: var(--muted); font-size: 12.5px; border-top: 0; padding-top: 0; }
+.tbl > .s { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.facts { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; font-size: 14.5px; color: #c3cedd; line-height: 1.45; }
+.facts b { font-weight: 600; color: var(--text); }
+.facts .warn { color: var(--amber); }
 
 /* Traffic */
 .a-traffic { grid-area: traffic; } .a-blocks { grid-area: blocks; }
@@ -362,6 +364,8 @@ a.step .s { color: var(--teal); }
 .rule.alert { border-color: rgba(245,176,65,.3); }
 
 @container (max-width: 980px) {
+  .ctls { grid-template-columns: minmax(0, 1fr); }
+  .details { grid-template-columns: minmax(0, 1fr); }
   .grid { grid-template-columns: minmax(0, 1fr); grid-template-areas: "path" "attn" "expo" "traffic" "blocks" "internet" "wifi" "clients"; }
 }
 @container (max-width: 640px) {
@@ -382,15 +386,12 @@ a.step .s { color: var(--teal); }
   .metric { padding: 12px; } .metric .v { font-size: 22px; } .metric .v small { font-size: 13px; } .metric .l { font-size: 12.5px; }
   .ap { padding: 12px; } .ap-name { font-size: 16px; } .ap-clients { font-size: 22px; }
   .counts .total { font-size: 36px; }
-  .big.four { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .funnel { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-  .step { padding: 12px; } .step .v { font-size: 22px; } .step .l { font-size: 13px; } .step .s { font-size: 12px; }
-  .step.next::before { display: none; }
+  .ctls { grid-template-columns: minmax(0, 1fr); gap: 10px; }
   .ctl { grid-template-columns: 40px minmax(0, 1fr); padding: 12px; }
   .ctl .nic { width: 40px; height: 40px; }
   .ctl b { font-size: 15.5px; } .ctl .t span { font-size: 13px; }
-  .ctl .a { grid-column: 1 / -1; justify-content: stretch; }
-  .ctl .a .btn { flex: 1 1 0; padding: 0 10px; }
+  .ctl .a .btn { padding: 0 10px; }
+  .tbl, .facts { font-size: 13.5px; }
   .row { font-size: 14px; }
   .dev .n { font-size: 14px; } .dev .v { font-size: 15px; }
   .rule-n { font-size: 17px; } .rule-top b { font-size: 15px; }
@@ -404,6 +405,7 @@ class NetworkPanel extends HTMLElement {
     this._html = "";
     this._history = {};
     this._showAll = false;
+    try { this._expoDetails = localStorage.getItem("network-panel.expo-details") === "1"; } catch (_) { this._expoDetails = false; }
     this.shadowRoot.addEventListener("click", (e) => this._onClick(e));
   }
 
@@ -497,6 +499,11 @@ class NetworkPanel extends HTMLElement {
     if (el.dataset.action === "edge-travel") this._edgeCall("us_only", false, "cloudflare_travel_start", { days: Number(el.dataset.days) });
     if (el.dataset.action === "edge-travel-end") this._edgeCall("us_only", true, "cloudflare_travel_end", {});
     if (el.dataset.action === "edge-lock") this._edgeCall("lockdown", el.dataset.lock === "1", "cloudflare_lockdown", { lock: el.dataset.lock === "1" });
+    if (el.dataset.action === "expo-details") {
+      this._expoDetails = !this._expoDetails;
+      try { localStorage.setItem("network-panel.expo-details", this._expoDetails ? "1" : "0"); } catch (_) { /* private mode */ }
+      this._render();
+    }
     if (el.dataset.action === "all") {
       this._showAll = !this._showAll;
       this._render();
@@ -637,24 +644,22 @@ class NetworkPanel extends HTMLElement {
     return { ok: true, at, stale: Date.now() - at > TRAFFIC_STALE_MIN * 60e3, ...s.attributes };
   }
 
-  // Connection path's first node: is Cloudflare filtering what comes in, and can it be skipped?
+  // Inbound path, Cloudflare node: is it filtering as intended? The router check is the next node's.
   _evaluateCloudflare(eg) {
     if (!eg) return null;
-    const sm = eg.summary;
     const r = eg.rules;
-    if (!eg.rulesOk && !sm) return { level: "grey", word: "No data", sub: "Can't read Cloudflare right now" };
-    const stopped = sm ? `${count(sm.stopped)} stopped in 24 h` : "No summary yet";
-    if (sm?.router && !sm.router.ok) return { level: "amber", word: "Bypassable", sub: "The router lets more than Cloudflare reach the Pi" };
-    if (r.lockdown?.enabled) return { level: "amber", word: "Locked down", sub: `Only home and T-Mobile · ${stopped}` };
-    const offRule = eg.rulesOk && ["hosting", "junk"].find((k) => !r[k]?.enabled);
-    if (offRule) return { level: "amber", word: "Rule off", sub: `${EDGE_ROLES[offRule]} ${r[offRule] ? "is off" : "rule is missing"} · ${stopped}` };
-    const abroad = r.us_only && !r.us_only.enabled;
-    if (abroad) return eg.travelOn ? { level: "green", word: "Travel mode", sub: `Any country until ${clock(new Date(eg.travelUntil).toISOString())}` } : { level: "amber", word: "Rule off", sub: `US-only is off · ${stopped}` };
-    const on = eg.rulesOk ? Object.values(r).filter((x) => x?.enabled).length : null;
-    return { level: "green", word: "Filtering", sub: `${stopped}${on !== null ? ` · ${plural(on, "rule")} on` : ""}` };
+    if (!eg.rulesOk && !eg.summary) return { level: "grey", note: "Can't read Cloudflare right now" };
+    if (r.lockdown?.enabled) return { level: "amber", note: "Locked down: only home and T-Mobile get through" };
+    const off = eg.rulesOk && ["hosting", "junk"].find((k) => !r[k]?.enabled);
+    if (off) return { level: "amber", note: `${EDGE_ROLES[off]} rule ${r[off] ? "is off" : "is missing"}` };
+    if (r.us_only && !r.us_only.enabled)
+      return eg.travelOn
+        ? { level: "green", note: `Travel mode: any country until ${clock(new Date(eg.travelUntil).toISOString())}` }
+        : { level: "amber", note: "US-only is off" };
+    return { level: "green", note: null };
   }
 
-  _evaluateExposure(x) {
+  _evaluateExposure(x, edgeStopped = 0) {
     if (!x) return null;
     if (!x.ok) return { level: "grey", icon: "mdiShieldSearch", word: "No data", sub: "Can't read the access-log pipeline (Loki on minipc) right now" };
     if (x.gotThrough > 0)
@@ -663,11 +668,10 @@ class NetworkPanel extends HTMLElement {
       return { level: "amber", icon: "mdiShieldAlertOutline", word: "Unknown password", sub: `OpenSprinkler was used with a password that isn't yours (${plural(x.unrecognized, "request")})` };
     if (x.failed >= FAILED_SIGNIN_WARN)
       return { level: "amber", icon: "mdiShieldAlertOutline", word: "Password guessing", sub: `${plural(x.failed, "failed sign-in")} to Frigate or Home Assistant in 24 h` };
-    if (x.probes > 0) {
-      const from = x.attackerIps ? ` from ${count(x.attackerIps)} address${x.attackerIps === 1 ? "" : "es"}` : "";
-      return { level: "green", icon: "mdiShieldCheckOutline", word: "Nothing got through", sub: `${count(x.probes)} attack probes${from} in 24 h, all turned away` };
-    }
-    return { level: "green", icon: "mdiShieldCheckOutline", word: "Quiet", sub: "No attack probes in the last 24 h" };
+    // The path below has the numbers; the verdict says what they add up to.
+    if (x.probes > 0)
+      return { level: "green", icon: "mdiShieldCheckOutline", word: "Nothing got through", sub: edgeStopped > x.probes ? "Every attack was turned away, most before it reached the house" : "Every attack probe that reached your apps was turned away" };
+    return { level: "green", icon: "mdiShieldCheckOutline", word: "Quiet", sub: edgeStopped ? "No attacks reached your apps; Cloudflare stopped the rest" : "No attack probes reached your apps in 24 h" };
   }
 
   _evaluate(m) {
@@ -713,7 +717,7 @@ class NetworkPanel extends HTMLElement {
     else if (downAps.length) wifi = { level: "amber", word: "Degraded", sub: `${downAps.map((a) => a.name).join(", ")} offline · ${wireless} on Wi-Fi` };
     else wifi = { level: "green", word: "Online", sub: `${plural(activeAps.length, "access point")} · ${wireless} on Wi-Fi` };
 
-    const exposure = this._evaluateExposure(m.exposure);
+    const exposure = this._evaluateExposure(m.exposure, m.edge?.summary?.stopped || 0);
     const cloudflare = this._evaluateCloudflare(m.edge);
     const eg = m.edge;
     const locked = !!eg?.rules.lockdown?.enabled;
@@ -779,8 +783,11 @@ class NetworkPanel extends HTMLElement {
       if (ct) {
         const failing = Object.entries(ct.origin || {}).filter(([, v]) => v.days >= 0 && v.days < CERT_RENEW_WARN_DAYS);
         const blocked = Object.values(ct.acme_blocked || {}).reduce((a, n) => a + n, 0);
-        if (failing.length)
-          items.push({ level: "info", icon: "mdiCertificateOutline", title: `Certificate renewal failing for ${failing.map(([k]) => SITE_NAMES[k] || k).join(" and ")}`, text: `${blocked ? `Cloudflare blocked ${plural(blocked, "Let's Encrypt check")} in 24 h (they come partly from outside the US). Exempt /.well-known/acme-challenge/ in "${eg.names.us_only}" to fix it. ` : ""}Visitors don't see these certificates; see Certificates on the exposure card.` });
+        const names = failing.map(([k]) => SITE_NAMES[k] || k).join(" and ");
+        if (failing.length && acmeExempt(eg))
+          items.push({ level: "info", icon: "mdiCertificateOutline", title: `Certificate renewal pending for ${names}`, text: "Let's Encrypt can reach them again, so NPM should renew them on its next run. Visitors don't see these certificates." });
+        else if (failing.length)
+          items.push({ level: "info", icon: "mdiCertificateOutline", title: `Certificate renewal failing for ${names}`, text: `${blocked ? `Cloudflare blocked ${plural(blocked, "Let's Encrypt check")} in 24 h (some come from outside the US). ` : ""}Exempt /.well-known/acme-challenge/ in "${eg.names.us_only}" to fix it. Visitors don't see these certificates.` });
         if (ct.edge && ct.edge.days < EDGE_CERT_WARN_DAYS)
           items.push({ level: "amber", icon: "mdiCertificateOutline", title: `Cloudflare's certificate expires in ${plural(Math.max(0, ct.edge.days), "day")}`, text: "Cloudflare renews it on its own, so this means something is stuck. Check SSL/TLS → Edge Certificates in the Cloudflare dashboard." });
       }
@@ -913,83 +920,53 @@ class NetworkPanel extends HTMLElement {
     return { traffic, blocks };
   }
 
-  // Connection attempts from the internet that the UDM dropped (exposure card's router half).
-  _inbound(t, metric, rt) {
-    const i = t?.ok ? t.inbound : null;
-    if (!i || !i.dropped) return "";
-    const ports = i.ports.map(([p]) => `${p}${PORT_NAMES[p] ? ` ${PORT_NAMES[p]}` : ""}`).join(", ");
-    const top = i.countries[0];
-    return `<div class="group">At your router · since ${esc(clock(i.since))}</div>
-      <div class="big four">
-        ${metric("Dropped from the internet", "mdiShieldCheckOutline", count(i.dropped), "")}
-        ${metric("Addresses trying", "mdiWeb", count(i.sources), "")}
-        ${metric("Direct tries on 80/443", "mdiWebOff", count(i.web), "")}
-        ${metric(top ? `Most from ${country(top[0])}` : "Top country", "mdiWeb", top ? count(top[1]) : "—", "")}
-      </div>
-      <div class="note">Most-tried ports: ${esc(ports)}. ${
-        !rt
-          ? "Ports 80/443 are meant to accept only Cloudflare (not checked yet)."
-          : rt.ok
-          ? `Checked: 80/443 forward to the Pi only from Cloudflare's ${rt.cloudflare_ranges} published ranges, so direct tries are dropped.`
-          : "80/443 accept more than Cloudflare right now, see Needs attention."
-      }</div>`;
-  }
-
-  // Stopped at Cloudflare | reached NPM -> attack probes -> got through. Every number is an exact
-  // count: Cloudflare's events (one per stopped request) and NPM's own log lines in Loki.
-  _funnel(x, eg) {
+  // The way in, in the order a request travels: Cloudflare -> your router -> NPM -> the apps. Each
+  // node is one exact count (Cloudflare events, UDM drops, NPM log lines) plus what it means.
+  _inboundPath(m, ev, node) {
+    const x = m.exposure;
+    const eg = m.edge;
     const sm = eg?.summary;
-    const stopped = sm ? sm.stopped : null;
-    const reached = x.ok ? x.requests : null;
-    const both = stopped !== null && reached !== null && stopped + reached > 0;
-    const pct = both ? Math.round((stopped / (stopped + reached)) * 100) : null;
-    const step = (cls, v, l, sub) => `<div class="step ${cls}"><div class="v">${v}</div><div class="l">${esc(l)}</div>${sub ? `<div class="s">${esc(sub)}</div>` : ""}</div>`;
-    const label = (desc) => EDGE_ROLES[Object.keys(EDGE_ROLES).find((k) => eg.names[k] === desc)] || desc;
-    let why = "";
-    if (sm) {
-      const rows = sm.by_rule.map(([d, n]) => [label(d), n, eg.rules && Object.values(eg.rules).some((r) => r?.description === d && !r.enabled)]);
-      for (const k of ["us_only", "hosting", "junk"])
-        if (eg.rules[k] && !sm.by_rule.some(([d]) => d === eg.names[k])) rows.push([EDGE_ROLES[k], 0, !eg.rules[k].enabled]);
-      const top = (sm.countries || []).slice(0, 3).map(([c, n]) => `${country(c)} ${count(n)}`).join(" · ");
-      why = `<div class="group">Why Cloudflare stopped them</div>
-        <div class="chips">${rows.map(([l, n, off]) => `<span class="chip${n ? "" : " zero"}${off ? " off" : ""}"><b>${count(n)}</b>${esc(l)}${off ? " (off now)" : ""}</span>`).join("")}${sm.solved ? `<span class="chip"><b>${count(sm.solved)}</b>passed a challenge</span>` : ""}</div>
-        ${top ? `<div class="note">Most came from ${esc(top)}.${sm.truncated ? " Over 50,000 in 24 h, so only the newest are counted." : ""}</div>` : ""}`;
-    }
-    return `<div class="funnel">
-        ${step("edge", stopped === null ? "—" : count(stopped), "Stopped at Cloudflare", sm ? (pct === null ? "never reached the house" : `${pct}% of all requests, never reached the house`) : "No Cloudflare data yet")}
-        ${step("", reached === null ? "—" : count(reached), "Reached your proxy", "requests NPM let in to the apps")}
-        ${step("next", x.ok ? count(x.probes) : "—", "Attack probes among them", x.attackerIps ? `from ${count(x.attackerIps)} address${x.attackerIps === 1 ? "" : "es"}` : "")}
-        ${(() => {
-          const c = this._config;
-          const html = step(`next${x.gotThrough > 0 ? " bad" : ""}`, x.ok ? count(x.gotThrough) : "—", "Got real content back", x.ok ? (x.gotThrough > 0 ? "see which requests in Grafana" : "every probe was turned away") : "");
-          const href = c.exposure_dashboard && c.exposure_got_through_panel ? `${c.exposure_dashboard}?viewPanel=${encodeURIComponent(c.exposure_got_through_panel)}` : "";
-          return href ? html.replace('<div class="step', `<a href="${esc(href)}" target="_blank" rel="noopener" class="step`).replace(/<\/div>$/, "</a>") : html;
-        })()}
-      </div>
-      ${both ? `<div class="split" aria-hidden="true"><div class="e" style="flex:${stopped}"></div><div class="p" style="flex:${reached}"></div></div>` : ""}
-      ${why}`;
-  }
+    const i = m.traffic?.ok ? m.traffic.inbound : null;
+    const rt = sm?.router;
+    const cf = ev.cloudflare;
+    const c = this._config;
+    const reached = x?.ok ? x.requests : null;
 
-  // Edge certificate (what visitors get) vs NPM's origin certificates behind it. Whether the origin
-  // ones matter is shown from evidence: an expired one that still gets traffic means Cloudflare
-  // isn't verifying them.
-  _certs(ct, x) {
-    const day = (iso) => new Date(`${iso}T12:00:00Z`).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
-    const origin = Object.entries(ct.origin || {}).sort((a, b) => a[1].days - b[1].days);
-    const reached = Object.fromEntries((x?.sites || []).map(([k, v]) => [k, v.requests]));
-    const expiredInUse = origin.find(([k, v]) => v.days < 0 && reached[k] > 0);
-    const o = origin.map(([k, v]) => {
-      const name = SITE_NAMES[k] || k;
-      if (v.days < 0) return `<span class="warn">${esc(name)} expired ${esc(day(v.expires))}</span>`;
-      const failing = v.days < CERT_RENEW_WARN_DAYS;
-      return `${failing ? '<span class="warn">' : ""}${esc(name)} ${esc(day(v.expires))}${failing ? ` (renewal failing${ct.acme_blocked?.[k] ? `, ${count(ct.acme_blocked[k])} checks blocked` : ""})</span>` : ""}`;
+    let cloud = null;
+    if (eg) {
+      const pct = sm && reached !== null && sm.stopped + reached > 0 ? Math.round((sm.stopped / (sm.stopped + reached)) * 100) : null;
+      const top = sm?.by_rule?.[0]?.[0];
+      const most = { us_only: "most from outside the US", hosting: "most from hosting networks", junk: "most were junk-path probes" }[Object.keys(EDGE_ROLES).find((k) => eg.names[k] === top)] || (top ? `most by ${top}` : "");
+      cloud = node("mdiCloudLockOutline", "Cloudflare", {
+        level: cf.level,
+        word: sm ? `${count(sm.stopped)} stopped` : "No data",
+        sub: cf.note || (sm ? [pct !== null ? `${pct}% of requests` : "", most].filter(Boolean).join(" · ") || "Nothing to stop" : "No summary from Cloudflare yet"),
+      });
+    }
+    const router = node("mdiRouterNetwork", "Your router", {
+      level: rt && !rt.ok ? "amber" : i || rt ? "green" : "grey",
+      // The router is a gate, not a funnel step: its drops are direct scans of the home address,
+      // which never went through Cloudflare, so they're context rather than the headline number.
+      word: rt ? (rt.ok ? "Cloudflare only" : "Bypassable") : "Not checked",
+      sub: rt && !rt.ok
+        ? "80/443 accept more than Cloudflare, so its rules can be skipped"
+        : i ? `${count(i.dropped)} direct tries dropped since ${clock(i.since)}` : "Direct tries unknown",
     });
-    return `<div class="group">Certificates</div>
-      <div class="certs">
-        ${ct.edge ? `<span>Visitors get <b>Cloudflare's certificate</b>, valid until ${esc(day(ct.edge.expires))}${ct.edge.days < EDGE_CERT_WARN_DAYS ? ' <span class="warn">(renewal overdue)</span>' : " (renews itself)"}</span>` : ""}
-        ${o.length ? `<span>Behind it, NPM's: ${o.join(" · ")}</span>` : ""}
-      </div>
-      ${o.length ? `<div class="note">${expiredInUse ? `Cloudflare isn't checking these: ${esc(SITE_NAMES[expiredInUse[0]] || expiredInUse[0])}'s expired and still gets traffic. So none of them affect visitors, unless Cloudflare is switched to Full (strict).` : "If Cloudflare is set to Full (strict), an expired one here takes that site offline."}</div>` : ""}`;
+    const busyProxy = x?.ok && (x.unrecognized > 0 || x.failed >= FAILED_SIGNIN_WARN);
+    const proxy = node("mdiServerNetwork", "Proxy (NPM)", {
+      level: !x?.ok ? "grey" : busyProxy ? "amber" : "green",
+      word: x?.ok ? `${count(reached)} let in` : "No data",
+      sub: !x?.ok ? "Can't read the access logs" : x.unrecognized > 0 ? "OpenSprinkler used with an unknown password" : x.failed >= FAILED_SIGNIN_WARN ? `${plural(x.failed, "failed sign-in")}` : x.probes ? `${plural(x.probes, "attack probe")}${x.attackerIps ? ` from ${count(x.attackerIps)} address${x.attackerIps === 1 ? "" : "es"}` : ""}` : "No attack probes",
+    });
+    const href = c.exposure_dashboard && c.exposure_got_through_panel ? `${c.exposure_dashboard}?viewPanel=${encodeURIComponent(c.exposure_got_through_panel)}` : "";
+    let apps = node("mdiShieldCheckOutline", "Your apps", {
+      level: !x?.ok ? "grey" : x.gotThrough > 0 ? "red" : "green",
+      word: x?.ok ? `${count(x.gotThrough)} got through` : "No data",
+      sub: !x?.ok ? "" : x.gotThrough > 0 ? "Attack requests got real content back" : x.probes ? "Every probe was turned away" : "No attacks reached them",
+    });
+    if (href) apps = apps.replace('<div class="node', `<a href="${esc(href)}" target="_blank" rel="noopener" aria-label="Got-through requests in Grafana" class="node`).replace(/<\/div>\s*$/, "</a>").replace("Your apps</div>", `Your apps${svg("mdiOpenInNew")}</div>`);
+    const nodes = [cloud, router, proxy, apps].filter(Boolean);
+    return `<div class="path inbound" style="--n:${nodes.length}">${nodes.join("")}</div>`;
   }
 
   // Travel mode and Lockdown. State is Cloudflare's own (sensor.cloudflare_edge_rules); a control
@@ -1011,25 +988,91 @@ class NetworkPanel extends HTMLElement {
     else if (busy("us_only"))
       travel = row(abroad, "mdiAirplane", "Travel mode", abroad ? "Turning US-only back on…" : "Letting other countries in…", "us_only", btn("", "Updating…", "", true));
     else if (abroad)
-      travel = row(true, "mdiAirplane", "Travel mode",
-        eg.travelOn && eg.travelUntil ? `On · any country until ${clock(new Date(eg.travelUntil).toISOString())}, then US-only again` : "US-only is off in Cloudflare (not by travel mode)",
-        "us_only", btn("primary", "End travel mode", 'data-action="edge-travel-end"'));
+      travel = eg.travelOn && eg.travelUntil
+        ? row(true, "mdiAirplane", "Travel mode", `Any country until ${clock(new Date(eg.travelUntil).toISOString())}`, "us_only", btn("primary", "End travel mode", 'data-action="edge-travel-end"'))
+        : row(true, "mdiAirplane", "Travel mode", "US-only is off, and nothing will turn it back on", "us_only", btn("primary", "Turn US-only back on", 'data-action="edge-travel-end"'));
     else
-      travel = row(false, "mdiAirplane", "Travel mode", "Off · only visitors in the US get through. Turn on before a trip abroad.", "us_only",
+      travel = row(false, "mdiAirplane", "Travel mode", "Only US visitors get through", "us_only",
         TRAVEL_DAYS.map(([d, l]) => btn("", l, `data-action="edge-travel" data-days="${d}"`)).join(""));
 
     let lock;
     const locked = r.lockdown?.enabled;
     if (off || !r.lockdown)
-      lock = row(false, "mdiLock", "Lockdown", off || `Not set up: add a "${eg.names.lockdown}" rule in Cloudflare (switched off)`, "lockdown", btn("", "Lock down", "", true));
+      lock = row(false, "mdiLock", "Lockdown", off || `Add a "${eg.names.lockdown}" rule in Cloudflare first`, "lockdown", btn("", "Lock down", "", true));
     else if (busy("lockdown"))
       lock = row(locked, locked ? "mdiLock" : "mdiLockOpenVariant", "Lockdown", locked ? "Unlocking…" : "Locking down…", "lockdown", btn("", "Updating…", "", true));
     else if (locked)
-      lock = row(true, "mdiLock", "Lockdown", "On · only your home connection and T-Mobile get through", "lockdown", btn("primary", "Unlock", 'data-action="edge-lock" data-lock="0"'));
+      lock = row(true, "mdiLock", "Lockdown", "Only home and T-Mobile get through", "lockdown", btn("primary", "Unlock", 'data-action="edge-lock" data-lock="0"'));
     else
-      lock = row(false, "mdiLockOpenVariant", "Lockdown", `Off · anyone${abroad ? "" : " in the US"} can reach your sign-in pages. Lock down if something looks wrong.`, "lockdown", btn(alarm ? "danger" : "", "Lock down", 'data-action="edge-lock" data-lock="1"'));
+      lock = row(false, "mdiLockOpenVariant", "Lockdown", "Shut out everyone but home and T-Mobile", "lockdown", btn(alarm ? "danger" : "", "Lock down", 'data-action="edge-lock" data-lock="1"'));
 
-    return `<div class="group">Cloudflare controls</div><div class="ctls">${travel}${lock}</div>`;
+    return `<div class="ctls">${travel}${lock}</div>`;
+  }
+
+  // Reference facts behind "Show details": why Cloudflare stopped what it did, per site, sign-ins,
+  // certificates, and what the router sees. Nothing here needs action (that goes to Needs attention).
+  _expoDetails_html(m) {
+    const x = m.exposure;
+    const eg = m.edge;
+    const sm = eg?.summary;
+    const i = m.traffic?.ok ? m.traffic.inbound : null;
+    const rt = sm?.router;
+    const out = [];
+    const left = [];
+
+    if (sm) {
+      const label = (d) => EDGE_ROLES[Object.keys(EDGE_ROLES).find((k) => eg.names[k] === d)] || d;
+      const rows = sm.by_rule.map(([d, n]) => [label(d), n, Object.values(eg.rules).some((r) => r?.description === d && !r.enabled)]);
+      for (const k of ["us_only", "hosting", "junk"])
+        if (eg.rules[k] && !sm.by_rule.some(([d]) => d === eg.names[k])) rows.push([EDGE_ROLES[k], 0, !eg.rules[k].enabled]);
+      const top = (sm.countries || []).slice(0, 3).map(([cc, n]) => `${country(cc)} ${count(n)}`).join(" · ");
+      left.push(`<div class="group">Why Cloudflare stopped them</div>
+        <div class="chips">${rows.map(([l, n, off]) => `<span class="chip${n ? "" : " zero"}${off ? " off" : ""}"><b>${count(n)}</b>${esc(l)}${off ? " (off now)" : ""}</span>`).join("")}${sm.solved ? `<span class="chip"><b>${count(sm.solved)}</b>passed a challenge</span>` : ""}</div>
+        ${top ? `<div class="note">Most came from ${esc(top)}.${sm.truncated ? " Over 50,000 in 24 h, so only the newest are counted." : ""}</div>` : ""}`);
+    }
+
+    const sites = {};
+    for (const [k, v] of x?.ok ? x.sites : []) sites[k] = { ...v };
+    for (const [k, n] of Object.entries(sm?.hosts || {})) if (k !== "apex") (sites[k] ||= { requests: 0, probes: 0 }).stopped = n;
+    const siteRows = Object.entries(sites).sort((a, b) => (b[1].requests || 0) - (a[1].requests || 0));
+    if (siteRows.length)
+      left.push(`<div class="group">By site</div>
+        <div class="tbl"><span class="h s">Site</span><span class="h">Stopped at Cloudflare</span><span class="h">Let in</span><span class="h">Attack probes</span>
+        ${siteRows.map(([k, v]) => `<span class="s">${esc(SITE_NAMES[k] || k)}</span><span>${sm ? count(v.stopped || 0) : "—"}</span><span>${x?.ok ? count(v.requests || 0) : "—"}</span><span>${x?.ok ? count(v.probes || 0) : "—"}</span>`).join("")}</div>`);
+
+    if (x?.ok) {
+      const si = x.signIn;
+      out.push(`<div class="group">Sign-ins</div><div class="facts"><span><b>${count(x.failed)}</b> failed in 24 h${si ? ` · last Frigate sign-in ${esc(ago(new Date(si.at).toISOString()))}, ${esc(si.client_family || "unknown device")}${si.country && !["unknown", "LAN"].includes(si.country) ? `, ${esc(si.country)}` : ""}` : ""}</span></div>`);
+    }
+
+    const ct = sm?.certs;
+    if (ct) {
+      const day = (iso) => new Date(`${iso}T12:00:00Z`).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
+      const origin = Object.entries(ct.origin || {}).sort((a, b) => a[1].days - b[1].days);
+      const reached = Object.fromEntries((x?.sites || []).map(([k, v]) => [k, v.requests]));
+      const expiredInUse = origin.find(([k, v]) => v.days < 0 && reached[k] > 0);
+      const pending = acmeExempt(eg);
+      const o = origin.map(([k, v]) => {
+        const name = esc(SITE_NAMES[k] || k);
+        if (v.days < 0) return `<span class="warn">${name} expired ${esc(day(v.expires))}</span>`;
+        return v.days < CERT_RENEW_WARN_DAYS ? `<span class="warn">${name} ${esc(day(v.expires))} (renewal ${pending ? "pending" : "failing"})</span>` : `${name} ${esc(day(v.expires))}`;
+      });
+      out.push(`<div class="group">Certificates</div><div class="facts">
+        ${ct.edge ? `<span>Visitors get <b>Cloudflare's</b>, valid until ${esc(day(ct.edge.expires))}${ct.edge.days < EDGE_CERT_WARN_DAYS ? ' <span class="warn">(renewal overdue)</span>' : " and renewed by Cloudflare"}.</span>` : ""}
+        ${o.length ? `<span>Behind it, NPM's: ${o.join(" · ")}.</span>` : ""}
+      </div>
+      ${o.length ? `<div class="note">${expiredInUse ? `Cloudflare doesn't check NPM's certificates (${esc(SITE_NAMES[expiredInUse[0]] || expiredInUse[0])}'s is expired and still works), so these don't affect visitors unless its SSL mode becomes Full (strict).` : "If Cloudflare's SSL mode is Full (strict), an expired one here takes that site offline."}</div>` : ""}`);
+    }
+
+    if (i?.dropped || rt) {
+      const ports = (i?.ports || []).slice(0, 5).map(([pt]) => `${pt}${PORT_NAMES[pt] ? ` ${PORT_NAMES[pt]}` : ""}`).join(", ");
+      const top = i?.countries?.[0];
+      out.push(`<div class="group">At your router</div><div class="facts">
+        ${i?.dropped ? `<span><b>${count(i.dropped)}</b> direct tries since ${esc(clock(i.since))} from <b>${count(i.sources)}</b> addresses${top ? `, most from ${esc(country(top[0]))}` : ""}. Most-tried ports: ${esc(ports)}.</span>` : ""}
+        ${rt ? `<span>${rt.ok ? `80/443 forward to the Pi only from Cloudflare's ${rt.cloudflare_ranges} published ranges (checked every 5 min).` : `<span class="warn">80/443 accept more than Cloudflare's ranges, see Needs attention.</span>`}</span>` : ""}
+      </div>`);
+    }
+    return `<div>${left.join("")}</div><div>${out.join("")}</div>`;
   }
 
   _render() {
@@ -1047,8 +1090,7 @@ class NetworkPanel extends HTMLElement {
     const path = `
       <section class="card a-path">
         <div class="eyebrow">Connection path</div>
-        <div class="path" style="--n:${ev.cloudflare ? 4 : 3}">
-          ${ev.cloudflare ? node("mdiCloudLockOutline", "Cloudflare", ev.cloudflare) : ""}
+        <div class="path">
           ${node("mdiWeb", "Internet", ev.internet)}
           ${node("mdiRouterNetwork", "Gateway", ev.gateway)}
           ${node("mdiWifi", "Wi-Fi", ev.wifi)}
@@ -1150,35 +1192,20 @@ class NetworkPanel extends HTMLElement {
 
     const { traffic: trafficCard, blocks: blocksCard } = this._trafficCards(m.traffic);
 
-    const x = m.exposure;
     const xe = ev.exposure;
-    const signIn = x?.signIn;
-    const eg = m.edge;
-    const sm = eg?.summary;
     const expo = !xe
       ? ""
       : `
       <section class="card a-expo">
         <div class="head"><span class="eyebrow">Internet exposure</span><span class="muted">last 24 h</span></div>
         <div class="item expo-status ${xe.level === "green" ? "info" : xe.level}">${svg(xe.icon)}<div><b>${esc(xe.word)}</b><span>${esc(xe.sub)}</span></div></div>
-        ${x.ok || sm ? this._funnel(x, eg) : ""}
-        ${
-          x.ok
-            ? `<div class="group">Reachable from the internet</div>
-        <div class="hosts">${x.sites
-          .map(([site, v]) => `<div class="host"><b>${esc(SITE_NAMES[site] || site)}</b><span>${count(v.requests)} reached · ${count(v.probes)} probe${v.probes === 1 ? "" : "s"}${sm ? ` · ${count(sm.hosts?.[site] ?? 0)} stopped at Cloudflare` : ""}</span></div>`)
-          .join("")}</div>
-        <div class="kv"><span>Failed sign-ins <b>${count(x.failed)}</b></span>${
-          signIn
-            ? `<span>Last Frigate sign-in <b>${esc(ago(new Date(signIn.at).toISOString()))} · ${esc(signIn.client_family || "unknown device")}${signIn.country && !["unknown", "LAN"].includes(signIn.country) ? ` · ${esc(signIn.country)}` : ""}</b></span>`
-            : ""
-        }</div>`
-            : ""
-        }
-        ${eg ? this._edgeControls(eg, ["red", "amber"].includes(xe.level)) : ""}
-        ${eg?.summary?.certs ? this._certs(eg.summary.certs, x) : ""}
-        ${this._inbound(m.traffic, metric, eg?.summary?.router)}
-        ${c.exposure_dashboard ? `<a class="link" href="${esc(c.exposure_dashboard)}" target="_blank" rel="noopener">Open the full dashboard (home network) ${svg("mdiOpenInNew")}</a>` : ""}
+        ${this._inboundPath(m, ev, node)}
+        ${m.edge ? this._edgeControls(m.edge, ["red", "amber"].includes(xe.level)) : ""}
+        <div class="foot">
+          <button class="more${this._expoDetails ? " open" : ""}" data-action="expo-details" aria-expanded="${this._expoDetails}">${this._expoDetails ? "Hide details" : "Show details"} ${svg("mdiChevronDown")}</button>
+          ${c.exposure_dashboard ? `<a class="link" href="${esc(c.exposure_dashboard)}" target="_blank" rel="noopener" title="Grafana's Internet Exposure dashboard (home network only)">Open in Grafana ${svg("mdiOpenInNew")}</a>` : ""}
+        </div>
+        ${this._expoDetails ? `<div class="details">${this._expoDetails_html(m)}</div>` : ""}
       </section>`;
 
     const s = ev.status;

@@ -558,7 +558,7 @@ panel_custom:
     url_path: network
     sidebar_title: Network
     sidebar_icon: mdi:router-wireless
-    module_url: /local/network/network-panel.js?v=5
+    module_url: /local/network/network-panel.js?v=6
     config:
       gateway: a765e99e-5f8c-3c5a-b264-0770b4d1030a
       # UniFi device id -> its stats sensor (see the UniFi rest resources above).
