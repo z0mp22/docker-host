@@ -275,6 +275,13 @@ The phone overflow bug (§3 Layout) was caught at step 3. It would have shipped 
 - [ ] **Check the `panel_custom` `url_path`** in the HA log after deploy ("Overwriting panel …").
       `security` is a built-in path, which is why the Security panel lives at `/cameras`.
 - [ ] **Summarize high-volume history before listing it** (e.g. 42 visits a day becomes a summary plus the latest 8).
+- [ ] **A path runs one direction.** Network's "Connection path" is your traffic going out (Wi-Fi → gateway →
+      internet); putting Cloudflare in front of it mixed in the way *in* and read as nonsense. The way in got its
+      own path on the exposure card (Cloudflare → router → proxy → apps), in the order a request travels.
+- [ ] **Each number once, and a gate isn't a funnel step.** The first exposure card repeated counts in the
+      verdict, the funnel and the boxes. Now the verdict states the conclusion, each node holds one number,
+      and the router node states its role ("Cloudflare only") because its drops never went through Cloudflare.
+      Reference facts (per-site table, certificates, ports) sit behind "Show details".
 
 ## 7. Known gaps / backlog
 
