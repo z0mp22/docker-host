@@ -1,5 +1,6 @@
-// TV panel: what's on each Roku, a remote, and an app launcher. A dependency-free web component
-// registered via panel_custom; HA hands it `hass`, so there is no token handling or build step.
+// TV panel: what's on each Roku, a remote, and an app launcher, plus the basement PS5 (whether it's
+// on, what game, and play time). A dependency-free web component registered via panel_custom; HA
+// hands it `hass`, so there is no token handling or build step.
 
 const ICONS = {
   mdiTelevisionPlay: "M21,3H3C1.89,3 1,3.89 1,5V17A2,2 0 0,0 3,19H8V21H16V19H21A2,2 0 0,0 23,17V5C23,3.89 22.1,3 21,3M21,17H3V5H21M16,11L9,15V7",
@@ -44,6 +45,8 @@ const ICONS = {
   mdiPauseCircleOutline: "M13,16V8H15V16H13M9,16V8H11V16H9M12,2A10,10 0 0,1 22,12A10,10 0 0,1 12,22A10,10 0 0,1 2,12A10,10 0 0,1 12,2M12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20A8,8 0 0,0 20,12A8,8 0 0,0 12,4Z",
   mdiClockOutline: "M12,20A8,8 0 0,0 20,12A8,8 0 0,0 12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20M12,2A10,10 0 0,1 22,12A10,10 0 0,1 12,22C6.47,22 2,17.5 2,12A10,10 0 0,1 12,2M12.5,7V12.25L17,14.92L16.25,16.15L11,13V7H12.5Z",
   mdiPlayPause: "M3,5V19L11,12M13,19H16V5H13M18,5V19H21V5",
+  mdiSonyPlaystation: "M9.5,4.27C10.88,4.53 12.9,5.14 14,5.5C16.75,6.45 17.69,7.63 17.69,10.29C17.69,12.89 16.09,13.87 14.05,12.89V8.05C14.05,7.5 13.95,6.97 13.41,6.82C13,6.69 12.76,7.07 12.76,7.63V19.73L9.5,18.69V4.27M13.37,17.62L18.62,15.75C19.22,15.54 19.31,15.24 18.83,15.08C18.34,14.92 17.47,14.97 16.87,15.18L13.37,16.41V14.45L13.58,14.38C13.58,14.38 14.59,14 16,13.87C17.43,13.71 19.17,13.89 20.53,14.4C22.07,14.89 22.25,15.61 21.86,16.1C21.46,16.6 20.5,16.95 20.5,16.95L13.37,19.5V17.62M3.5,17.42C1.93,17 1.66,16.05 2.38,15.5C3.05,15 4.18,14.65 4.18,14.65L8.86,13V14.88L5.5,16.09C4.9,16.3 4.81,16.6 5.29,16.76C5.77,16.92 6.65,16.88 7.24,16.66L8.86,16.08V17.77L8.54,17.83C6.92,18.09 5.2,18 3.5,17.42Z",
+  mdiGamepadVariantOutline: "M6,9H8V11H10V13H8V15H6V13H4V11H6V9M18.5,9A1.5,1.5 0 0,1 20,10.5A1.5,1.5 0 0,1 18.5,12A1.5,1.5 0 0,1 17,10.5A1.5,1.5 0 0,1 18.5,9M15.5,12A1.5,1.5 0 0,1 17,13.5A1.5,1.5 0 0,1 15.5,15A1.5,1.5 0 0,1 14,13.5A1.5,1.5 0 0,1 15.5,12M17,5A7,7 0 0,1 24,12A7,7 0 0,1 17,19C15.04,19 13.27,18.2 12,16.9C10.73,18.2 8.96,19 7,19A7,7 0 0,1 0,12A7,7 0 0,1 7,5H17M7,7A5,5 0 0,0 2,12A5,5 0 0,0 7,17C8.64,17 10.09,16.21 11,15H13C13.91,16.21 15.36,17 17,17A5,5 0 0,0 22,12A5,5 0 0,0 17,7H7Z",
 };
 
 const PLAYING = new Set(["playing", "paused", "buffering"]);
@@ -53,6 +56,8 @@ const APPS_SHOWN = 12;
 const APPS_SHOWN_IDLE = 20;
 const SEEK_SECONDS = 30;
 const ROOM_KEY = "tv-panel-room";
+const PLAY_REFRESH_MS = 5 * 60e3;
+const GAMES_SHOWN = 5;
 
 const svg = (name, cls = "") =>
   `<svg class="ic ${cls}" viewBox="0 0 24 24" aria-hidden="true"><path d="${ICONS[name] || ICONS.mdiTelevision}"/></svg>`;
@@ -77,13 +82,62 @@ function fmtLeft(sec) {
   return m ? `${h} h ${m} min left` : `${h} h left`;
 }
 
+// "1 h 20 min" / "45 min"
+function fmtDur(sec) {
+  const min = Math.round(Math.max(0, sec) / 60);
+  if (min < 60) return `${min} min`;
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return m ? `${h} h ${m} min` : `${h} h`;
+}
+
+// A room's PS5 (config `ps5:`): power from the LAN check (sensor.ps5_power: on/standby/off), hours
+// from history_stats, and the game from the PlayStation Network media player, when PSN is linked.
+function readPs5(states, cfg) {
+  if (!cfg) return null;
+  const p = states[cfg.power];
+  const power = p && !DEAD.has(p.state) ? p.state : "unknown";
+  const m = cfg.psn ? states[cfg.psn] : null;
+  const linked = !!m && !DEAD.has(m.state);
+  const game = linked && m.state === "playing" ? m.attributes?.media_title || "" : "";
+  const hours = (id) => (id ? num(states[id]?.state) : null);
+  return {
+    ...cfg,
+    power,
+    on: power === "on",
+    linked,
+    game,
+    art: game ? m.attributes?.entity_picture || "" : "",
+    today: hours(cfg.today),
+    week: hours(cfg.week),
+  };
+}
+
+// Seconds per game title from recorder history of the PSN "Now playing" sensor (state = title).
+function sumGames(entries, start, end, today) {
+  const at = (e) => (e.lc ?? e.lu) * 1000;
+  const games = new Map();
+  entries.forEach((e, i) => {
+    const from = Math.max(start, at(e));
+    const to = i + 1 < entries.length ? at(entries[i + 1]) : end;
+    if (!e.s || DEAD.has(e.s) || to <= from) return;
+    const g = games.get(e.s) || { title: e.s, week: 0, today: 0 };
+    g.week += (to - from) / 1000;
+    g.today += Math.max(0, to - Math.max(from, today)) / 1000;
+    games.set(e.s, g);
+  });
+  return [...games.values()].sort((a, b) => b.week - a.week);
+}
+
 // What a room's TV is doing, merged from the Roku itself and the Plex client running on it.
 // Plex knows titles, artwork and position; the Roku knows the app and whether it's on at all.
 function readRoom(states, cfg, now) {
   const r = states[cfg.roku];
   const p = cfg.plex ? states[cfg.plex] : null;
   const online = !!r && !DEAD.has(r.state);
-  const room = { ...cfg, online, exists: !!r, state: r?.state || "missing", app: r?.attributes?.app_name || "", sources: r?.attributes?.source_list || [] };
+  const ps5 = readPs5(states, cfg.ps5);
+  const room = { ...cfg, ps5, online, exists: !!r, state: r?.state || "missing", app: r?.attributes?.app_name || "", sources: r?.attributes?.source_list || [] };
+  room.gaming = !!ps5?.on && !(online && (PLAYING.has(r.state) || (p && PLAYING.has(p.state))));
   if (!online) return { ...room, mode: "dead" };
   if (["off", "standby"].includes(r.state)) return { ...room, mode: "off" };
 
@@ -199,7 +253,9 @@ h1 { margin: 0; font-size: 34px; font-weight: 700; letter-spacing: -.01em; line-
 .grid { display: grid; gap: 22px; grid-template-columns: minmax(0, 1.4fr) minmax(0, 0.9fr); align-items: start; }
 .col { display: flex; flex-direction: column; gap: 22px; min-width: 0; }
 .card { background: linear-gradient(180deg, var(--card-2), var(--card)); border: 1px solid var(--line); border-radius: 30px; padding: 24px 28px; min-width: 0; }
-.rooms { order: 0; } .now { order: 1; } .remote { order: 2; } .apps { order: 3; } .dvr { order: 4; }
+.rooms { order: 0; } .now { order: 1; } .remote { order: 2; } .apps { order: 3; } .play { order: 4; } .dvr { order: 5; }
+/* While gaming the Roku remote matters less; on phones play time comes first. */
+.app.gaming .play { order: 2; } .app.gaming .remote { order: 3; }
 .card-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .eyebrow { font-size: 13px; letter-spacing: .12em; font-weight: 600; color: var(--muted); text-transform: uppercase; }
 .link-btn { color: var(--violet); font-weight: 600; font-size: 15px; padding: 6px 2px; display: inline-flex; align-items: center; gap: 4px; }
@@ -214,12 +270,12 @@ h1 { margin: 0; font-size: 34px; font-weight: 700; letter-spacing: -.01em; line-
 .room:hover { border-color: rgba(148,170,200,.28); }
 .room.sel { border-color: rgba(167,139,250,.65); background: linear-gradient(180deg, #1c1833, var(--card)); }
 .ric { width: 48px; height: 48px; border-radius: 15px; display: grid; place-items: center; flex: none; background: #243246; color: #aeb9c9; }
-.room.media .ric { background: linear-gradient(160deg, #c4b5fd, #7c3aed); color: #fff; box-shadow: 0 8px 22px rgba(124,58,237,.35); }
+.room.media .ric, .room.gaming .ric { background: linear-gradient(160deg, #c4b5fd, #7c3aed); color: #fff; box-shadow: 0 8px 22px rgba(124,58,237,.35); }
 .room.dead .ric { background: rgba(245,176,65,.14); color: var(--amber); }
 .room-t { min-width: 0; flex: 1; }
 .room-t b { display: block; font-size: 18px; font-weight: 600; }
 .room-t span { display: block; font-size: 14.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
-.room.media .room-t span { color: #d6cbff; }
+.room.media .room-t span, .room.gaming .room-t span { color: #d6cbff; }
 .room.dead .room-t span { color: #f7d49a; }
 
 /* Now playing */
@@ -230,6 +286,7 @@ h1 { margin: 0; font-size: 34px; font-weight: 700; letter-spacing: -.01em; line-
 .art { position: relative; flex: none; width: 180px; aspect-ratio: 2 / 3; border-radius: 18px; overflow: hidden; background: #1a2435; display: grid; place-items: center;
   box-shadow: 0 18px 40px rgba(0,0,0,.45); border: 1px solid rgba(255,255,255,.06); color: #4b5a70; }
 .art.wide { width: 220px; aspect-ratio: 4 / 3; }
+.art.square { aspect-ratio: 1; }
 .art .ic { width: 56px; height: 56px; }
 .art img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .np-t { flex: 1; min-width: 0; display: flex; flex-direction: column; }
@@ -310,6 +367,13 @@ h1 { margin: 0; font-size: 34px; font-weight: 700; letter-spacing: -.01em; line-
 .tile:disabled { opacity: .45; }
 .app-grid.few .tile:nth-child(n+11) { display: none; }
 
+/* Play time */
+.stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; }
+.stat { padding: 14px 16px; border-radius: 18px; background: #172234; border: 1px solid var(--line); }
+.stat small { display: block; font-size: 13px; color: var(--muted); }
+.stat b { display: block; font-size: 24px; font-weight: 700; margin-top: 4px; font-variant-numeric: tabular-nums; }
+.rec .aic.game { background: rgba(167,139,250,.14); color: var(--violet); }
+
 /* DVR */
 .dvr-list { display: flex; flex-direction: column; margin-top: 10px; }
 .sub-h { font-size: 12.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); font-weight: 600; margin: 14px 0 2px; }
@@ -376,6 +440,7 @@ h1 { margin: 0; font-size: 34px; font-weight: 700; letter-spacing: -.01em; line-
   .app-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
   .app-grid.few .tile:nth-child(n+10), .app-grid.roomy .tile:nth-child(n+19) { display: none; }
   .tile { border-radius: 12px; font-size: 12px; }
+  .stat b { font-size: 20px; }
 }
 `;
 
@@ -387,6 +452,7 @@ class TvPanel extends HTMLElement {
     this._apps = new Map(); // roku entity -> { status, list: [{id, title}] }
     this._icons = new Map(); // "entity|appId" -> blob URL | "" (failed) | null (loading)
     this._art = new Map(); // room name -> { key, url }: keeps the first artwork URL for a title
+    this._play = new Map(); // PSN now-playing sensor -> { loading, cur, at, games, error }
     this._showAllApps = false;
     this._query = "";
     this._toast = "";
@@ -465,6 +531,37 @@ class TvPanel extends HTMLElement {
     } catch (_) {
       this._apps.set(id, { status: "error", at: Date.now(), list: [] });
     }
+    this._scheduleRender();
+  }
+
+  // Per-game time for today and the last 7 days, from recorder history. Refetched every few
+  // minutes, and right away when the game changes so a new one shows up.
+  async _loadPlay(ps5) {
+    const id = ps5?.game_sensor;
+    if (!id || !ps5.linked) return;
+    const cur = this._hass.states[id]?.state;
+    const have = this._play.get(id);
+    if (have && (have.loading || (have.cur === cur && Date.now() - have.at < PLAY_REFRESH_MS))) return;
+    this._play.set(id, { ...have, loading: true, cur, at: Date.now() });
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    const today = start.getTime();
+    start.setDate(start.getDate() - 6);
+    let next;
+    try {
+      const res = await this._hass.callWS({
+        type: "history/history_during_period",
+        start_time: start.toISOString(),
+        entity_ids: [id],
+        minimal_response: true,
+        no_attributes: true,
+        significant_changes_only: false,
+      });
+      next = { games: sumGames(res?.[id] || [], start.getTime(), Date.now(), today) };
+    } catch (_) {
+      next = { games: have?.games || null, error: true };
+    }
+    this._play.set(id, { ...next, loading: false, cur, at: Date.now() });
     this._scheduleRender();
   }
 
@@ -591,6 +688,7 @@ class TvPanel extends HTMLElement {
   }
 
   _roomLine(r) {
+    if (r.gaming) return r.ps5.game ? `PS5 · ${r.ps5.game}` : "PS5 on";
     if (r.mode === "dead") return r.exists ? "Not responding" : "Not set up in HA";
     if (r.mode === "off") return "Off";
     if (r.mode === "idle") return r.home ? "On · home screen" : `On · ${r.app}`;
@@ -607,7 +705,65 @@ class TvPanel extends HTMLElement {
     return r.art;
   }
 
+  // While the PS5 is on (and the Roku isn't playing), the TV is on the PS5, so this replaces the Roku card.
+  _ps5Card(r) {
+    const g = r.ps5;
+    const head = `<div class="card-head"><span class="eyebrow">${esc(r.name)} · PS5</span></div>`;
+    const today = g.today !== null ? `On ${fmtDur(g.today * 3600)} today` : "";
+    const sub = g.linked
+      ? "No game running: it's on the home screen or in an app."
+      : "Link PlayStation Network in Home Assistant to see which game.";
+    if (!g.game) {
+      return `<section class="card now"><div class="now-in">${head}
+        <div class="idle-row"><div class="idle-ic">${svg("mdiSonyPlaystation")}</div>
+          <div style="min-width:0"><div class="state-big" style="margin-top:0">The PS5 is on</div>
+          <div class="state-sub">${esc(sub)}${today ? ` ${esc(today)}.` : ""}</div></div></div></div></section>`;
+    }
+    const art = g.art;
+    return `<section class="card now">
+      ${art ? `<div class="backdrop" style="background-image:url('${esc(art)}')"></div>` : ""}
+      <div class="now-in">${head}
+        <div class="np">
+          <div class="art square">${svg("mdiGamepadVariantOutline")}${art ? `<img src="${esc(art)}" alt="">` : ""}</div>
+          <div class="np-t">
+            <div class="np-title">${esc(g.game)}</div>
+            <div class="tags"><span class="tag">${svg("mdiSonyPlaystation")}PS5</span>${today ? `<span class="tag">${svg("mdiClockOutline")}${esc(today)}</span>` : ""}</div>
+          </div>
+        </div>
+      </div></section>`;
+  }
+
+  _playCard(r) {
+    const g = r.ps5;
+    const head = `<div class="card-head"><span class="eyebrow">PS5 · Play time</span></div>`;
+    const stat = (label, h) => `<div class="stat"><small>${label}</small><b>${h === null ? "–" : fmtDur(h * 3600)}</b></div>`;
+    const state = { on: "On now", standby: "In rest mode", off: "Off" }[g.power];
+    let games;
+    if (!g.linked) {
+      games = `<div class="empty">Which games: add PlayStation Network under Settings → Devices &amp; services.</div>`;
+    } else {
+      const play = this._play.get(g.game_sensor);
+      const list = (play?.games || []).filter((x) => x.week >= 60).slice(0, GAMES_SHOWN);
+      if (!play?.games) games = `<div class="empty">${play?.error ? "Couldn't load game history." : "Loading games…"}</div>`;
+      else if (!list.length) games = `<div class="empty">No games in the last 7 days.</div>`;
+      else
+        games = `<div class="sub-h">Games · last 7 days</div><div class="dvr-list">${list
+          .map(
+            (x) => `<div class="rec"><div class="aic game">${svg("mdiGamepadVariantOutline")}</div>
+              <div style="min-width:0"><b>${esc(x.title)}</b><small>${x.today >= 60 ? `${fmtDur(x.today)} today` : ""}</small></div>
+              <div class="when">${fmtDur(x.week)}</div></div>`,
+          )
+          .join("")}</div>`;
+    }
+    return `<section class="card play">${head}
+      <div class="stats">${stat("On today", g.today)}${stat("Last 7 days", g.week)}</div>
+      ${state ? "" : `<div class="note">Can't tell whether the PS5 is on right now (${esc(g.power)}).</div>`}
+      ${games}
+    </section>`;
+  }
+
   _nowCard(r) {
+    if (r.gaming) return this._ps5Card(r);
     const head = (label) => `<div class="card-head"><span class="eyebrow">${esc(r.name)} · ${esc(label)}</span></div>`;
     if (r.mode === "dead") {
       const steps = r.exists
@@ -755,15 +911,21 @@ class TvPanel extends HTMLElement {
       return;
     }
     // Default to whatever is playing, then whatever is reachable; a remembered choice wins.
-    let sel = rooms.find((r) => r.name === this._room) || rooms.find((r) => r.mode === "media") || rooms.find((r) => r.online) || rooms[0];
+    let sel =
+      rooms.find((r) => r.name === this._room) || rooms.find((r) => r.mode === "media") || rooms.find((r) => r.gaming) || rooms.find((r) => r.online) || rooms[0];
     this._sel = sel;
     for (const r of rooms) if (r.online) this._loadApps(r);
+    this._loadPlay(sel.ps5);
 
     const playing = rooms.filter((r) => r.mode === "media");
+    const gaming = rooms.filter((r) => r.gaming);
     let status;
     if (playing.length) {
       const p = playing[0];
       status = { dot: p.playing ? "violet" : "", label: p.playing ? "Playing" : "Paused", detail: `${p.title} · ${p.name}${playing.length > 1 ? ` +${playing.length - 1} more` : ""}` };
+    } else if (gaming.length) {
+      const g = gaming[0];
+      status = { dot: "violet", label: "Gaming", detail: `${g.ps5.game || "PS5 on"} · ${g.name}` };
     } else {
       const on = rooms.filter((r) => r.mode === "idle");
       status = { dot: on.length ? "green" : "", label: "Nothing playing", detail: on.length ? `${on.map((r) => r.name).join(" and ")} ${on.length === 1 ? "is" : "are"} on` : "All TVs are off" };
@@ -776,18 +938,18 @@ class TvPanel extends HTMLElement {
 
     const roomTiles = rooms
       .map(
-        (r) => `<button class="room ${r === sel ? "sel" : ""} ${r.mode}" data-action="room" data-room="${esc(r.name)}" aria-pressed="${r === sel}">
-          <div class="ric">${svg(r.mode === "dead" ? "mdiWifiOff" : r.icon || "mdiTelevision")}</div>
+        (r) => `<button class="room ${r === sel ? "sel" : ""} ${r.mode} ${r.gaming ? "gaming" : ""}" data-action="room" data-room="${esc(r.name)}" aria-pressed="${r === sel}">
+          <div class="ric">${svg(r.gaming ? "mdiSonyPlaystation" : r.mode === "dead" ? "mdiWifiOff" : r.icon || "mdiTelevision")}</div>
           <div class="room-t"><b>${esc(r.name)}</b><span>${esc(this._roomLine(r))}</span></div></button>`,
       )
       .join("");
 
     const html = `
       <style>${CSS}</style>
-      <div class="app">
+      <div class="app ${sel.gaming ? "gaming" : ""}">
         <header class="top">
           ${this._narrow ? `<button class="icon-btn" data-action="menu" aria-label="Menu">${svg("mdiMenu")}</button>` : ""}
-          <div class="brand ${playing.length ? "" : "idle"}">${svg("mdiTelevisionPlay")}</div>
+          <div class="brand ${playing.length || gaming.length ? "" : "idle"}">${svg("mdiTelevisionPlay")}</div>
           <div class="titles">
             <h1>TV</h1>
             <div class="status"><span class="dot ${status.dot}"></span><b>${esc(status.label)}</b><span class="muted">·</span><span class="muted detail">${esc(status.detail)}${
@@ -800,7 +962,7 @@ class TvPanel extends HTMLElement {
         ${rooms.length > 1 ? `<div class="room-row">${roomTiles}</div>` : ""}
         <main class="grid">
           <div class="col">${this._nowCard(sel)}${this._appsCard(sel)}</div>
-          <div class="col">${this._remoteCard(sel)}${this._dvrCard(rec)}</div>
+          <div class="col">${this._remoteCard(sel)}${sel.ps5 ? this._playCard(sel) : ""}${this._dvrCard(rec)}</div>
         </main>
         ${this._toast ? `<div class="toast" role="alert">${esc(this._toast)}</div>` : ""}
       </div>`;

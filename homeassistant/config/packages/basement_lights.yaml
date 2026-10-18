@@ -4,7 +4,8 @@
 #   seconds to minutes while someone moves around, which the hour absorbs.
 # - It does miss someone sitting still: on 2026-10-11 someone watched Plex on the basement Roku from
 #   18:50 to 20:15 and Frigate saw no person for 79 minutes. So the basement Roku playing or paused
-#   counts as someone being there, and the lights stay on until it stops.
+#   counts as someone being there, and the lights stay on until it stops. The PS5 being on
+#   (binary_sensor.ps5_on, packages/ps5.yaml) counts the same way, for gaming with the Roku idle.
 # - Without a working camera there's no way to tell, so nothing happens while the Basement stream is
 #   off (binary_sensor.basement_stream_active) or Frigate detection is switched off.
 # - The occupancy sensor goes unavailable and back on every HA restart, which restarts the hour.
@@ -14,7 +15,8 @@ automation:
     alias: "Basement: lights off at night when nobody's been seen for an hour"
     description: >-
       22:00-03:00: light.basement off once the Basement camera hasn't seen a person for an hour and
-      the basement Roku isn't playing. Skips while the camera stream or Frigate detection is off.
+      the basement Roku isn't playing and the PS5 isn't on. Skips while the camera stream or
+      Frigate detection is off.
     mode: single
     triggers:
       - trigger: state
@@ -31,6 +33,11 @@ automation:
       - trigger: state
         entity_id: media_player.basement_roku
         from: [playing, paused]
+        for: "00:15:00"
+      # Same after a gaming session: 15 minutes after the PS5 goes to rest or off.
+      - trigger: state
+        entity_id: binary_sensor.ps5_on
+        from: "on"
         for: "00:15:00"
       # The camera or detection coming back: an hour of it watching before anything turns off.
       - trigger: state
@@ -56,6 +63,11 @@ automation:
           - condition: state
             entity_id: media_player.basement_roku
             state: [playing, paused]
+      - condition: not
+        conditions:
+          - condition: state
+            entity_id: binary_sensor.ps5_on
+            state: "on"
     actions:
       - action: light.turn_off
         target:

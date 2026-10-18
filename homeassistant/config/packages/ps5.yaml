@@ -1,0 +1,115 @@
+# Basement PS5: is it on, and for how long.
+# - sensor.ps5_power comes from shell/ps5_status.py, which asks the PS5 over the LAN (Sony's
+#   discovery protocol, no pairing or account): on / standby (rest mode) / off. "off" is also what
+#   rest mode looks like when the PS5's "Stay connected to the internet" setting is off.
+# - binary_sensor.ps5_on waits a minute before going off, so a dropped Wi-Fi reply doesn't end a
+#   session. The basement lights automation counts it as someone being downstairs.
+# - The hours come from recorder history, so they start from when this was deployed.
+# - The game comes from the PlayStation Network integration (Cody's account, set up in the UI):
+#   sensor.basement_ps5_now_playing is the title, or unknown when no game is running. Its token
+#   expires every couple of months; HA then raises a repair and the title stays unknown.
+# - Left on: one push once the PS5 has been on for 2 h while the Basement camera has seen nobody
+#   and no game is running (it's probably sitting at a menu). A paused game counts as running, so
+#   that case doesn't push. Like the lights, it needs the camera and Frigate detection working.
+
+command_line:
+  - sensor:
+      name: PS5 power
+      unique_id: ps5_power
+      command: python3 /config/shell/ps5_status.py
+      scan_interval: 30
+      value_template: "{{ value_json.state }}"
+      json_attributes:
+        - host_name
+        - ip
+        - checked_at
+      icon: mdi:sony-playstation
+
+template:
+  - binary_sensor:
+      - name: PS5 on
+        unique_id: ps5_on
+        icon: mdi:sony-playstation
+        availability: "{{ states('sensor.ps5_power') in ['on', 'standby', 'off'] }}"
+        state: "{{ is_state('sensor.ps5_power', 'on') }}"
+        delay_off: "00:01:00"
+
+sensor:
+  - platform: history_stats
+    name: PS5 on today
+    unique_id: ps5_on_today
+    entity_id: binary_sensor.ps5_on
+    state: "on"
+    type: time
+    start: "{{ today_at() }}"
+    end: "{{ now() }}"
+  - platform: history_stats
+    name: PS5 on last 7 days
+    unique_id: ps5_on_last_7_days
+    entity_id: binary_sensor.ps5_on
+    state: "on"
+    type: time
+    start: "{{ today_at() - timedelta(days=6) }}"
+    end: "{{ now() }}"
+
+automation:
+  - id: ps5_left_on
+    alias: "PS5: push when it's left on with nobody downstairs"
+    description: >-
+      The PS5 has been on for 2 h, the Basement camera hasn't seen a person for 2 h, and no game
+      has been running for 2 h. One push per time it's left on.
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.ps5_on
+        to: "on"
+        for: "02:00:00"
+      - trigger: state
+        entity_id: binary_sensor.basement_person_occupancy
+        to: "off"
+        for: "02:00:00"
+      - trigger: state
+        entity_id: sensor.basement_ps5_now_playing
+        to: [unknown, unavailable]
+        for: "02:00:00"
+    conditions:
+      - condition: state
+        entity_id: binary_sensor.ps5_on
+        state: "on"
+        for: "02:00:00"
+      - condition: state
+        entity_id: binary_sensor.basement_person_occupancy
+        state: "off"
+        for: "02:00:00"
+      - condition: state
+        entity_id: sensor.basement_ps5_now_playing
+        state: [unknown, unavailable]
+        for: "02:00:00"
+      - condition: state
+        entity_id: [binary_sensor.basement_stream_active, switch.basement_detect]
+        state: "on"
+    actions:
+      - action: script.notify_phones
+        data:
+          title: PS5 left on?
+          message: >-
+            On since {{ as_local(states.binary_sensor.ps5_on.last_changed).strftime('%-I:%M %p') }}
+            with nobody seen downstairs and no game running.
+          tag: ps5-left-on
+          channel: Basement
+          data:
+            clickAction: /tv
+            url: /tv
+
+  - id: ps5_left_on_clear
+    alias: "PS5: clear the left-on push when it goes off"
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.ps5_on
+        from: "on"
+    actions:
+      - action: script.notify_phones
+        data:
+          message: clear_notification
+          tag: ps5-left-on
