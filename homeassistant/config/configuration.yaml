@@ -517,7 +517,7 @@ panel_custom:
     url_path: tv
     sidebar_title: TV
     sidebar_icon: mdi:television-play
-    module_url: /local/tv/tv-panel.js?v=4
+    module_url: /local/tv/tv-panel.js?v=5
     config:
       # Each room: the Roku (core roku integration), its remote, and the Plex client on it, which
       # supplies titles, artwork and seeking. Icons: mdiSofa, mdiStairsDown, mdiTelevision.
@@ -541,6 +541,28 @@ panel_custom:
             week: sensor.ps5_on_last_7_days
             psn: media_player.playstation_5
             game_sensor: sensor.basement_ps5_now_playing
+          # The TV set itself (packages/basement_tv.yaml): power, volume and auto-off from the core
+          # samsungtv integration (LAN only). The input is guessed from which `device` is active.
+          tv:
+            media_player: media_player.basement_tv
+            remote: remote.basement_tv
+            host: 10.0.0.243
+            today: sensor.basement_tv_on_today
+            auto_off: automation.basement_tv_off_after_30_min_with_nothing_on
+            inputs:
+              - name: Roku
+                detail: HDMI 2
+                device: roku
+                script: script.basement_tv_watch_roku
+              - name: PS5
+                detail: HDMI 1
+                device: ps5
+                script: script.basement_tv_watch_ps5
+            scenes:
+              - name: Movie
+                detail: Lights 10% · Plex
+                icon: mdiPlex
+                script: script.basement_movie
       recordings: sensor.plex_recordings_sync_meta
       links:
         recordings: /recordings

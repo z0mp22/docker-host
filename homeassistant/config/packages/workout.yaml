@@ -13,7 +13,8 @@
 # No Spotify account link or developer app is involved.
 #
 # End workout (same card, added 2026-10-11): Home closes Spotify (a Roku app can't keep playing in the
-# background), PowerOff puts the Roku in standby and the TV follows over HDMI-CEC, lights off, then a
+# background), PowerOff puts the Roku in standby, the TV is turned off directly (added 2026-10-22; it used
+# to rely on following the Roku over HDMI-CEC), lights off, then a
 # push asks how it went. The push has an inline Reply: the text goes straight into the coach feedback
 # log (script.lift_feedback_submit), and the push clears itself once feedback is logged, from the push or
 # the Coach panel. Tapping the push opens /coach?feedback with the feedback box focused. "Felt good" and
@@ -69,6 +70,11 @@ script:
         continue_on_error: true
         target:
           entity_id: media_player.basement_roku
+      # The TV directly too (packages/basement_tv.yaml), so it doesn't depend on CEC following the Roku.
+      - action: media_player.turn_off
+        continue_on_error: true
+        target:
+          entity_id: media_player.basement_tv
       - action: light.turn_off
         continue_on_error: true
         target:
