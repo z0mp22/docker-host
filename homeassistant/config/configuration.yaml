@@ -517,7 +517,7 @@ panel_custom:
     url_path: tv
     sidebar_title: TV
     sidebar_icon: mdi:television-play
-    module_url: /local/tv/tv-panel.js?v=6
+    module_url: /local/tv/tv-panel.js?v=7
     config:
       # Each room: the Roku (core roku integration), its remote, and the Plex client on it, which
       # supplies titles, artwork and seeking. Icons: mdiSofa, mdiStairsDown, mdiTelevision.
@@ -560,6 +560,8 @@ panel_custom:
               - name: PS5
                 detail: HDMI 1
                 device: ps5
+                # The script wakes it from rest mode (shell_command.ps5_wake); fully off still needs the controller.
+                wakes: true
                 script: script.basement_tv_watch_ps5
             scenes:
               - name: Movie

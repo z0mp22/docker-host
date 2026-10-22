@@ -12,6 +12,11 @@
 #   and no game is running (it's probably sitting at a menu). A paused game counts as running, so
 #   that case doesn't push. Like the lights, it needs the camera and Frigate detection working.
 
+# Wake from rest mode (shell/ps5_wake.py; Remote Play credential in /config/.ps5_credential, not in
+# the repo). Used by script.basement_tv_watch_ps5. It can't turn on a PS5 that's fully off.
+shell_command:
+  ps5_wake: python3 /config/shell/ps5_wake.py
+
 command_line:
   - sensor:
       name: PS5 power

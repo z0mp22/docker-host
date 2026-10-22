@@ -28,8 +28,11 @@ Options:
 - **Local only:** `samsungtv`, entities renamed to `media_player.basement_tv` and
   `remote.basement_tv`. The TV stays blocked from the internet; it has a fixed IP (10.0.0.243) on the UDM.
 - **Inputs:** "watch the Roku" wakes the Roku (CEC) and, if the TV was already on, sends
-  `KEY_HDMI2`. "Switch to the PS5" sends `KEY_HDMI1`; HA can't wake the PS5 (no Remote Play
-  pairing), so the panel asks for the controller's PS button when it's off.
+  `KEY_HDMI2`. "Switch to the PS5" wakes the PS5 from rest mode, turns the TV on if needed and sends
+  `KEY_HDMI1`. The wake is a DDP `WAKEUP` with the credential from a Remote Play device link
+  (pyremoteplay registration with the Link Device code, done once on 2026-10-22; the credential is
+  in `/config/.ps5_credential`, not the repo). A fully-off PS5 doesn't listen, so then the panel asks
+  for the controller's PS button.
 - **Which input is showing** is a guess: the PS5 while it's on and the Roku isn't playing (the
   panel's existing gaming rule), else the Roku while it's awake. The panel says it's a guess.
 - **Auto-off** (`automation.basement_tv_off_after_30_min_with_nothing_on`): TV on for 30 min with
@@ -47,6 +50,7 @@ Options:
 - **Tested with Cody at the TV, 2026-10-22, after pairing:** `KEY_HDMI1` and `KEY_HDMI2` switch inputs;
   `script.basement_tv_watch_roku` lands on the Roku home screen; turn off works, and Wake-on-LAN
   over Wi-Fi brings it back (network up in about 2 s, screen on, HA reports on in about 6 s).
+- **PS5 wake tested 2026-10-22:** from rest mode (`620`) to on (`200`) within seconds of the wake.
 - **No volume from HA.** The sound is a Samsung HW-T550 soundbar on optical, which only takes IR
   (it answers the TV remote's codes). The TV's network volume keys only change its built-in speakers
   (always 0), and the Roku's volume keys don't reach it either. The Basement room shows a note

@@ -930,8 +930,13 @@ class TvPanel extends HTMLElement {
     const busy = this._tvBusy;
     const btn = (x, i, kind) => {
       const isBusy = busy === `${kind}${i}`;
-      const ps5Off = x.device === "ps5" && !r.ps5?.on;
-      const detail = isBusy ? "Switching…" : ps5Off ? "Off · press PS on a controller" : x.detail || "";
+      // A PS5 in rest mode can be woken by the script (`wakes: true`); fully off, only its controller can.
+      const asleep = x.device === "ps5" && !r.ps5?.on;
+      const canWake = asleep && x.wakes && r.ps5?.power === "standby";
+      const ps5Off = asleep && !canWake;
+      const detail = isBusy
+        ? canWake ? "Waking the PS5…" : "Switching…"
+        : ps5Off ? "Off · press PS on a controller" : canWake ? "In rest mode · tap to wake" : x.detail || "";
       const icon = x.icon || (x.device === "ps5" ? "mdiSonyPlaystation" : x.device === "roku" ? "mdiTelevisionPlay" : "mdiPlex");
       return `<button class="inp ${cur && x.device === cur ? "cur" : ""} ${isBusy ? "busy" : ""}" data-action="tv-run" data-kind="${kind}" data-i="${i}"
         aria-label="${esc(x.name)}" ${ps5Off || busy ? "disabled" : ""}>${svg(icon)}<span><b>${esc(x.name)}</b><small>${esc(detail)}</small></span></button>`;
