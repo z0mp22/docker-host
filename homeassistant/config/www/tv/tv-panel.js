@@ -1,5 +1,5 @@
 // TV panel: what's on each Roku, a remote, and an app launcher, plus the basement PS5 (whether it's
-// on, what game, and play time) and the basement Samsung TV itself (power, input, volume, auto-off). A dependency-free web component registered via panel_custom; HA
+// on, what game, and play time) and the basement Samsung TV itself (power, input, auto-off). A dependency-free web component registered via panel_custom; HA
 // hands it `hass`, so there is no token handling or build step.
 
 const ICONS = {
@@ -113,7 +113,7 @@ function readPs5(states, cfg) {
   };
 }
 
-// A room's TV set (config `tv:`, core samsungtv integration, LAN only): power, volume and remote keys.
+// A room's TV set (config `tv:`, core samsungtv integration, LAN only): power and remote keys.
 // The integration can't read the HDMI input without SmartThings, so the card guesses it from which
 // device is active and says so.
 function readTv(states, cfg) {
@@ -127,8 +127,6 @@ function readTv(states, cfg) {
     state: m?.state || "missing",
     on: m?.state === "on",
     reachable: !!m && !DEAD.has(m.state),
-    volume: num(m?.attributes?.volume_level),
-    muted: !!m?.attributes?.is_volume_muted,
     today: cfg.today ? num(states[cfg.today]?.state) : null,
     autoOff: a && !DEAD.has(a.state) ? a.state === "on" : null,
     autoOffAt: Number.isNaN(at) ? null : at,
@@ -721,15 +719,6 @@ class TvPanel extends HTMLElement {
       case "tv-off":
         if (room?.tv) this._call("media_player", "turn_off", { entity_id: room.tv.media_player });
         return;
-      case "tv-vol": {
-        if (!room?.tv?.on) return;
-        navigator.vibrate?.(8);
-        const svc = el.dataset.svc;
-        const data = { entity_id: room.tv.media_player };
-        if (svc === "volume_mute") data.is_volume_muted = !room.tv.muted;
-        this._call("media_player", svc, data);
-        return;
-      }
       case "tv-autooff":
         if (room?.tv?.auto_off) this._call("automation", room.tv.autoOff ? "turn_off" : "turn_on", { entity_id: room.tv.auto_off });
         return;
@@ -996,18 +985,10 @@ class TvPanel extends HTMLElement {
       </div></section>`;
   }
 
-  // With the TV paired and on, volume goes to the TV and shows its level; otherwise through the Roku remote.
+  // Volume through the Roku remote's keys. A room can set `volume:` to a note instead, when its sound
+  // comes from something HA can't reach (the basement soundbar is on optical and only takes IR).
   _volRow(r, dis) {
-    const tv = r.tv;
-    if (tv?.on) {
-      const level = tv.muted ? "Muted" : tv.volume !== null ? `TV volume ${Math.round(tv.volume * 100)}` : "TV volume";
-      return `<div class="vol">
-          <button data-action="tv-vol" data-svc="volume_down" aria-label="TV volume down">${svg("mdiVolumeMinus")}</button>
-          <span>${level}</span>
-          <button data-action="tv-vol" data-svc="volume_mute" aria-label="${tv.muted ? "Unmute TV" : "Mute TV"}">${svg("mdiVolumeOff")}</button>
-          <button data-action="tv-vol" data-svc="volume_up" aria-label="TV volume up">${svg("mdiVolumePlus")}</button>
-        </div>`;
-    }
+    if (r.volume) return `<div class="note" style="margin-top:0">${esc(r.volume)}</div>`;
     return `<div class="vol">
           <button data-action="key" data-cmd="volume_down" aria-label="TV volume down" ${dis}>${svg("mdiVolumeMinus")}</button>
           <span>TV volume</span>
