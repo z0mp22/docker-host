@@ -10,7 +10,8 @@
 #   entity only log a warning.
 # - Which input is showing is a guess from which device is active (the TV panel says so). Inputs
 #   switch two ways: the Roku and PS5 grab the TV over HDMI-CEC (Anynet+) when they wake, and the TV
-#   remote's KEY_HDMI1 / KEY_HDMI2 switch directly when the TV is already on.
+#   remote's KEY_HDMI1 / KEY_HDMI2 switch directly when the TV is already on (both tested 2026-10-22).
+# - The PS5 is woken from rest mode by shell_command.ps5_wake (packages/ps5.yaml).
 # - Turning on: Wake-on-LAN only works with "Power On with Mobile" on (Settings > General > Network >
 #   Expert Settings) and is patchy over Wi-Fi, so turning on goes through the Roku (CEC) when it can.
 
@@ -77,10 +78,19 @@ script:
 
   basement_tv_watch_ps5:
     alias: "Basement TV: switch to the PS5"
-    description: Turns the basement TV on if needed and switches it to HDMI 1. It can't wake the PS5; the controller's PS button does that (and the TV follows over CEC).
+    description: Wakes the PS5 from rest mode if needed, turns the basement TV on and switches it to HDMI 1.
     icon: mdi:sony-playstation
     mode: single
     sequence:
+      - variables:
+          ps5_was_on: "{{ is_state('sensor.ps5_power', 'on') }}"
+      # Rest mode only: a fully-off PS5 doesn't listen (the panel says to use the controller then).
+      - if:
+          - condition: template
+            value_template: "{{ not ps5_was_on }}"
+        then:
+          - action: shell_command.ps5_wake
+            continue_on_error: true
       - if:
           - condition: not
             conditions:
@@ -95,11 +105,36 @@ script:
           - wait_template: "{{ is_state('media_player.basement_tv', 'on') }}"
             timeout: "00:00:20"
             continue_on_timeout: false
+      # The PS5 also claims the TV over CEC when it wakes; this covers a TV that was already on.
       - action: remote.send_command
         target:
           entity_id: remote.basement_tv
         data:
           command: KEY_HDMI1
+      # Waking takes about 5-20 s. sensor.ps5_power polls every 30 s, so ask it directly until it's on.
+      - if:
+          - condition: template
+            value_template: "{{ not ps5_was_on }}"
+        then:
+          - repeat:
+              sequence:
+                - delay:
+                    seconds: 4
+                - action: homeassistant.update_entity
+                  target:
+                    entity_id: sensor.ps5_power
+              until:
+                - condition: template
+                  value_template: "{{ is_state('sensor.ps5_power', 'on') or repeat.index >= 10 }}"
+          - if:
+              - condition: not
+                conditions:
+                  - condition: state
+                    entity_id: sensor.ps5_power
+                    state: "on"
+            then:
+              - stop: "The PS5 didn't wake up"
+                error: true
 
   basement_movie:
     alias: "Basement: movie"

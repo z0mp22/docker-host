@@ -49,4 +49,7 @@ Options for knowing whether the PS5 is on:
   the backstop.
 - When the PSN token expires, HA shows a repair notice and titles go blank. There's no push for it
   (Cody's choice).
-- No remote control: waking or resting the PS5 over DDP needs Remote Play pairing credentials.
+- Waking from rest mode was added on 2026-10-22 (see ADR 0010). docker-host is linked as a Remote
+  Play device, and `shell/ps5_wake.py` sends DDP `WAKEUP` with that credential (kept in
+  `/config/.ps5_credential`, outside the repo). Putting it back into rest mode still isn't built:
+  that needs a full Remote Play session.
