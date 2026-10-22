@@ -1,5 +1,5 @@
 // TV panel: what's on each Roku, a remote, and an app launcher, plus the basement PS5 (whether it's
-// on, what game, and play time). A dependency-free web component registered via panel_custom; HA
+// on, what game, and play time) and the basement Samsung TV itself (power, input, volume, auto-off). A dependency-free web component registered via panel_custom; HA
 // hands it `hass`, so there is no token handling or build step.
 
 const ICONS = {
@@ -113,6 +113,28 @@ function readPs5(states, cfg) {
   };
 }
 
+// A room's TV set (config `tv:`, core samsungtv integration, LAN only): power, volume and remote keys.
+// The integration can't read the HDMI input without SmartThings, so the card guesses it from which
+// device is active and says so.
+function readTv(states, cfg) {
+  if (!cfg) return null;
+  const m = states[cfg.media_player];
+  const a = cfg.auto_off ? states[cfg.auto_off] : null;
+  const at = a?.attributes?.last_triggered ? Date.parse(a.attributes.last_triggered) : null;
+  return {
+    ...cfg,
+    paired: !!m,
+    state: m?.state || "missing",
+    on: m?.state === "on",
+    reachable: !!m && !DEAD.has(m.state),
+    volume: num(m?.attributes?.volume_level),
+    muted: !!m?.attributes?.is_volume_muted,
+    today: cfg.today ? num(states[cfg.today]?.state) : null,
+    autoOff: a && !DEAD.has(a.state) ? a.state === "on" : null,
+    autoOffAt: Number.isNaN(at) ? null : at,
+  };
+}
+
 // Seconds per game title from recorder history of the PSN "Now playing" sensor (state = title).
 function sumGames(entries, start, end, today) {
   const at = (e) => (e.lc ?? e.lu) * 1000;
@@ -136,7 +158,8 @@ function readRoom(states, cfg, now) {
   const p = cfg.plex ? states[cfg.plex] : null;
   const online = !!r && !DEAD.has(r.state);
   const ps5 = readPs5(states, cfg.ps5);
-  const room = { ...cfg, ps5, online, exists: !!r, state: r?.state || "missing", app: r?.attributes?.app_name || "", sources: r?.attributes?.source_list || [] };
+  const tv = readTv(states, cfg.tv);
+  const room = { ...cfg, ps5, tv, online, exists: !!r, state: r?.state || "missing", app: r?.attributes?.app_name || "", sources: r?.attributes?.source_list || [] };
   room.gaming = !!ps5?.on && !(online && (PLAYING.has(r.state) || (p && PLAYING.has(p.state))));
   if (!online) return { ...room, mode: "dead" };
   if (["off", "standby"].includes(r.state)) return { ...room, mode: "off" };
@@ -253,7 +276,7 @@ h1 { margin: 0; font-size: 34px; font-weight: 700; letter-spacing: -.01em; line-
 .grid { display: grid; gap: 22px; grid-template-columns: minmax(0, 1.4fr) minmax(0, 0.9fr); align-items: start; }
 .col { display: flex; flex-direction: column; gap: 22px; min-width: 0; }
 .card { background: linear-gradient(180deg, var(--card-2), var(--card)); border: 1px solid var(--line); border-radius: 30px; padding: 24px 28px; min-width: 0; }
-.rooms { order: 0; } .now { order: 1; } .remote { order: 2; } .apps { order: 3; } .play { order: 4; } .dvr { order: 5; }
+.rooms { order: 0; } .now { order: 1; } .tvc { order: 1; } .remote { order: 2; } .apps { order: 3; } .play { order: 4; } .dvr { order: 5; }
 /* While gaming the Roku remote matters less; on phones play time comes first. */
 .app.gaming .play { order: 2; } .app.gaming .remote { order: 3; }
 .card-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
@@ -374,6 +397,28 @@ h1 { margin: 0; font-size: 34px; font-weight: 700; letter-spacing: -.01em; line-
 .stat b { display: block; font-size: 24px; font-weight: 700; margin-top: 4px; font-variant-numeric: tabular-nums; }
 .rec .aic.game { background: rgba(167,139,250,.14); color: var(--violet); }
 
+/* TV set */
+.tv-state { font-size: 26px; font-weight: 700; margin-top: 12px; line-height: 1.15; }
+.inputs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 16px; }
+.inp { min-height: 88px; border-radius: 18px; background: #1a2435; border: 1.5px solid var(--line); display: flex; flex-direction: column;
+  align-items: flex-start; justify-content: space-between; gap: 6px; padding: 12px 14px; text-align: left; min-width: 0; transition: transform .12s, border-color .2s; }
+.inp:not(:disabled):hover { border-color: rgba(148,170,200,.35); }
+.inp:not(:disabled):active { transform: scale(.97); }
+.inp .ic { color: #aeb9c9; }
+.inp b, .inp small { display: block; }
+.inp b { font-size: 16px; font-weight: 600; }
+.inp small { font-size: 12.5px; color: var(--muted); line-height: 1.3; }
+.inp.cur { border-color: var(--violet); box-shadow: 0 0 0 3px rgba(167,139,250,.25); }
+.inp.cur .ic, .inp.busy small { color: var(--violet); }
+.inp:disabled { opacity: .5; }
+.tv-foot { display: flex; align-items: center; gap: 14px; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); font-size: 15px; }
+.tv-foot .grow { flex: 1; min-width: 0; }
+.tv-foot small { display: block; font-size: 13px; color: var(--muted); margin-top: 2px; }
+.sw { width: 52px; height: 30px; border-radius: 15px; background: #243044; position: relative; flex: none; }
+.sw::after { content: ""; position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%; background: #8593a8; transition: left .15s; }
+.sw.on { background: var(--violet-2); }
+.sw.on::after { left: 25px; background: #fff; }
+
 /* DVR */
 .dvr-list { display: flex; flex-direction: column; margin-top: 10px; }
 .sub-h { font-size: 12.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); font-weight: 600; margin: 14px 0 2px; }
@@ -441,6 +486,12 @@ h1 { margin: 0; font-size: 34px; font-weight: 700; letter-spacing: -.01em; line-
   .app-grid.few .tile:nth-child(n+10), .app-grid.roomy .tile:nth-child(n+19) { display: none; }
   .tile { border-radius: 12px; font-size: 12px; }
   .stat b { font-size: 20px; }
+  .tv-state { font-size: 21px; margin-top: 10px; }
+  .inputs { gap: 8px; margin-top: 12px; }
+  .inp { min-height: 80px; padding: 10px; border-radius: 14px; }
+  .inp b { font-size: 14.5px; }
+  .inp small { font-size: 12px; }
+  .tv-foot { font-size: 14px; }
 }
 `;
 
@@ -454,6 +505,7 @@ class TvPanel extends HTMLElement {
     this._art = new Map(); // room name -> { key, url }: keeps the first artwork URL for a title
     this._play = new Map(); // PSN now-playing sensor -> { loading, cur, at, games, error }
     this._showAllApps = false;
+    this._tvBusy = ""; // "in0" / "sc0" while that TV button's script runs
     this._query = "";
     this._toast = "";
     try {
@@ -647,9 +699,13 @@ class TvPanel extends HTMLElement {
         this._call("media_player", "media_seek", { entity_id: room.entity, seek_position: Math.round(to) });
         return;
       }
-      case "power":
-        if (room) this._call("media_player", room.mode === "off" ? "turn_on" : "turn_off", { entity_id: room.roku });
+      case "power": {
+        if (!room) return;
+        const i = room.tv?.reachable ? (room.tv.inputs || []).findIndex((x) => x.device === "roku") : -1;
+        if (room.mode === "off" && i >= 0) this._tvRun(room, "in", i);
+        else this._call("media_player", room.mode === "off" ? "turn_on" : "turn_off", { entity_id: room.roku });
         return;
+      }
       case "launch":
         if (room?.online) {
           navigator.vibrate?.(8);
@@ -658,6 +714,24 @@ class TvPanel extends HTMLElement {
         return;
       case "search":
         this._search();
+        return;
+      case "tv-run":
+        if (room?.tv) this._tvRun(room, el.dataset.kind, Number(el.dataset.i));
+        return;
+      case "tv-off":
+        if (room?.tv) this._call("media_player", "turn_off", { entity_id: room.tv.media_player });
+        return;
+      case "tv-vol": {
+        if (!room?.tv?.on) return;
+        navigator.vibrate?.(8);
+        const svc = el.dataset.svc;
+        const data = { entity_id: room.tv.media_player };
+        if (svc === "volume_mute") data.is_volume_muted = !room.tv.muted;
+        this._call("media_player", svc, data);
+        return;
+      }
+      case "tv-autooff":
+        if (room?.tv?.auto_off) this._call("automation", room.tv.autoOff ? "turn_off" : "turn_on", { entity_id: room.tv.auto_off });
         return;
       case "more-apps":
         this._showAllApps = !this._showAllApps;
@@ -690,6 +764,7 @@ class TvPanel extends HTMLElement {
   _roomLine(r) {
     if (r.gaming) return r.ps5.game ? `PS5 · ${r.ps5.game}` : "PS5 on";
     if (r.mode === "dead") return r.exists ? "Not responding" : "Not set up in HA";
+    if (r.tv?.paired && r.tv.state === "off" && r.mode !== "media") return "TV off";
     if (r.mode === "off") return "Off";
     if (r.mode === "idle") return r.home ? "On · home screen" : `On · ${r.app}`;
     return `${r.playing ? "Playing" : "Paused"} · ${r.title}`;
@@ -775,9 +850,13 @@ class TvPanel extends HTMLElement {
           <div style="min-width:0"><div class="state-big" style="margin-top:0">Home Assistant can't reach this Roku</div>${steps}</div></div></div></section>`;
     }
     if (r.mode === "off") {
+      // With the TV paired, Turn on runs the same script as the TV card's Roku button.
+      const viaTv = r.tv?.reachable && r.tv.inputs?.some((x) => x.device === "roku");
       return `<section class="card now"><div class="now-in">${head("Off")}
         <div class="idle-row"><div class="idle-ic off">${svg("mdiTelevisionOff")}</div>
-          <div><div class="state-big" style="margin-top:0">The Roku is off</div><div class="state-sub">Turning it on also wakes the TV if HDMI-CEC is on.</div></div></div>
+          <div><div class="state-big" style="margin-top:0">The Roku is off</div><div class="state-sub">${
+            viaTv ? "Turning it on switches the TV to it, too." : "Turning it on also wakes the TV if HDMI-CEC is on."
+          }</div></div></div>
         <div class="controls"><button class="cta" data-action="power">${svg("mdiPower")} Turn on</button></div></div></section>`;
     }
     if (r.mode === "idle") {
@@ -827,6 +906,71 @@ class TvPanel extends HTMLElement {
       </div></section>`;
   }
 
+  // Which input the TV is probably showing: the PS5 while it's on and the Roku isn't playing (the same
+  // rule as the gaming tile), else the Roku while it's awake. Both wake the TV onto themselves over CEC.
+  _tvInput(r) {
+    if (!r.tv?.on) return null;
+    if (r.gaming) return "ps5";
+    if (r.mode === "media" || r.mode === "idle") return "roku";
+    return null;
+  }
+
+  _tvCard(r) {
+    const tv = r.tv;
+    const head = (btn = "") => `<div class="card-head"><span class="eyebrow">${esc(r.name)} · TV</span>${btn}</div>`;
+    if (!tv.paired || !tv.reachable) {
+      const body = !tv.paired
+        ? `<div class="state-sub">Pair it once, with someone at the TV:</div>
+           <ol class="steps"><li>On the TV: Settings → General → Network → Expert settings → <b>Power On with Mobile</b> on</li>
+           <li>In Home Assistant: Settings → Devices &amp; services → Add → <b>Samsung Smart TV</b>${tv.host ? `, host <b>${esc(tv.host)}</b>` : ""}</li>
+           <li>Choose <b>Allow</b> on the TV, then name the entities <code>${esc(tv.media_player)}</code> and <code>${esc(tv.remote || "")}</code></li></ol>`
+        : `<div class="state-sub">It drops off Wi-Fi when it's fully off. If it's on, check that it's still connected.</div>`;
+      return `<section class="card tvc">${head()}
+        <div class="idle-row"><div class="idle-ic warn">${svg("mdiWifiOff")}</div>
+          <div style="min-width:0"><div class="state-big" style="margin-top:0">${tv.paired ? "Home Assistant can't reach the TV" : "The TV isn't paired yet"}</div>${body}</div></div></section>`;
+    }
+    const cur = this._tvInput(r);
+    const inputs = tv.inputs || [];
+    const curName = inputs.find((x) => x.device === cur)?.name;
+    const state = !tv.on ? "Off" : curName ? `On · showing the ${curName}` : "On";
+    const sub = !tv.on
+      ? "Pick what to watch and it turns on."
+      : curName
+        ? `Going by which device is active${tv.today !== null ? ` · on ${fmtDur(tv.today * 3600)} today` : ""}.`
+        : `Nothing is playing on it${tv.today !== null ? ` · on ${fmtDur(tv.today * 3600)} today` : ""}.`;
+    const busy = this._tvBusy;
+    const btn = (x, i, kind) => {
+      const isBusy = busy === `${kind}${i}`;
+      const ps5Off = x.device === "ps5" && !r.ps5?.on;
+      const detail = isBusy ? "Switching…" : ps5Off ? "Off · press PS on a controller" : x.detail || "";
+      const icon = x.icon || (x.device === "ps5" ? "mdiSonyPlaystation" : x.device === "roku" ? "mdiTelevisionPlay" : "mdiPlex");
+      return `<button class="inp ${cur && x.device === cur ? "cur" : ""} ${isBusy ? "busy" : ""}" data-action="tv-run" data-kind="${kind}" data-i="${i}"
+        aria-label="${esc(x.name)}" ${ps5Off || busy ? "disabled" : ""}>${svg(icon)}<span><b>${esc(x.name)}</b><small>${esc(detail)}</small></span></button>`;
+    };
+    const tiles = [...inputs.map((x, i) => btn(x, i, "in")), ...(tv.scenes || []).map((x, i) => btn(x, i, "sc"))].join("");
+    let foot = "";
+    if (tv.autoOff !== null) {
+      const last = tv.autoOffAt ? ` Last time: ${this._fmtDay(tv.autoOffAt)} ${this._fmtTime(tv.autoOffAt)}.` : "";
+      foot = `<div class="tv-foot"><div class="grow">Turn off when nothing's on<small>After 30 min with the PS5 off and nothing playing on the Roku.${esc(last)}</small></div>
+        <button class="sw ${tv.autoOff ? "on" : ""}" role="switch" aria-checked="${tv.autoOff}" aria-label="Turn off when nothing's on" data-action="tv-autooff"></button></div>`;
+    }
+    const pwr = tv.on ? `<button class="pwr on" data-action="tv-off" aria-label="Turn the TV off" title="Turn the TV off">${svg("mdiPower")}</button>` : "";
+    return `<section class="card tvc">${head(pwr)}
+      <div class="tv-state">${esc(state)}</div><div class="state-sub">${esc(sub)}</div>
+      <div class="inputs">${tiles}</div>${foot}</section>`;
+  }
+
+  async _tvRun(r, kind, i) {
+    const x = (kind === "sc" ? r.tv.scenes : r.tv.inputs)?.[i];
+    if (!x?.script || this._tvBusy) return;
+    navigator.vibrate?.(8);
+    this._tvBusy = `${kind}${i}`;
+    this._render();
+    await this._call("script", x.script.replace(/^script\./, ""), {});
+    this._tvBusy = "";
+    this._render();
+  }
+
   _remoteCard(r) {
     const off = !r.online;
     const dis = off ? "disabled" : "";
@@ -844,17 +988,32 @@ class TvPanel extends HTMLElement {
           ${k("right", "mdiChevronRight", "Right", "k right")}${k("down", "mdiChevronDown", "Down", "k down")}
         </div>
         <div class="keys">${k("reverse", "mdiRewind", "Rewind")}<button class="key" data-action="playpause" aria-label="Play or pause" title="Play / pause" ${dis}>${svg("mdiPlayPause")}</button>${k("forward", "mdiFastForward", "Fast forward")}</div>
-        <div class="vol">
-          <button data-action="key" data-cmd="volume_down" aria-label="TV volume down" ${dis}>${svg("mdiVolumeMinus")}</button>
-          <span>TV volume</span>
-          <button data-action="key" data-cmd="volume_mute" aria-label="Mute TV" ${dis}>${svg("mdiVolumeOff")}</button>
-          <button data-action="key" data-cmd="volume_up" aria-label="TV volume up" ${dis}>${svg("mdiVolumePlus")}</button>
-        </div>
+        ${this._volRow(r, dis)}
         <div class="search">
           <input name="q" type="search" placeholder="Search Roku for a show or movie" value="${esc(this._query)}" autocomplete="off" enterkeyhint="search" ${dis}>
           <button data-action="search" ${dis}>${svg("mdiMagnify")}Search</button>
         </div>
       </div></section>`;
+  }
+
+  // With the TV paired and on, volume goes to the TV and shows its level; otherwise through the Roku remote.
+  _volRow(r, dis) {
+    const tv = r.tv;
+    if (tv?.on) {
+      const level = tv.muted ? "Muted" : tv.volume !== null ? `TV volume ${Math.round(tv.volume * 100)}` : "TV volume";
+      return `<div class="vol">
+          <button data-action="tv-vol" data-svc="volume_down" aria-label="TV volume down">${svg("mdiVolumeMinus")}</button>
+          <span>${level}</span>
+          <button data-action="tv-vol" data-svc="volume_mute" aria-label="${tv.muted ? "Unmute TV" : "Mute TV"}">${svg("mdiVolumeOff")}</button>
+          <button data-action="tv-vol" data-svc="volume_up" aria-label="TV volume up">${svg("mdiVolumePlus")}</button>
+        </div>`;
+    }
+    return `<div class="vol">
+          <button data-action="key" data-cmd="volume_down" aria-label="TV volume down" ${dis}>${svg("mdiVolumeMinus")}</button>
+          <span>TV volume</span>
+          <button data-action="key" data-cmd="volume_mute" aria-label="Mute TV" ${dis}>${svg("mdiVolumeOff")}</button>
+          <button data-action="key" data-cmd="volume_up" aria-label="TV volume up" ${dis}>${svg("mdiVolumePlus")}</button>
+        </div>`;
   }
 
   _appsCard(r) {
@@ -962,7 +1121,7 @@ class TvPanel extends HTMLElement {
         ${rooms.length > 1 ? `<div class="room-row">${roomTiles}</div>` : ""}
         <main class="grid">
           <div class="col">${this._nowCard(sel)}${this._appsCard(sel)}</div>
-          <div class="col">${this._remoteCard(sel)}${sel.ps5 ? this._playCard(sel) : ""}${this._dvrCard(rec)}</div>
+          <div class="col">${sel.tv ? this._tvCard(sel) : ""}${this._remoteCard(sel)}${sel.ps5 ? this._playCard(sel) : ""}${this._dvrCard(rec)}</div>
         </main>
         ${this._toast ? `<div class="toast" role="alert">${esc(this._toast)}</div>` : ""}
       </div>`;

@@ -1,0 +1,171 @@
+# Basement TV: Samsung UN70TU700D (2020 TU7000, Tizen) at 10.0.0.243 (fixed on the UDM), on Wi-Fi.
+# PS5 on HDMI 1, basement Roku on HDMI 2. ADR 0010 has the reasoning.
+#
+# - Local only. The core samsungtv integration talks to the TV over the LAN (websocket on 8002,
+#   paired once by pressing Allow on the TV), so the UDM's "Block TV" internet rule stays. It gives
+#   on/off, volume, mute and remote keys. SmartThings (the only way to read the HDMI input) needs the
+#   TV online and isn't used.
+# - The entities are renamed to media_player.basement_tv / remote.basement_tv after pairing.
+#   Until then everything here is a no-op: the conditions need the TV on, and actions on a missing
+#   entity only log a warning.
+# - Which input is showing is a guess from which device is active (the TV panel says so). Inputs
+#   switch two ways: the Roku and PS5 grab the TV over HDMI-CEC (Anynet+) when they wake, and the TV
+#   remote's KEY_HDMI1 / KEY_HDMI2 switch directly when the TV is already on.
+# - Turning on: Wake-on-LAN only works with "Power On with Mobile" on (Settings > General > Network >
+#   Expert Settings) and is patchy over Wi-Fi, so turning on goes through the Roku (CEC) when it can.
+
+template:
+  - binary_sensor:
+      # Something on the basement TV is worth keeping it on for: the PS5, or the Roku / Plex playing.
+      # A pause counts for 2 h (snack break, phone call), then it's treated as forgotten.
+      - name: Basement TV in use
+        unique_id: basement_tv_in_use
+        icon: mdi:television-play
+        state: >-
+          {% set ns = namespace(on=is_state('binary_sensor.ps5_on', 'on')) %}
+          {% for s in expand('media_player.basement_roku', 'media_player.plex_plex_for_roku_basement_roku') %}
+            {% if (s.state in ['playing', 'buffering']
+                         or (s.state == 'paused' and now() - s.last_changed < timedelta(hours=2))) %}
+              {% set ns.on = true %}
+            {% endif %}
+          {% endfor %}
+          {{ ns.on }}
+
+sensor:
+  - platform: history_stats
+    name: Basement TV on today
+    unique_id: basement_tv_on_today
+    entity_id: media_player.basement_tv
+    state: "on"
+    type: time
+    start: "{{ today_at() }}"
+    end: "{{ now() }}"
+
+script:
+  basement_tv_watch_roku:
+    alias: "Basement TV: watch the Roku"
+    description: Wakes the basement Roku (the TV turns on and switches to it over CEC) and switches the TV to HDMI 2.
+    icon: mdi:television-play
+    mode: single
+    sequence:
+      - variables:
+          tv_was_on: "{{ is_state('media_player.basement_tv', 'on') }}"
+      # Any key wakes the Roku; on wake it claims the TV over HDMI-CEC (turns it on, switches input).
+      - action: remote.send_command
+        continue_on_error: true
+        target:
+          entity_id: remote.basement_roku
+        data:
+          command: home
+      - if:
+          - condition: template
+            value_template: "{{ tv_was_on }}"
+        then:
+          # Already on (maybe showing the PS5): CEC doesn't always switch an awake TV, so ask the TV.
+          - action: remote.send_command
+            continue_on_error: true
+            target:
+              entity_id: remote.basement_tv
+            data:
+              command: KEY_HDMI2
+        else:
+          # Backup for when CEC doesn't wake it (needs "Power On with Mobile").
+          - action: media_player.turn_on
+            continue_on_error: true
+            target:
+              entity_id: media_player.basement_tv
+
+  basement_tv_watch_ps5:
+    alias: "Basement TV: switch to the PS5"
+    description: Turns the basement TV on if needed and switches it to HDMI 1. It can't wake the PS5; the controller's PS button does that (and the TV follows over CEC).
+    icon: mdi:sony-playstation
+    mode: single
+    sequence:
+      - if:
+          - condition: not
+            conditions:
+              - condition: state
+                entity_id: media_player.basement_tv
+                state: "on"
+        then:
+          - action: media_player.turn_on
+            continue_on_error: true
+            target:
+              entity_id: media_player.basement_tv
+          - wait_template: "{{ is_state('media_player.basement_tv', 'on') }}"
+            timeout: "00:00:20"
+            continue_on_timeout: false
+      - action: remote.send_command
+        target:
+          entity_id: remote.basement_tv
+        data:
+          command: KEY_HDMI1
+
+  basement_movie:
+    alias: "Basement: movie"
+    description: Basement lights down to 10%, the TV on the Roku, and Plex open.
+    icon: mdi:movie-open-outline
+    mode: single
+    sequence:
+      - action: light.turn_on
+        continue_on_error: true
+        target:
+          entity_id: light.basement
+        data:
+          brightness_pct: 10
+          transition: 3
+      - action: script.basement_tv_watch_roku
+        continue_on_error: true
+      - delay:
+          seconds: 2
+      # Plex for Roku is app 13535 (checked on the basement Roku's /query/apps, 2026-10-22).
+      - action: media_player.play_media
+        target:
+          entity_id: media_player.basement_roku
+        data:
+          media_content_type: app
+          media_content_id: "13535"
+
+automation:
+  - id: basement_tv_auto_off
+    alias: "Basement TV: off after 30 min with nothing on"
+    description: >-
+      The TV has been on for 30 min with nothing worth keeping it on for: the PS5 is off and the
+      Roku isn't playing (a pause counts as playing for its first 2 h). Turns the TV off, and the Roku too so it
+      doesn't wake the TV again. Toggle from the TV panel.
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.basement_tv_in_use
+        to: "off"
+        for: "00:30:00"
+      # Turned on and nothing ever played: in_use never changed, so watch the TV too.
+      - trigger: state
+        entity_id: media_player.basement_tv
+        to: "on"
+        for: "00:30:00"
+    conditions:
+      - condition: state
+        entity_id: media_player.basement_tv
+        state: "on"
+        for: "00:30:00"
+      - condition: state
+        entity_id: binary_sensor.basement_tv_in_use
+        state: "off"
+        for: "00:30:00"
+    actions:
+      - action: media_player.turn_off
+        continue_on_error: true
+        target:
+          entity_id: media_player.basement_tv
+      - if:
+          - condition: not
+            conditions:
+              - condition: state
+                entity_id: media_player.basement_roku
+                state: ["off", "standby", "unavailable", "unknown"]
+        then:
+          - action: media_player.turn_off
+            continue_on_error: true
+            target:
+              entity_id: media_player.basement_roku
+    mode: single
