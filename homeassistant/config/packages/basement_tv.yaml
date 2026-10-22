@@ -91,12 +91,11 @@ script:
         then:
           - action: shell_command.ps5_wake
             continue_on_error: true
+      - variables:
+          tv_was_on: "{{ is_state('media_player.basement_tv', 'on') }}"
       - if:
-          - condition: not
-            conditions:
-              - condition: state
-                entity_id: media_player.basement_tv
-                state: "on"
+          - condition: template
+            value_template: "{{ not tv_was_on }}"
         then:
           - action: media_player.turn_on
             continue_on_error: true
@@ -104,9 +103,29 @@ script:
               entity_id: media_player.basement_tv
           - wait_template: "{{ is_state('media_player.basement_tv', 'on') }}"
             timeout: "00:00:20"
-            continue_on_timeout: false
-      # The PS5 also claims the TV over CEC when it wakes; this covers a TV that was already on.
+          # A TV that was turned off seconds ago ignores the wake (2026-10-22, 6 s after off); say so.
+          - if:
+              - condition: template
+                value_template: "{{ not wait.completed }}"
+            then:
+              - stop: "The TV didn't turn on"
+                error: true
+          # The TV reports on as soon as its network is up, before it takes remote keys: on 2026-10-22
+          # a KEY_HDMI1 sent 0.3 s after it came on was ignored and it stayed on HDMI 2.
+          - delay:
+              seconds: 8
+      # KEY_HDMI1 selects HDMI 1 directly (not a toggle), so a second send is harmless and covers a
+      # first one the TV wasn't ready for. The PS5 also claims the TV over CEC when it wakes, if HDMI
+      # Device Link is on.
       - action: remote.send_command
+        target:
+          entity_id: remote.basement_tv
+        data:
+          command: KEY_HDMI1
+      - delay:
+          seconds: 4
+      - action: remote.send_command
+        continue_on_error: true
         target:
           entity_id: remote.basement_tv
         data:
