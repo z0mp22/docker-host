@@ -517,7 +517,7 @@ panel_custom:
     url_path: tv
     sidebar_title: TV
     sidebar_icon: mdi:television-play
-    module_url: /local/tv/tv-panel.js?v=5
+    module_url: /local/tv/tv-panel.js?v=6
     config:
       # Each room: the Roku (core roku integration), its remote, and the Plex client on it, which
       # supplies titles, artwork and seeking. Icons: mdiSofa, mdiStairsDown, mdiTelevision.
@@ -543,6 +543,9 @@ panel_custom:
             game_sensor: sensor.basement_ps5_now_playing
           # The TV set itself (packages/basement_tv.yaml): power, volume and auto-off from the core
           # samsungtv integration (LAN only). The input is guessed from which `device` is active.
+          # The sound is a Samsung HW-T550 soundbar on optical: it only takes IR (the TV remote), so
+          # neither the TV's nor the Roku's volume keys reach it. Shown instead of the volume buttons.
+          volume: "Volume is on the soundbar: use the TV remote."
           tv:
             media_player: media_player.basement_tv
             remote: remote.basement_tv

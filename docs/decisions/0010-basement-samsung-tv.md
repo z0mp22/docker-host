@@ -44,7 +44,13 @@ Options:
 
 - No input readback. If the guess is wrong (e.g. someone switched inputs with the TV remote), the
   card shows the wrong source until a device changes state.
-- `KEY_HDMI1` / `KEY_HDMI2` and Wake-on-LAN must be checked on this TV at pairing. If the HDMI keys
-  don't work, the input buttons fall back to CEC only (the Roku still works; the PS5 button doesn't).
+- **Tested with Cody at the TV, 2026-10-22, after pairing:** `KEY_HDMI1` and `KEY_HDMI2` switch inputs;
+  `script.basement_tv_watch_roku` lands on the Roku home screen; turn off works, and Wake-on-LAN
+  over Wi-Fi brings it back (network up in about 2 s, screen on, HA reports on in about 6 s).
+- **No volume from HA.** The sound is a Samsung HW-T550 soundbar on optical, which only takes IR
+  (it answers the TV remote's codes). The TV's network volume keys only change its built-in speakers
+  (always 0), and the Roku's volume keys don't reach it either. The Basement room shows a note
+  instead of volume buttons (`volume:` in the panel config). An IR blaster in HA would be the way to
+  add it later.
 - Before pairing, everything is a no-op: conditions need the TV on, and actions on missing
   entities only log a warning. The panel shows pairing steps.
