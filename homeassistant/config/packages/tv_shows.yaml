@@ -1,5 +1,5 @@
 # TV shows: Sonarr + qBittorrent on media-laptop (plex_recordings ADR 0015/0016).
-# - sensor.plex_recordings_sonarr is MQTT-discovered from plex_recordings' publish_sonarr.py
+# - sensor.plex_dvr_sync_plex_recordings_sonarr is MQTT-discovered from plex_recordings' publish_sonarr.py
 #   (every 5 min). State: problem / warning / downloading / tracking_only / ok / offline.
 #   The Recordings panel's TV shows card reads its attributes (upcoming, queue, recent,
 #   qbittorrent, problems).
@@ -42,7 +42,7 @@ automation:
     mode: single
     triggers:
       - trigger: state
-        entity_id: sensor.plex_recordings_sonarr
+        entity_id: sensor.plex_dvr_sync_plex_recordings_sonarr
         to: [problem, offline]
         for: "00:15:00"
     actions:
@@ -52,7 +52,7 @@ automation:
           channel: TV shows
           tag: sonarr-problem
           message: >-
-            {% set ps = state_attr('sensor.plex_recordings_sonarr', 'problems') or [] %}
+            {% set ps = state_attr('sensor.plex_dvr_sync_plex_recordings_sonarr', 'problems') or [] %}
             {% set red = ps | selectattr('level', 'eq', 'red') | list %}
             {% set p = (red or ps or [{'title': 'Sonarr or qBittorrent needs a look'}])[0] %}
             {{ p.title }}{% if (red or ps) | count > 1 %} (+{{ (red or ps) | count - 1 }} more){% endif %}
@@ -66,7 +66,7 @@ automation:
     mode: single
     triggers:
       - trigger: state
-        entity_id: sensor.plex_recordings_sonarr
+        entity_id: sensor.plex_dvr_sync_plex_recordings_sonarr
         from: [problem, offline]
         not_to: [problem, offline, unavailable, unknown]
     actions:
