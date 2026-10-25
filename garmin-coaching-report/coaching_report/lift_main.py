@@ -32,7 +32,7 @@ from .lift_collector import build_fingerboard_payload, build_lift_payload, last_
 from .lift_equipment import home_gym_catalog, snap_free_weights
 from .lift_feedback import append_feedback
 from .lift_fingerboard import assert_fingerboard_safe, board_blocks, resolve_warmup_id, without_board_exercises
-from .lift_review import fingerboard_problems, name_problems, review_plan
+from .lift_review import enforce_hinge_limits, fingerboard_problems, name_problems, review_plan
 from .lift_safety import assert_session_plan_safe, resolve_banned_exercise_ids
 from .hevy_client import HevyClient
 
@@ -148,9 +148,17 @@ def main() -> int:
 
         plan, model_meta = _review_and_revise(
             config, payload, plan, model_meta, catalog_by_id,
-            lambda p: review_plan(p.exercises, session_type, catalog_by_id, p.priorities, payload["recent_lift_sessions"]),
+            lambda p: review_plan(
+                p.exercises, session_type, catalog_by_id, p.priorities, payload["recent_lift_sessions"],
+                payload["bodyweight_history"],
+            ),
             lambda p: assert_session_plan_safe(p.exercises, catalog_by_id, banned_ids),
         )
+        # Back-safety limits on barbell hinges hold whatever the revision did.
+        for change in enforce_hinge_limits(
+            plan.exercises, catalog_by_id, payload["hinge_limits"], payload["recent_lift_sessions"]
+        ):
+            plan.flags_considered.append(f"Adjusted after generation: {change}")
 
         routine_id = hevy_client.upsert_session_routine(
             plan, config.hevy_routine_title, session_type

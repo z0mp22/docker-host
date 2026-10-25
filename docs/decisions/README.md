@@ -11,5 +11,6 @@
 | [0008](0008-ps5-presence.md) | Basement PS5: LAN power check for presence, PSN only for game titles | Accepted |
 | [0009](0009-cloudflare-edge.md) | Cloudflare edge: filter at Cloudflare, show what it stopped, one-tap travel and lockdown | Accepted |
 | [0010](0010-basement-samsung-tv.md) | Basement Samsung TV: local control only, input guessed from the active device | Accepted |
+| [0011](0011-lift-coach-deadlift-back-limits.md) | Back-safety limits on deadlifts and other barbell hinges | Accepted |
 
 Related DVR library decisions live in [czampino/plex_recordings](https://github.com/czampino/plex_recordings/tree/main/docs/decisions).

@@ -16,11 +16,19 @@ its exercise_id would make the plan say one exercise while Hevy shows (and
 logs) another, so lift_main refuses to write it if the revision doesn't fix
 it. Fingerboard sessions also get brevity checks (2026-10-11: the athlete
 found the board notes too long to follow on the board).
+
+Barbell hinges (deadlifts, rack pulls, RDLs, good mornings) have limits for
+his back (ADR 0011): a ceiling of 1.5x bodyweight, every working set at RIR 2
+or more, 3-6 reps on floor and pin pulls, and no added load after a top set
+harder than RPE 8. Those go to the revision like any other problem, and then
+enforce_hinge_limits() clamps whatever the revision left, so a session can
+never go out over them.
 """
 
 from __future__ import annotations
 
 import dataclasses
+import math
 import re
 from typing import TYPE_CHECKING, Any
 
@@ -37,6 +45,125 @@ WARMUP_FROM_LB = 95.0
 MAX_BOARD_NOTE_CHARS = 140
 MAX_BOARD_SUMMARY_CHARS = 500
 VALID_GOALS = {"climbing", "mtb", "snowboard", "physique", "core", "shoulder_health"}
+# Barbell hinges and his back (ADR 0011, 2026-10-25). Disc injuries come from
+# loaded spinal flexion under fatigue, so effort and reps are limited, not
+# just load. None of his goals needs a deadlift past about 1.5x bodyweight.
+HINGE_CEILING_X_BODYWEIGHT = 1.5
+DEFAULT_BODYWEIGHT_LB = 180.0  # the profile in prompts/lift_system.md; Hevy bodyweight is often empty
+HINGE_MIN_RIR = 2.0
+HINGE_PROGRESS_MAX_RPE = 8.0  # a top set harder than this holds the load next time
+HINGE_REPS = {"pull": (3, 6), "hinge": (3, 10)}
+
+
+def _last_working_sets(exercise_id: str, history: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    last = next(
+        (e for s in reversed(history) for e in s["exercises"] if e.get("exercise_id") == exercise_id),
+        None,
+    )
+    return [st for st in (last or {}).get("sets", []) if st["set_type"] != "warmup" and st["weight_lb"]]
+
+
+def _top_set(working: list[dict[str, Any]]) -> tuple[float, float]:
+    """(top weight, hardest RPE at that weight; 0 when unrated)."""
+    top = max(st["weight_lb"] for st in working)
+    return top, max((st["rpe"] or 0) for st in working if st["weight_lb"] == top)
+
+
+def hinge_kind(entry: dict[str, Any] | None) -> str | None:
+    """'pull' for floor and pin pulls (deadlift, sumo, rack pull), 'hinge'
+    for the other barbell hinges (RDL, straight-leg deadlift, good morning),
+    None for everything else."""
+    if not entry or load_kind(entry) != "barbell":
+        return None
+    name = entry["name"].lower()
+    if "high pull" in name or not any(k in name for k in ("deadlift", "rack pull", "good morning")):
+        return None
+    return "hinge" if any(k in name for k in ("romanian", "straight leg", "stiff leg", "good morning")) else "pull"
+
+
+def hinge_limits(bodyweight_history: list[dict[str, Any]]) -> dict[str, Any]:
+    """The payload's `hinge_limits`: today's ceiling from the latest Hevy
+    bodyweight, or the profile's 180 lb when he hasn't logged one."""
+    bodyweight = bodyweight_history[-1]["weight_lb"] if bodyweight_history else DEFAULT_BODYWEIGHT_LB
+    return {
+        "ceiling_lb": math.floor(bodyweight * HINGE_CEILING_X_BODYWEIGHT / 5) * 5,
+        "bodyweight_lb": round(bodyweight, 1),
+        "bodyweight_source": "hevy" if bodyweight_history else "profile",
+        "min_rir": HINGE_MIN_RIR,
+        "reps": {"floor_and_pin_pulls": list(HINGE_REPS["pull"]), "rdl_and_good_morning": list(HINGE_REPS["hinge"])},
+        "hold_load_after_rpe_above": HINGE_PROGRESS_MAX_RPE,
+    }
+
+
+def _hinge_max_lb(ex: "ExercisePrescription", ceiling: float, history: list[dict[str, Any]]) -> tuple[float, str]:
+    """The heaviest working weight allowed today, and why."""
+    working = _last_working_sets(ex.exercise_id, history)
+    if working:
+        top, hardest = _top_set(working)
+        if hardest > HINGE_PROGRESS_MAX_RPE and top < ceiling:
+            return top, f"last time {top:g} lb reached RPE {hardest:g}, so hold it until it's RPE 8 or easier"
+    return ceiling, f"the ceiling is {ceiling:g} lb ({HINGE_CEILING_X_BODYWEIGHT:g}x bodyweight)"
+
+
+def hinge_problems(
+    exercises: list["ExercisePrescription"],
+    catalog_by_id: dict[str, dict[str, Any]],
+    limits: dict[str, Any],
+    history: list[dict[str, Any]] = (),
+) -> list[str]:
+    problems = []
+    for ex in exercises:
+        kind = hinge_kind(catalog_by_id.get(ex.exercise_id))
+        if kind is None:
+            continue
+        if ex.weight_lb is not None:
+            max_lb, reason = _hinge_max_lb(ex, limits["ceiling_lb"], history)
+            if ex.weight_lb > max_lb:
+                problems.append(
+                    f"{ex.exercise_name} at {ex.weight_lb:g} lb is too heavy: {reason}; at the cap, "
+                    "progress reps within the range and move extra hinge volume to RDLs or cable pull-throughs"
+                )
+        if ex.rir_target is None or ex.rir_target < HINGE_MIN_RIR:
+            problems.append(
+                f"{ex.exercise_name} has rir_target {ex.rir_target}; barbell hinges keep 2 or more reps in reserve"
+            )
+        low, high = HINGE_REPS[kind]
+        if ex.reps is not None and not low <= ex.reps <= high:
+            problems.append(
+                f"{ex.exercise_name} at {ex.reps} reps; {'floor and pin pulls' if kind == 'pull' else 'this hinge'} "
+                f"stays at {low}-{high} reps (no singles or doubles, no long fatiguing sets)"
+            )
+    return problems
+
+
+def enforce_hinge_limits(
+    exercises: list["ExercisePrescription"],
+    catalog_by_id: dict[str, dict[str, Any]],
+    limits: dict[str, Any],
+    history: list[dict[str, Any]] = (),
+) -> list[str]:
+    """Clamp barbell hinges to their limits after the revision. Returns what
+    changed."""
+    changed = []
+    for ex in exercises:
+        kind = hinge_kind(catalog_by_id.get(ex.exercise_id))
+        if kind is None:
+            continue
+        if ex.weight_lb is not None:
+            max_lb, _ = _hinge_max_lb(ex, limits["ceiling_lb"], history)
+            if ex.weight_lb > max_lb:
+                changed.append(f"{ex.exercise_name}: {ex.weight_lb:g} lb -> {max_lb:g} lb (back-safety limit)")
+                ex.weight_lb = max_lb
+                ex.warmup_sets = [w for w in ex.warmup_sets or [] if (w.get("weight_lb") or 0) < max_lb]
+        if ex.rir_target is None or ex.rir_target < HINGE_MIN_RIR:
+            changed.append(f"{ex.exercise_name}: RIR {ex.rir_target} -> {HINGE_MIN_RIR:g} (back-safety limit)")
+            ex.rir_target = HINGE_MIN_RIR
+        low, high = HINGE_REPS[kind]
+        if ex.reps is not None and not low <= ex.reps <= high:
+            new = min(max(ex.reps, low), high)
+            changed.append(f"{ex.exercise_name}: {ex.reps} -> {new} reps (back-safety limit)")
+            ex.reps = new
+    return changed
 
 
 def progression_problems(
@@ -49,15 +176,10 @@ def progression_problems(
     for ex in exercises:
         if ex.weight_lb is None:
             continue
-        last = next(
-            (e for s in reversed(history) for e in s["exercises"] if e.get("exercise_id") == ex.exercise_id),
-            None,
-        )
-        working = [st for st in (last or {}).get("sets", []) if st["set_type"] != "warmup" and st["weight_lb"]]
+        working = _last_working_sets(ex.exercise_id, history)
         if not working:
             continue
-        top = max(st["weight_lb"] for st in working)
-        hardest = max((st["rpe"] or 0) for st in working if st["weight_lb"] == top)
+        top, hardest = _top_set(working)
         if hardest >= 9.5 and ex.weight_lb > top:
             problems.append(
                 f"{ex.exercise_name}: last time {top:g} lb reached RPE {hardest:g}, so don't add load "
@@ -150,6 +272,7 @@ def review_plan(
     catalog_by_id: dict[str, dict[str, Any]],
     priorities: list[str] = (),
     history: list[dict[str, Any]] = (),
+    bodyweight_history: list[dict[str, Any]] = (),
 ) -> list[str]:
     """`history` is the payload's recent_lift_sessions (oldest first)."""
     problems = (
@@ -157,6 +280,7 @@ def review_plan(
         + load_problems(exercises, catalog_by_id)
         + warmup_problems(exercises, catalog_by_id)
         + progression_problems(exercises, history)
+        + hinge_problems(exercises, catalog_by_id, hinge_limits(bodyweight_history), history)
     )
     unexplained = [ex.exercise_name for ex in exercises if not ex.goal or not (ex.why or "").strip()]
     if unexplained:
