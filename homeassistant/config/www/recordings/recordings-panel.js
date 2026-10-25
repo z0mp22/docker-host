@@ -1,6 +1,6 @@
 // Recordings panel: a dependency-free web component registered via panel_custom.
 // Reads sensor.plex_recordings_sync_meta (plex_recordings sync via MQTT), the
-// HDHomeRun tuner sensors, and sensor.plex_recordings_sonarr (Sonarr + qBittorrent,
+// HDHomeRun tuner sensors, and sensor.plex_dvr_sync_plex_recordings_sonarr (Sonarr + qBittorrent,
 // plex_recordings ADR 0016) for the TV shows card; ids come from panel_custom `config`.
 
 const ICONS = {
