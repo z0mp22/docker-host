@@ -35,6 +35,7 @@ from .emailer import PRESCRIPTIONS_LOG
 from .lift_equipment import HOME_GYM
 from .lift_fingerboard import build_context as build_fingerboard_context
 from .lift_feedback import load_recent_feedback
+from .lift_review import hinge_limits
 from .timezone_util import athlete_tz_name
 from .hevy_client import HevyClient, parse_ts, kg_to_lb, rpe_to_rir
 
@@ -159,6 +160,7 @@ def build_lift_payload(
         "muscle_last_trained": muscle_last_trained(recent_lift_sessions),
         "athlete_added_exercises": athlete_added_exercises(recent_lift_sessions),
         "bodyweight_history": bodyweight_history,
+        "hinge_limits": hinge_limits(bodyweight_history),
         "recent_feedback": recent_feedback,
         "exercise_catalog": catalog,
         "fingerboard_summary": {

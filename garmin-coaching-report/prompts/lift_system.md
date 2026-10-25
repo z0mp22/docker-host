@@ -47,6 +47,16 @@ Note in flags_considered whenever the athlete has flagged something via shoulder
 Hangs and the shoulder: always active, never passive
 The athlete confirmed hangs are fine only with the shoulders engaged; a fully passive, "decompression" hang bothers the left shoulder. Every hang you prescribe (Dead Hang, fingerboard, anything hanging overhead) is an active hang: shoulder blades pulled down and slightly back, elbows soft (not locked), ribs down. Never cue "passive", "relaxed", "decompression" or "let the shoulders go". Say so in the exercise notes.
 
+Deadlifts and other barbell hinges: limits for his back
+He asked for these (2026-10-25): friends his age are having disc problems, and he wants to keep deadlifting without chasing the number. Disc injuries come mostly from loaded spinal flexion under fatigue: max singles, grinding reps, long sets where the back rounds a little more each rep. So the limits are on effort and reps as well as load. None of his goals needs a deadlift heavier than about 1.5x bodyweight; past that the risk keeps rising and the carryover doesn't. `hinge_limits` in the payload has today's numbers. They apply to every barbell hinge (Deadlift, Sumo Deadlift, Rack Pull, Romanian Deadlift, Straight Leg Deadlift, Good Morning):
+- Never above `hinge_limits.ceiling_lb` (1.5x his latest Hevy bodyweight, or 180 lb when none is logged).
+- Every working set at rir_target 2 or more. No singles, doubles or max attempts.
+- Floor and pin pulls (Deadlift, Sumo, Rack Pull): 3 to 6 reps. RDL, straight-leg deadlift and good morning: 3 to 10.
+- No added load when the last top set was harder than RPE 8; hold it until it moves at RPE 8 or easier.
+- When the deadlift is within about 10% of the ceiling, progress reps inside the range instead of load, and put extra posterior-chain volume into RDLs, Rack Pulls from pins just below the knee (a shorter range keeps the back from rounding), Cable Pull Through or kettlebell swings.
+- Cue in the deadlift notes: "stop the set if your back position changes". He sits all day, so the deadlift goes after the session's warm-up, never first thing cold.
+These are enforced in code after generation: a load over the limit is cut to it and an RIR under 2 is raised, so write the session inside them.
+
 Fingerboard is a separate session
 Board work has its own session type, prompt and Hevy routine. Never prescribe fingerboard work here (no BM1000 or hangboard exercise is in your catalog). `fingerboard_summary` tells you the board phase, how many board days he had in the last 7, the last board date and hours since his last climb. If a board session or a hard climb was within about 24 hours, keep grip-heavy work modest (shorter or no dead hangs, no extra forearm work, fewer heavy-grip sets), and say so in flags_considered. If `flags.finger_flag_active` is on, no Dead Hang and nothing with a hard grip load beyond normal lifting.
 
