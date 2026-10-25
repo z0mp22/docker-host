@@ -1,0 +1,76 @@
+# TV shows: Sonarr + qBittorrent on media-laptop (plex_recordings ADR 0015/0016).
+# - sensor.plex_recordings_sonarr is MQTT-discovered from plex_recordings' publish_sonarr.py
+#   (every 5 min). State: problem / warning / downloading / tracking_only / ok / offline.
+#   The Recordings panel's TV shows card reads its attributes (upcoming, queue, recent,
+#   qbittorrent, problems).
+# - "Episode ready" pushes once per episode Sonarr imports from a download, from the
+#   events/imported topic. The library import and renames never publish there.
+# - "TV downloads problem" pushes only for red problems lasting 15 min: Sonarr or
+#   qBittorrent down, qBittorrent not bound to the VPN, a failed download. Amber ones
+#   (VPN down, so downloads are paused) stay on the panel.
+#   "tracking_only" (no indexers, on purpose) is not a problem.
+
+automation:
+  - id: sonarr_episode_ready
+    alias: "TV shows: episode ready"
+    description: Push when Sonarr imports a downloaded episode into the TV library.
+    mode: queued
+    max: 10
+    triggers:
+      - trigger: mqtt
+        topic: home/plex_recordings/sonarr/events/imported
+    conditions:
+      - condition: template
+        value_template: "{{ (trigger.payload_json | default({})).get('series') is not none }}"
+    actions:
+      - action: script.notify_phones
+        data:
+          title: Episode ready
+          channel: TV shows
+          # One tag per episode so a season pack doesn't collapse to the last one.
+          tag: >-
+            {% set p = trigger.payload_json %}
+            sonarr-ready-{{ (p.series ~ ' s' ~ p.season ~ 'e' ~ p.episode) | slugify }}
+          message: "{{ trigger.payload_json.message }}"
+          data:
+            clickAction: /recordings
+            url: /recordings
+
+  - id: sonarr_downloads_problem
+    alias: "TV shows: downloads problem"
+    description: Push when Sonarr/qBittorrent reports a red problem for 15 minutes.
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id: sensor.plex_recordings_sonarr
+        to: [problem, offline]
+        for: "00:15:00"
+    actions:
+      - action: script.notify_phones
+        data:
+          title: TV downloads problem
+          channel: TV shows
+          tag: sonarr-problem
+          message: >-
+            {% set ps = state_attr('sensor.plex_recordings_sonarr', 'problems') or [] %}
+            {% set red = ps | selectattr('level', 'eq', 'red') | list %}
+            {% set p = (red or ps or [{'title': 'Sonarr or qBittorrent needs a look'}])[0] %}
+            {{ p.title }}{% if (red or ps) | count > 1 %} (+{{ (red or ps) | count - 1 }} more){% endif %}
+          data:
+            clickAction: /recordings
+            url: /recordings
+
+  - id: sonarr_downloads_problem_clear
+    alias: "TV shows: downloads problem cleared"
+    description: Remove the problem push once the downloader is healthy again.
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id: sensor.plex_recordings_sonarr
+        from: [problem, offline]
+        not_to: [problem, offline, unavailable, unknown]
+    actions:
+      - action: script.notify_phones
+        data:
+          message: clear_notification
+          tag: sonarr-problem

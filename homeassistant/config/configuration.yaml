@@ -40,6 +40,8 @@ recorder:
       - sensor.network_traffic
       # ~14 KB of attributes, rewritten every 5 min; panels and automations only read the live state.
       - sensor.plex_recordings_sync_meta
+      # Sonarr upcoming/queue/recent lists, rewritten every 5 min (packages/tv_shows.yaml).
+      - sensor.plex_recordings_sonarr
       # Cloudflare summaries: rewritten every 5 min (MQTT retains the latest); rule expressions.
       - sensor.cloudflare_edge
       - sensor.cloudflare_edge_rules
@@ -634,9 +636,14 @@ panel_custom:
     url_path: recordings
     sidebar_title: Recordings
     sidebar_icon: mdi:television-classic
-    module_url: /local/recordings/recordings-panel.js?v=3
+    module_url: /local/recordings/recordings-panel.js?v=4
     config:
       meta: sensor.plex_recordings_sync_meta
+      # TV shows card: Sonarr + qBittorrent on media-laptop (packages/tv_shows.yaml).
+      # The links are LAN-only web UIs.
+      sonarr: sensor.plex_recordings_sonarr
+      sonarr_url: http://10.0.0.22:8989
+      qbittorrent_url: http://10.0.0.22:8080
       tuners: [sensor.tuner0, sensor.tuner1]
       # Plex server machineIdentifier (GET :32400/identity on media-laptop), for Watch links.
       plex_server: f711dff5db23ec95cd83c44cbcd0194875081f5c

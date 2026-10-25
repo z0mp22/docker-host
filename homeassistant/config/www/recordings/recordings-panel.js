@@ -1,6 +1,7 @@
 // Recordings panel: a dependency-free web component registered via panel_custom.
-// Reads sensor.plex_recordings_sync_meta (plex_recordings sync via MQTT) and the
-// HDHomeRun tuner sensors; ids come from panel_custom `config`.
+// Reads sensor.plex_recordings_sync_meta (plex_recordings sync via MQTT), the
+// HDHomeRun tuner sensors, and sensor.plex_recordings_sonarr (Sonarr + qBittorrent,
+// plex_recordings ADR 0016) for the TV shows card; ids come from panel_custom `config`.
 
 const ICONS = {
   mdiAlertCircleOutline: "M11,15H13V17H11V15M11,7H13V13H11V7M12,2C6.47,2 2,6.5 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4A8,8 0 0,1 20,12A8,8 0 0,1 12,20Z",
@@ -8,6 +9,10 @@ const ICONS = {
   mdiCalendarQuestion: "M6,1V3H5C3.89,3 3,3.9 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V5A2,2 0 0,0 19,3H18V1H16V3H8V1H6M5,8H19V19H5V8M12.19,9C11.32,9 10.62,9.2 10.08,9.59C9.56,10 9.3,10.57 9.31,11.36L9.32,11.39H11.25C11.26,11.09 11.35,10.86 11.53,10.7C11.71,10.55 11.93,10.47 12.19,10.47C12.5,10.47 12.76,10.57 12.94,10.75C13.12,10.94 13.2,11.2 13.2,11.5C13.2,11.82 13.13,12.09 12.97,12.32C12.83,12.55 12.62,12.75 12.36,12.91C11.85,13.25 11.5,13.55 11.31,13.82C11.11,14.08 11,14.5 11,15H13C13,14.69 13.04,14.44 13.13,14.26C13.22,14.08 13.39,13.9 13.64,13.74C14.09,13.5 14.46,13.21 14.75,12.81C15.04,12.41 15.19,12 15.19,11.5C15.19,10.74 14.92,10.13 14.38,9.68C13.85,9.23 13.12,9 12.19,9M11,16V18H13V16H11Z",
   mdiCalendarRemove: "M19,19H5V8H19M19,3H18V1H16V3H8V1H6V3H5C3.89,3 3,3.9 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V5A2,2 0 0,0 19,3M9.31,17L11.75,14.56L14.19,17L15.25,15.94L12.81,13.5L15.25,11.06L14.19,10L11.75,12.44L9.31,10L8.25,11.06L10.69,13.5L8.25,15.94L9.31,17Z",
   mdiCheckCircleOutline: "M12 2C6.5 2 2 6.5 2 12S6.5 22 12 22 22 17.5 22 12 17.5 2 12 2M12 20C7.59 20 4 16.41 4 12S7.59 4 12 4 20 7.59 20 12 16.41 20 12 20M16.59 7.58L10 14.17L7.41 11.59L6 13L10 17L18 9L16.59 7.58Z",
+  mdiDownload: "M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z",
+  mdiOpenInNew: "M14,3V5H17.59L7.76,14.83L9.17,16.24L19,6.41V10H21V3M19,19H5V5H12V3H5C3.89,3 3,3.9 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V12H19V19Z",
+  mdiShieldAlertOutline: "M21,11C21,16.55 17.16,21.74 12,23C6.84,21.74 3,16.55 3,11V5L12,1L21,5V11M12,21C15.75,20 19,15.54 19,11.22V6.3L12,3.18L5,6.3V11.22C5,15.54 8.25,20 12,21M11,7H13V13H11V7M11,15H13V17H11V15Z",
+  mdiShieldCheckOutline: "M21,11C21,16.55 17.16,21.74 12,23C6.84,21.74 3,16.55 3,11V5L12,1L21,5V11M12,21C15.75,20 19,15.54 19,11.22V6.3L12,3.18L5,6.3V11.22C5,15.54 8.25,20 12,21M10,17L6,13L7.41,11.59L10,14.17L16.59,7.58L18,9",
   mdiClockOutline: "M12,20A8,8 0 0,0 20,12A8,8 0 0,0 12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20M12,2A10,10 0 0,1 22,12A10,10 0 0,1 12,22C6.47,22 2,17.5 2,12A10,10 0 0,1 12,2M12.5,7V12.25L17,14.92L16.25,16.15L11,13V7H12.5Z",
   mdiHarddisk: "M6,2H18A2,2 0 0,1 20,4V20A2,2 0 0,1 18,22H6A2,2 0 0,1 4,20V4A2,2 0 0,1 6,2M12,4A6,6 0 0,0 6,10C6,13.31 8.69,16 12.1,16L11.22,13.77C10.95,13.29 11.11,12.68 11.59,12.4L12.45,11.9C12.93,11.63 13.54,11.79 13.82,12.27L15.74,14.69C17.12,13.59 18,11.9 18,10A6,6 0 0,0 12,4M12,9A1,1 0 0,1 13,10A1,1 0 0,1 12,11A1,1 0 0,1 11,10A1,1 0 0,1 12,9M7,18A1,1 0 0,0 6,19A1,1 0 0,0 7,20A1,1 0 0,0 8,19A1,1 0 0,0 7,18M12.09,13.27L14.58,19.58L17.17,18.08L12.95,12.77L12.09,13.27Z",
   mdiMenu: "M3,6H21V8H3V6M3,11H21V13H3V11M3,16H21V18H3V16Z",
@@ -21,6 +26,8 @@ const ICONS = {
 const SYNC_STALE_H = 30;
 // "Ready to watch" refreshes every 5 min (plex_recordings ADR 0010).
 const RECENT_STALE_MIN = 30;
+// Sonarr state is published every 5 min (plex_recordings ADR 0016).
+const TV_STALE_MIN = 30;
 const DISK_WARN = 85;
 const DISK_ALERT = 92;
 const WEAK_QUALITY = 70;
@@ -32,6 +39,9 @@ const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 const live = (st) => !!st && !["unavailable", "unknown"].includes(st.state);
 const arr = (v) => (Array.isArray(v) ? v : []);
 const startOfDay = (ms) => new Date(ms).setHours(0, 0, 0, 0);
+const epCode = (e) => (Number.isFinite(e.season) && Number.isFinite(e.episode) ? `S${String(e.season).padStart(2, "0")}E${String(e.episode).padStart(2, "0")}` : "");
+// Sonarr titles unannounced episodes "TBA"; that's no title at all.
+const epTitle = (e) => (e.title && e.title !== "TBA" ? e.title : "");
 
 // "2026-10-04" as a local calendar date (new Date("2026-10-04") would be UTC midnight).
 function isoDay(s) {
@@ -120,9 +130,9 @@ h1 { margin: 0; font-size: 34px; font-weight: 700; line-height: 1.1; }
 .icon-btn { width: 48px; height: 48px; border-radius: 16px; display: grid; place-items: center; background: var(--card-2); border: 1px solid var(--line); flex: none; }
 
 .grid { display: grid; gap: 22px; align-items: start; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
-  grid-template-areas: "hero ready" "sched ready" "sched tuners" "sched storage" "sched attn" "del del"; }
+  grid-template-areas: "hero ready" "sched ready" "sched tuners" "sched storage" "sched attn" "shows shows" "del del"; }
 .card { background: linear-gradient(180deg, var(--card-2), var(--card)); border: 1px solid var(--line); border-radius: 30px; padding: 24px 26px; min-width: 0; }
-.a-hero { grid-area: hero; } .a-sched { grid-area: sched; } .a-ready { grid-area: ready; } .a-tuners { grid-area: tuners; } .a-storage { grid-area: storage; } .a-attn { grid-area: attn; } .a-del { grid-area: del; }
+.a-hero { grid-area: hero; } .a-sched { grid-area: sched; } .a-ready { grid-area: ready; } .a-tuners { grid-area: tuners; } .a-storage { grid-area: storage; } .a-attn { grid-area: attn; } .a-del { grid-area: del; } .a-shows { grid-area: shows; }
 .eyebrow { font-size: 13px; letter-spacing: .12em; font-weight: 600; color: var(--muted); text-transform: uppercase; }
 .head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
 
@@ -182,6 +192,22 @@ h1 { margin: 0; font-size: 34px; font-weight: 700; line-height: 1.1; }
 .watch .ic { width: 18px; height: 18px; }
 .link { margin-top: 10px; color: var(--pink); font-weight: 600; font-size: 15px; }
 
+/* TV shows (Sonarr) */
+.shows-status { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 17px; min-width: 0; }
+.shows-status b { font-weight: 600; white-space: nowrap; }
+.shows-status .detail { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.shows-cols { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 22px; }
+.sub { font-size: 13px; letter-spacing: .1em; text-transform: uppercase; font-weight: 600; color: var(--muted); margin-top: 22px; }
+.shows-cols .day { margin-top: 12px; }
+.dl { padding: 12px 0; border-top: 1px solid var(--line); }
+.dl:first-of-type { border-top: 0; }
+.dl .progress { margin-top: 8px; height: 6px; }
+.dl.stuck .progress div { background: var(--amber); }
+.ext { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); font-weight: 600; }
+.ext .ic { width: 16px; height: 16px; }
+.vpn { display: inline-flex; align-items: center; gap: 6px; }
+.vpn.ok .ic { color: var(--green); } .vpn.bad .ic { color: var(--red); } .vpn.warn .ic { color: var(--amber); }
+
 /* Tuners */
 .tuners { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
 .tuner { border-radius: 18px; padding: 14px; background: #121a28; border: 1px solid var(--line); min-width: 0; }
@@ -216,8 +242,9 @@ h1 { margin: 0; font-size: 34px; font-weight: 700; line-height: 1.1; }
 .empty { margin-top: 14px; padding: 18px; border-radius: 14px; border: 1px dashed var(--line); color: var(--muted); font-size: 15px; text-align: center; }
 
 @container (max-width: 980px) {
-  .grid { grid-template-columns: minmax(0, 1fr); grid-template-areas: "hero" "attn" "sched" "ready" "tuners" "storage" "del"; }
+  .grid { grid-template-columns: minmax(0, 1fr); grid-template-areas: "hero" "attn" "sched" "ready" "shows" "tuners" "storage" "del"; }
   .del-cols { columns: 1; }
+  .shows-cols { grid-template-columns: minmax(0, 1fr); gap: 4px; }
 }
 @container (max-width: 640px) {
   .app { padding: 14px 14px 24px; }
@@ -233,6 +260,7 @@ h1 { margin: 0; font-size: 34px; font-weight: 700; line-height: 1.1; }
   .ev-tags, .ev-actions { grid-column: 2; justify-content: flex-start; }
   .ev-time { font-size: 15px; } .ev-title { font-size: 15px; }
   .rec-title { font-size: 15px; }
+  .shows-status { font-size: 14px; }
   .watch { height: 36px; padding: 0 10px; font-size: 13px; }
   .tuner-state { font-size: 17px; }
   .big { font-size: 24px; }
@@ -286,7 +314,7 @@ class RecordingsPanel extends HTMLElement {
   }
 
   get _config() {
-    return { meta: "sensor.plex_recordings_sync_meta", tuners: [], team_colors: {}, avg_recording_gb: 14, ...(this._cfg || {}) };
+    return { meta: "sensor.plex_recordings_sync_meta", sonarr: null, tuners: [], team_colors: {}, avg_recording_gb: 14, ...(this._cfg || {}) };
   }
 
   _scheduleRender() {
@@ -360,7 +388,25 @@ class RecordingsPanel extends HTMLElement {
       .map((d) => ({ ...d, at: d.delete_after ? Date.parse(d.delete_after) : null, day: isoDay(d.air_date) }))
       .filter((d) => d.at)
       .sort((x, y) => x.at - y.at);
+    const tvSt = c.sonarr ? this._hass.states[c.sonarr] : null;
+    const t = tvSt?.attributes || {};
+    const tv = c.sonarr
+      ? {
+          ok: live(tvSt) && !!t.checked_at,
+          status: tvSt?.state,
+          checkedAt: t.checked_at ? Date.parse(t.checked_at) : null,
+          problems: arr(t.problems),
+          series: Number(t.series_count) || 0,
+          indexers: Number(t.indexer_count) || 0,
+          sizeOnDisk: Number(t.size_on_disk) || 0,
+          qbit: t.qbittorrent || {},
+          upcoming: arr(t.upcoming).map((e) => ({ ...e, at: e.air_utc ? Date.parse(e.air_utc) : null })).filter((e) => e.at),
+          queue: arr(t.queue),
+          recent: arr(t.recent).map((r) => ({ ...r, at: r.imported_at ? Date.parse(r.imported_at) : null })),
+        }
+      : null;
     return {
+      tv,
       ok: live(metaSt) && !!a.ran_at,
       ranAt: a.ran_at ? Date.parse(a.ran_at) : null,
       matched: a.matched,
@@ -415,6 +461,13 @@ class RecordingsPanel extends HTMLElement {
     }
     if (m.recentCheckedAt && now - m.recentCheckedAt > RECENT_STALE_MIN * 60e3 && !stale)
       items.push({ level: "amber", icon: "mdiSyncAlert", title: `Ready to watch last checked ${agoText(m.recentCheckedAt)}`, text: "New recordings won't show up or push until it refreshes. Check the publish_recent cron on media-laptop." });
+    const tv = m.tv;
+    const tvStale = tv?.ok && now - tv.checkedAt > TV_STALE_MIN * 60e3;
+    if (tv?.ok && !tvStale)
+      for (const p of tv.problems)
+        items.push({ level: p.level === "red" ? "red" : "amber", icon: /VPN/.test(p.title) ? "mdiShieldAlertOutline" : "mdiDownload", title: p.title, text: p.text || "" });
+    if (tvStale)
+      items.push({ level: "amber", icon: "mdiSyncAlert", title: `TV shows last checked ${agoText(tv.checkedAt)}`, text: "Sonarr and qBittorrent status is out of date. Check the publish_sonarr cron on media-laptop." });
     for (const t of busyTuners.filter((x) => x.quality !== null && x.quality < WEAK_QUALITY))
       items.push({ level: "info", icon: "mdiAntenna", title: `Weak signal on ${t.channel}`, text: `${t.name} quality ${Math.round(t.quality)}% — playback may stutter.` });
 
@@ -423,12 +476,106 @@ class RecordingsPanel extends HTMLElement {
     else if (m.errors.length) status = { dot: "red", label: `Couldn't schedule ${m.errors.length}`, detail: m.errors[0].title || "" };
     else if (!m.healthy) status = { dot: "red", label: "Library problem", detail: "Plex can't index recordings" };
     else if (m.airing.length) status = { dot: "blue", label: "Recording now", detail: m.airing.map((q) => q.title).join(" · ") };
+    else if (tv?.ok && !tvStale && ["problem", "offline"].includes(tv.status))
+      status = { dot: "red", label: "TV downloads problem", detail: (tv.problems.find((p) => p.level === "red") || tv.problems[0])?.title || "" };
     else if (Number.isFinite(usedPct) && usedPct >= DISK_ALERT) status = { dot: "amber", label: "Disk almost full", detail: `${Math.round(freeGb)} GB free` };
     else if (stale) status = { dot: "amber", label: "Sync stalled", detail: `Last ran ${agoText(m.ranAt)}` };
     else if (m.awaiting) status = { dot: "amber", label: "Waiting for Plex", detail: `${plural(m.awaiting, "recording")} not indexed yet` };
     else if (next) status = { dot: "green", label: "Ready", detail: `Next: ${next.title} · ${dayLabel(next.at)} ${this._fmtTime(next.at)}` };
     else status = { dot: "green", label: "Ready", detail: "Nothing scheduled" };
-    return { status, items, fits, freeGb, usedPct, busyTuners, next };
+    return { status, items, fits, freeGb, usedPct, busyTuners, next, tvStale };
+  }
+
+  // TV shows (Sonarr): one status line, then what's airing for the shows it tracks and what has
+  // landed. "Tracking only" (no indexer) is a deliberate setup, so it's grey and explained, not an error.
+  _showsCard(tv, stale, watchUrl) {
+    if (!tv) return "";
+    const now = Date.now();
+    const c = this._config;
+    if (!tv.ok)
+      return `<section class="card a-shows"><div class="eyebrow">TV shows</div><div class="empty">Sonarr status unavailable. It's published from media-laptop every 5 minutes.</div></section>`;
+    const q = tv.qbit;
+    const label = (e) => [e.series, epCode(e)].filter(Boolean).join(" · ");
+    const nextAir = tv.upcoming.find((e) => e.at > now);
+    const red = tv.problems.find((p) => p.level === "red");
+    let st;
+    if (stale) st = { dot: "amber", label: "Not checked lately", detail: `Last update ${agoText(tv.checkedAt)}` };
+    else if (tv.status === "offline") st = { dot: "red", label: "Sonarr offline", detail: tv.problems[0]?.text || "" };
+    else if (red) st = { dot: "red", label: "Problem", detail: red.title };
+    else if (tv.problems.length) st = { dot: "amber", label: "Needs a look", detail: tv.problems[0].title };
+    else if (tv.queue.length) st = { dot: "blue", label: `Downloading ${tv.queue.length}`, detail: tv.queue.map(label).join(" · ") };
+    else if (!tv.indexers) st = { dot: "", label: "Tracking only", detail: "No indexer, so new episodes won't download on their own" };
+    else st = { dot: "green", label: "Up to date", detail: nextAir ? `Next: ${label(nextAir)} · ${dayLabel(nextAir.at)} ${this._fmtTime(nextAir.at)}` : "Nothing airing soon" };
+
+    const days = [];
+    for (const e of tv.upcoming) {
+      const key = startOfDay(e.at);
+      let d = days.find((x) => x.key === key);
+      if (!d) days.push((d = { key, items: [] }));
+      d.items.push(e);
+    }
+    const coming = days.length
+      ? days
+          .map(
+            (d) => `<div class="day"><div class="day-label">${esc(dayLabel(d.key))}</div>${d.items
+              .map((e) => {
+                const aired = e.at <= now;
+                const tag = e.has_file ? `<span class="tag new">Downloaded</span>` : aired ? `<span class="tag warn">Not downloaded</span>` : "";
+                return `<div class="ev">
+                  <div class="ev-time">${this._fmtTime(e.at)}<small>${aired ? "aired" : esc(until(e.at).replace("in ", ""))}</small></div>
+                  <div><div class="ev-title">${esc(e.series)}</div><div class="ev-sub"><span>${esc([epCode(e), epTitle(e), e.network].filter(Boolean).join(" · "))}</span></div></div>
+                  <div class="ev-tags">${tag}</div>
+                </div>`;
+              })
+              .join("")}</div>`,
+          )
+          .join("")
+      : `<div class="empty">No episodes of your shows air in the next 2 weeks.</div>`;
+
+    const downloading = tv.queue.length
+      ? `<div class="sub">Downloading</div>${tv.queue
+          .map((d) => {
+            const stuck = ["warning", "error"].includes(d.status);
+            const pct = Number.isFinite(d.progress) ? d.progress : 0;
+            return `<div class="dl ${stuck ? "stuck" : ""}"><div class="rec-title">${esc(label(d))}${epTitle(d) ? ` <span class="muted">· ${esc(epTitle(d))}</span>` : ""}</div>
+              <div class="rec-sub">${stuck ? esc(d.message || "Stuck") : `${Math.round(pct)}%${d.timeleft ? ` · ${esc(d.timeleft)} left` : ""}`}</div>
+              <div class="progress"><div style="width:${pct}%"></div></div></div>`;
+          })
+          .join("")}`
+      : "";
+
+    const recent = tv.recent.length
+      ? `<div class="recs">${tv.recent
+          .map((r) => {
+            const url = watchUrl(r);
+            return `<div class="rec">
+              <div><div class="rec-title">${esc(label(r))}${epTitle(r) ? ` <span class="muted">· ${esc(epTitle(r))}</span>` : ""}</div>
+                <div class="rec-sub">${r.at ? `Added ${esc(dayLabel(r.at))} ${this._fmtTime(r.at)}` : ""}${r.quality ? ` · ${esc(r.quality)}` : ""}</div></div>
+              ${url ? `<a class="watch" href="${esc(url)}" target="_blank" rel="noopener">${svg("mdiPlay")}Watch</a>` : "<span></span>"}
+            </div>`;
+          })
+          .join("")}</div>`
+      : `<div class="empty">${tv.indexers ? "Nothing new in the last 2 weeks." : "Nothing downloaded yet. Sonarr is only tracking episodes until an indexer is added in Sonarr."}</div>`;
+
+    let vpn;
+    if (!q.reachable) vpn = `<span class="vpn bad">${svg("mdiShieldAlertOutline")}qBittorrent not responding</span>`;
+    else if (q.interface !== q.expected_interface) vpn = `<span class="vpn bad">${svg("mdiShieldAlertOutline")}qBittorrent not bound to the VPN</span>`;
+    else if (!q.vpn_up) vpn = `<span class="vpn warn">${svg("mdiShieldAlertOutline")}VPN down · downloads paused</span>`;
+    else vpn = `<span class="vpn ok">${svg("mdiShieldCheckOutline")}qBittorrent on VPN${q.downloading ? ` · ${plural(q.downloading, "download")}` : " · idle"}</span>`;
+    const links = [
+      c.sonarr_url ? `<a class="ext" href="${esc(c.sonarr_url)}" target="_blank" rel="noopener">Sonarr${svg("mdiOpenInNew")}</a>` : "",
+      c.qbittorrent_url ? `<a class="ext" href="${esc(c.qbittorrent_url)}" target="_blank" rel="noopener">qBittorrent${svg("mdiOpenInNew")}</a>` : "",
+    ].filter(Boolean);
+
+    return `<section class="card a-shows">
+      <div class="head"><span class="eyebrow">TV shows</span><span class="muted">${plural(tv.series, "show")}${tv.sizeOnDisk ? ` · ${Math.round(tv.sizeOnDisk / 1e9)} GB` : ""}</span></div>
+      <div class="shows-status"><span class="dot ${st.dot}"></span><b>${esc(st.label)}</b>${st.detail ? `<span class="muted">·</span><span class="detail">${esc(st.detail)}</span>` : ""}</div>
+      <div class="shows-cols">
+        <div><div class="sub">Coming up</div>${coming}</div>
+        <div>${downloading}<div class="sub">New episodes</div>${recent}</div>
+      </div>
+      <div class="footer">${vpn}${links.length ? `<span class="muted">·</span>${links.join(`<span class="muted">·</span>`)}` : ""}<span class="muted">·</span><span>checked ${esc(agoText(tv.checkedAt))}</span></div>
+    </section>`;
   }
 
   _render() {
@@ -632,6 +779,8 @@ class RecordingsPanel extends HTMLElement {
     </section>`;
     }
 
+    const showsCard = this._showsCard(m.tv, ev.tvStale, watchUrl);
+
     const s = ev.status;
     const html = `
       <style>${CSS}</style>
@@ -642,7 +791,7 @@ class RecordingsPanel extends HTMLElement {
           <div class="titles"><h1>Recordings</h1>
             <div class="status"><span class="dot ${s.dot}"></span><b>${esc(s.label)}</b><span class="muted">·</span><span class="muted detail">${esc(s.detail)}</span></div></div>
         </header>
-        <main class="grid">${hero}${sched}${ready}${tuners}${storage}${attn}${del}</main>
+        <main class="grid">${hero}${sched}${ready}${tuners}${storage}${attn}${showsCard}${del}</main>
       </div>`;
     if (html !== this._html) {
       this._html = html;
