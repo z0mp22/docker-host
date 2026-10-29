@@ -1,0 +1,54 @@
+{#- Soil dry-down for the young trees: a running water balance since the last watering.
+    Each day adds that day's reference evapotranspiration (Open-Meteo et0_fao_evapotranspiration,
+    the water sun, wind and dry air pull from the ground) and subtracts rain that counts
+    (at least min_rain in that day). The balance never goes below zero: a soaking rain refills
+    the root zone but doesn't bank water for later. The trees are due once it reaches threshold.
+
+    daily:      Open-Meteo daily block (time, et0_fao_evapotranspiration, precipitation_sum),
+                past days plus forecast.
+    today:      'YYYY-MM-DD'.
+    rain_today: rain that has fallen so far today. Today's precipitation_sum is part forecast,
+                so it isn't used for today: a forecast storm used to skip a watering it never
+                delivered.
+    watered:    'YYYY-MM-DD' of the last watering, or none. That day itself isn't counted; today
+                counts its whole forecast ET0, so "due" means "dry by tonight".
+    Returns JSON: {deficit, et, rain, since_data_start, due_in, cycle}
+      due_in: days from today until due (0 = today), using the forecast (rain included) and
+              then the forecast's average ET0 past its end.
+      cycle:  the same, for a watering done today: what "next due" will be once it's logged. -#}
+{%- macro _trees_days_to_due(d0, et, p, i, threshold, min_rain) -%}
+  {%- set ns = namespace(d=d0 | float, n=none, sum=0, cnt=0) -%}
+  {%- if ns.d >= threshold -%}{%- set ns.n = 0 -%}{%- endif -%}
+  {%- for k in range(i + 1, et | count) -%}
+    {%- set e = et[k] | float(0) -%}
+    {%- set r = p[k] | float(0) -%}
+    {%- set ns.sum = ns.sum + e -%}{%- set ns.cnt = ns.cnt + 1 -%}
+    {%- set ns.d = [ns.d + e - (r if r >= min_rain else 0), 0] | max -%}
+    {%- if ns.n is none and ns.d >= threshold -%}{%- set ns.n = k - i -%}{%- endif -%}
+  {%- endfor -%}
+  {%- if ns.n is none -%}
+    {%- set avg = ns.sum / ns.cnt if ns.cnt else 0 -%}
+    {%- set ns.n = (ns.cnt + ((threshold - ns.d) / avg) | round(0, 'ceil')) | int if avg > 0 else 60 -%}
+  {%- endif -%}
+  {{- [ns.n, 60] | min -}}
+{%- endmacro -%}
+
+{%- macro trees_dry_down(daily, today, rain_today, watered, threshold, min_rain) -%}
+  {%- set t = daily.time -%}
+  {%- set et = daily.et0_fao_evapotranspiration -%}
+  {%- set p = daily.precipitation_sum -%}
+  {%- set i = t.index(today) if today in t else t | count - 1 -%}
+  {%- set start = (t.index(watered) + 1) if watered and watered in t else (i + 1 if watered and watered >= today else 0) -%}
+  {%- set ns = namespace(d=0, et=0, rain=0) -%}
+  {%- for k in range(start, i + 1) -%}
+    {%- set e = et[k] | float(0) -%}
+    {%- set r = (rain_today if k == i else p[k]) | float(0) -%}
+    {%- set eff = r if r >= min_rain else 0 -%}
+    {%- set ns.et = ns.et + e -%}{%- set ns.rain = ns.rain + eff -%}
+    {%- set ns.d = [ns.d + e - eff, 0] | max -%}
+  {%- endfor -%}
+  {{- {'deficit': ns.d | round(2), 'et': ns.et | round(2), 'rain': ns.rain | round(2),
+       'since_data_start': start == 0,
+       'due_in': _trees_days_to_due(ns.d, et, p, i, threshold, min_rain) | int,
+       'cycle': _trees_days_to_due(0, et, p, i, threshold, min_rain) | int} | to_json -}}
+{%- endmacro -%}

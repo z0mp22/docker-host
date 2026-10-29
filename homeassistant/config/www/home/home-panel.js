@@ -1224,7 +1224,7 @@ class HomePanel extends HTMLElement {
       ${water ? `<div class="do"><div>${svg("mdiWateringCan")}<span>${esc(a.how_much || "")}</span></div><div>${svg("mdiClockOutline")}<span>${esc(a.when || "")}</span></div></div>` : ""}
       <div class="facts">
         <div class="fact"><b>${esc(num1(a.rain_7d, " in"))}</b><span>Rain, 7 days</span></div>
-        <div class="fact"><b>${esc(a.days_since_rain ?? "—")}</b><span>Days since rain</span></div>
+        <div class="fact"><b>${esc(code === "skip_nodata" ? "—" : a.dry_down_at ? `${num1(a.dry_down, "")} of ${num1(a.dry_down_at, " in")}` : num1(a.dry_down, " in"))}</b><span>Soil dried</span></div>
         <div class="fact"><b>${esc(num1(a.soil_today_max ?? a.soil_temp, "°F"))}</b><span>Soil high today</span></div>
         <div class="fact"><b>${esc(String(a.next_hard_freeze || "—").replace("None in the NWS forecast", "None forecast"))}</b><span>Next hard freeze</span></div>
       </div>

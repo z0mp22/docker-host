@@ -12,19 +12,26 @@
 #     the first weeks, every 2-3 days for several months, then weekly; ~1-1.5 gal per inch of
 #     caliper per irrigation; check soil first (clay soils are easy to overwater); in winter,
 #     water monthly on sunny days above 40 F when the ground is not frozen.
+#   When: a soil water balance, not a calendar (custom_templates/trees_water.jinja). Since the
+#   last watering, each day adds Open-Meteo's reference evapotranspiration (ET0) and subtracts
+#   rain of at least 0.1 in; the trees are due when that reaches input_number.trees_dry_down_in
+#   (0.6 in, which reproduces #635's every 2-3 days in July heat). A fixed every-3-days rule
+#   treated a 91 F October day like a 51 F one (ET0 0.17 vs 0.04 in) and then dropped to every
+#   14 days overnight on Nov 1. Replayed over Open-Meteo 2021-2025 the balance gives a median
+#   of 3 days between waterings in Jun-Aug, 4 in Sep, 6 in Oct, 10 in Nov and 15-22 in Dec-Feb.
 #   - City of Fort Collins voluntary Water Shortage Watch (declared 2026-05-01, still in effect
 #     as of 2026-10-03): no watering 10 AM-6 PM, lawns 2 days/week, ~1 in/week; it explicitly
 #     asks residents to keep prioritising trees with careful hand or drip watering.
-#   Data: Open-Meteo REST (past rainfall, soil temperature, snow depth: the core Open-Meteo
+#   Data: Open-Meteo REST (past rainfall, ET0, soil temperature, snow depth: the core Open-Meteo
 #   integration exposes none of these) and the Open-Meteo weather.home hourly forecast (overnight
 #   lows / first freeze).
 #   Fort Collins winters are freeze-thaw, not one long freeze. In Open-Meteo history for
 #   2020-2026, soil at 2 in was frozen at 7 AM on ~90 days per Nov-Mar but frozen all day on
 #   only ~30-48, and highs reached 40 F on 89-128 of 151 days. So winter is a date window (it
-#   doesn't wait for, or end with, a cold snap), "frozen" means frozen all day, and "dry" means
-#   little total precipitation rather than no single 0.1 in day (light snows used to reset that
-#   counter). Replayed over those winters, the old rules called for 2-6 winter soaks; these give
-#   8-10, i.e. CSU's once or twice a month.
+#   doesn't wait for, or end with, a cold snap) and "frozen" means frozen all day. Winter uses
+#   the same water balance (ET0 is low, so it stretches on its own) plus CSU's gates: thawed
+#   ground, no snow cover, a high of 40 F, midday, a deep soak. Replayed over Nov-Mar 2020-2026
+#   with those gates that's 4-14 winter soaks, i.e. CSU's once or twice a month.
 #
 # PROJECT 2 - smoke and air gate
 #   0-100 outdoor activity score with a green/yellow/red level.
@@ -47,22 +54,14 @@
 
 input_number:
   # --- Trees ---
-  trees_rain_skip_7d:
-    name: "Trees: skip if rain in last 7 days ≥"
-    min: 0
-    max: 3
+  trees_dry_down_in:
+    name: "Trees: water once the soil has dried by"
+    min: 0.2
+    max: 2
     step: 0.05
     unit_of_measurement: in
     mode: box
-    icon: mdi:weather-rainy
-  trees_rain_skip_48h:
-    name: "Trees: skip if rain in last 48 h ≥"
-    min: 0
-    max: 3
-    step: 0.05
-    unit_of_measurement: in
-    mode: box
-    icon: mdi:weather-pouring
+    icon: mdi:water-minus
   trees_min_effective_rain:
     name: "Trees: smallest daily rain that counts"
     min: 0
@@ -87,14 +86,6 @@ input_number:
     unit_of_measurement: "%"
     mode: box
     icon: mdi:water-percent
-  trees_interval_days:
-    name: "Trees: water every (growing season)"
-    min: 1
-    max: 14
-    step: 1
-    unit_of_measurement: days
-    mode: box
-    icon: mdi:calendar-refresh
   trees_freeze_temp:
     name: "Trees: freeze at or below"
     min: 20
@@ -127,22 +118,6 @@ input_number:
     unit_of_measurement: "°F"
     mode: box
     icon: mdi:thermometer-chevron-up
-  trees_winter_interval_days:
-    name: "Trees: winter watering at most every"
-    min: 7
-    max: 45
-    step: 1
-    unit_of_measurement: days
-    mode: box
-    icon: mdi:calendar-month
-  trees_winter_dry_in:
-    name: "Trees: winter counts as dry below this much precipitation per interval"
-    min: 0
-    max: 3
-    step: 0.05
-    unit_of_measurement: in
-    mode: box
-    icon: mdi:weather-sunny-alert
   trees_bucket_fill_seconds:
     name: "Trees: seconds for the hose to fill a 5-gal bucket"
     min: 5
@@ -312,7 +287,7 @@ input_boolean:
     name: "Outdoor: include riding score"
     icon: mdi:bike
   # Bump the suffix to re-apply the defaults below (e.g. after adding a helper).
-  trees_air_defaults_v3:
+  trees_air_defaults_v4:
     name: "Trees & air: defaults applied"
     icon: mdi:check-decagram
 
@@ -350,10 +325,10 @@ input_text:
     max: 12
 
 rest:
-  # Open-Meteo: past 60 days + 3-day forecast of rain/snow/lows, plus current soil temperature
-  # and snow depth. snow_depth comes back in feet when precipitation_unit=inch.
+  # Open-Meteo: past 60 days + 7-day forecast of rain/snow/lows/ET0, plus current soil
+  # temperature and snow depth. snow_depth comes back in feet when precipitation_unit=inch.
   - resource_template: >-
-      https://api.open-meteo.com/v1/forecast?latitude={{ state_attr('zone.home', 'latitude') | round(3) }}&longitude={{ state_attr('zone.home', 'longitude') | round(3) }}&timezone=America%2FDenver&temperature_unit=fahrenheit&precipitation_unit=inch&past_days=60&forecast_days=3&daily=precipitation_sum,snowfall_sum,temperature_2m_min,temperature_2m_max&current=soil_temperature_0cm,soil_temperature_6cm,snow_depth,temperature_2m
+      https://api.open-meteo.com/v1/forecast?latitude={{ state_attr('zone.home', 'latitude') | round(3) }}&longitude={{ state_attr('zone.home', 'longitude') | round(3) }}&timezone=America%2FDenver&temperature_unit=fahrenheit&precipitation_unit=inch&past_days=60&forecast_days=7&daily=precipitation_sum,snowfall_sum,temperature_2m_min,temperature_2m_max,et0_fao_evapotranspiration&current=soil_temperature_0cm,soil_temperature_6cm,snow_depth,temperature_2m
     scan_interval: 1800
     timeout: 20
     sensor:
@@ -366,12 +341,13 @@ rest:
           - daily
           - current
 
-  # Open-Meteo: today's hourly soil temperature at 6 cm (~2 in). Its warmest hour decides
-  # "frozen": frosty mornings that thaw by midday are the usual Fort Collins winter day, and
-  # the 7:30 reading alone called those frozen. Separate call so the 60-day history above
-  # doesn't pull 1,500 hourly values into attributes.
+  # Open-Meteo: today's hourly soil temperature at 6 cm (~2 in) and rain. The warmest soil hour
+  # decides "frozen": frosty mornings that thaw by midday are the usual Fort Collins winter day,
+  # and the 7:30 reading alone called those frozen. Rain is summed only up to the current hour,
+  # because the daily total for today is part forecast. Separate call so the 60-day history
+  # above doesn't pull 1,500 hourly values into attributes.
   - resource_template: >-
-      https://api.open-meteo.com/v1/forecast?latitude={{ state_attr('zone.home', 'latitude') | round(3) }}&longitude={{ state_attr('zone.home', 'longitude') | round(3) }}&timezone=America%2FDenver&temperature_unit=fahrenheit&forecast_days=1&hourly=soil_temperature_6cm
+      https://api.open-meteo.com/v1/forecast?latitude={{ state_attr('zone.home', 'latitude') | round(3) }}&longitude={{ state_attr('zone.home', 'longitude') | round(3) }}&timezone=America%2FDenver&temperature_unit=fahrenheit&precipitation_unit=inch&forecast_days=1&hourly=soil_temperature_6cm,precipitation
     scan_interval: 1800
     timeout: 20
     sensor:
@@ -382,6 +358,17 @@ rest:
         icon: mdi:thermometer-chevron-up
         availability: "{{ value_json is defined and value_json.hourly is defined and value_json.hourly.soil_temperature_6cm | select('number') | list | count > 0 }}"
         value_template: "{{ value_json.hourly.soil_temperature_6cm | select('number') | max }}"
+      - name: Trees rain today so far
+        unique_id: trees_rain_today_so_far
+        unit_of_measurement: in
+        icon: mdi:weather-pouring
+        availability: "{{ value_json is defined and value_json.hourly is defined and value_json.hourly.precipitation is defined }}"
+        # Each hourly value is the hour ending at its timestamp, so HH:00 is already complete.
+        value_template: >-
+          {% set h = now().strftime('%Y-%m-%dT%H:00') %}
+          {% set ns = namespace(s=0) %}
+          {% for t in value_json.hourly.time %}{% if t <= h %}{% set ns.s = ns.s + value_json.hourly.precipitation[loop.index0] | float(0) %}{% endif %}{% endfor %}
+          {{ ns.s | round(2) }}
 
   # PurpleAir: one sensor's A/B CF=1 PM2.5 + humidity (about 10 points per call; a new key's
   # 1,000,000 free points last ~2 years at this interval). Pick the sensor with
@@ -475,7 +462,7 @@ template:
           {% set d = state_attr('sensor.trees_open_meteo', 'daily') %}
           {% set today = now().strftime('%Y-%m-%d') %}
           {% set i = d.time.index(today) if today in d.time else d.time | count - 1 %}
-          {{ (d.precipitation_sum[i - 6:i + 1] | map('float', 0) | sum) | round(2) }}
+          {{ (d.precipitation_sum[[i - 6, 0] | max:i] | map('float', 0) | sum + states('sensor.trees_rain_today_so_far') | float(0)) | round(2) }}
       - name: Trees rain last 48 hours
         unique_id: trees_rain_48h
         unit_of_measurement: in
@@ -485,7 +472,7 @@ template:
           {% set d = state_attr('sensor.trees_open_meteo', 'daily') %}
           {% set today = now().strftime('%Y-%m-%d') %}
           {% set i = d.time.index(today) if today in d.time else d.time | count - 1 %}
-          {{ (d.precipitation_sum[i - 1:i + 1] | map('float', 0) | sum) | round(2) }}
+          {{ (d.precipitation_sum[[i - 1, 0] | max:i] | map('float', 0) | sum + states('sensor.trees_rain_today_so_far') | float(0)) | round(2) }}
       - name: Trees days since rain
         unique_id: trees_days_since_rain
         unit_of_measurement: days
@@ -498,7 +485,8 @@ template:
           {% set m = states('input_number.trees_min_effective_rain') | float(0.1) %}
           {% set ns = namespace(n=none) %}
           {% for k in range(i, -1, -1) %}
-            {% if ns.n is none and (d.precipitation_sum[k] | float(0)) >= m %}{% set ns.n = i - k %}{% endif %}
+            {% set r = states('sensor.trees_rain_today_so_far') if k == i else d.precipitation_sum[k] %}
+            {% if ns.n is none and (r | float(0)) >= m %}{% set ns.n = i - k %}{% endif %}
           {% endfor %}
           {{ ns.n if ns.n is not none else i + 1 }}
       - name: Trees soil temperature
@@ -681,22 +669,19 @@ template:
           - sensor.trees_season
           - sensor.trees_soil_temperature_today_max
           - sensor.tree_soil_moisture
+          - sensor.trees_rain_today_so_far
           - input_datetime.trees_last_watered
           - input_boolean.trees_use_moisture_sensor
           - input_boolean.trees_city_hours
           - input_select.trees_season_mode
-          - input_number.trees_rain_skip_7d
-          - input_number.trees_rain_skip_48h
+          - input_number.trees_dry_down_in
           - input_number.trees_min_effective_rain
           - input_number.trees_soil_frozen_temp
           - input_number.trees_moisture_wet_pct
-          - input_number.trees_interval_days
           - input_number.trees_freeze_temp
           - input_number.trees_hard_freeze_temp
           - input_number.trees_final_watering_lead_days
           - input_number.trees_winter_min_air_temp
-          - input_number.trees_winter_interval_days
-          - input_number.trees_winter_dry_in
           - input_number.trees_bucket_fill_seconds
           - input_number.trees_snow_cover_in
           - input_number.trees_caliper_hot_wings
@@ -713,33 +698,28 @@ template:
       frozen_t: "{{ states('input_number.trees_soil_frozen_temp') | float(32) }}"
       rain7: "{{ states('sensor.trees_rain_last_7_days') | float(0) }}"
       rain2: "{{ states('sensor.trees_rain_last_48_hours') | float(0) }}"
-      t7: "{{ states('input_number.trees_rain_skip_7d') | float(1) }}"
-      t2: "{{ states('input_number.trees_rain_skip_48h') | float(0.5) }}"
       snow: "{{ states('sensor.trees_snow_depth') | float(0) }}"
       snow_t: "{{ states('input_number.trees_snow_cover_in') | float(0.5) }}"
       dry: "{{ states('sensor.trees_days_since_rain') | int(0) }}"
-      win_dry: "{{ states('input_number.trees_winter_dry_in') | float(0.5) }}"
       season: "{{ states('sensor.trees_season') }}"
       lead: "{{ states('input_number.trees_final_watering_lead_days') | int(2) }}"
       win_t: "{{ states('input_number.trees_winter_min_air_temp') | float(40) }}"
+      thr: "{{ states('input_number.trees_dry_down_in') | float(0.6) }}"
       lw: >-
         {% set lw = as_datetime(states('input_datetime.trees_last_watered'), none) %}
         {{ as_local(lw).isoformat() if lw is not none and lw.year > 2000 else none }}
       since: "{{ (now().date() - as_datetime(lw).date()).days if lw else none }}"
-      interval: >-
-        {{ states('input_number.trees_interval_days') | int(3) if season == 'Growing season' else states('input_number.trees_winter_interval_days') | int(14) }}
-      # Rain + snowmelt over the winter interval: Fort Collins winters bring frequent light
-      # snows, so total water says more about the root zone than days since the last one.
-      rain_win: >-
+      # Soil water balance since the last watering (custom_templates/trees_water.jinja).
+      dd: >-
+        {% from 'trees_water.jinja' import trees_dry_down %}
         {% set d = state_attr('sensor.trees_open_meteo', 'daily') %}
-        {% set n = states('input_number.trees_winter_interval_days') | int(14) %}
-        {% if d %}
-          {% set today = now().strftime('%Y-%m-%d') %}
-          {% set i = d.time.index(today) if today in d.time else d.time | count - 1 %}
-          {% set lo = [i - n + 1, 0] | max %}
-          {{ (d.precipitation_sum[lo:i + 1] | map('float', 0) | sum) | round(2) }}
-        {% else %}0{% endif %}
-      next_due: "{{ (as_datetime(lw) + timedelta(days=interval | int)).strftime('%a %b %-d') if lw else none }}"
+        {% if d and d.et0_fao_evapotranspiration is defined %}
+          {{ trees_dry_down(d, now().strftime('%Y-%m-%d'), states('sensor.trees_rain_today_so_far') | float(0),
+                            as_datetime(lw).strftime('%Y-%m-%d') if lw else none, thr,
+                            states('input_number.trees_min_effective_rain') | float(0.1)) | from_json }}
+        {% else %}{{ none }}{% endif %}
+      deficit: "{{ dd.deficit if dd else 0 }}"
+      next_due: "{{ (now() + timedelta(days=dd.due_in)).strftime('%a %b %-d') if dd else none }}"
       hard: >-
         {% set t = states('input_number.trees_hard_freeze_temp') | float(28) %}
         {% set ns = namespace(n=none) %}
@@ -752,7 +732,7 @@ template:
         {{ ns.n }}
       hard_days: "{{ (as_datetime(hard[0]).date() - now().date()).days if hard else none }}"
       hard_when: >-
-        {% if hard %}{% set dd = hard_days %}{{ 'tonight' if dd == 0 else ('tomorrow night' if dd == 1 else as_datetime(hard[0]).strftime('%A') ~ ' night') }}{% endif %}
+        {% if hard %}{% set n = hard_days %}{{ 'tonight' if n == 0 else ('tomorrow night' if n == 1 else as_datetime(hard[0]).strftime('%A') ~ ' night') }}{% endif %}
       high: >-
         {% set h = state_attr('sensor.trees_overnight_low', 'today_high') %}
         {% if h is number %}{{ h }}{% else %}
@@ -762,33 +742,37 @@ template:
         {% endif %}
       # Fall only: a hard freeze in a late-April cold snap isn't the run-up to winter.
       final_due: "{{ season == 'Growing season' and now().month in [8, 9, 10] and hard_days is not none and hard_days <= lead }}"
+      # The final soak is skipped only if rain has already refilled most of the root zone.
       decision: >-
         {%- if since == 0 -%}done_today
         {%- elif use_moist and moist is not none and moist >= wet_pct -%}skip_wet
         {%- elif soil_max is not none and soil_max <= frozen_t -%}skip_frozen
         {%- elif season == 'Winter' and snow >= snow_t -%}skip_snow
-        {%- elif rain2 >= t2 or rain7 >= t7 -%}skip_rain
-        {%- elif final_due and (since is none or since >= 1) -%}water_final
-        {%- elif season == 'Growing season' and (since is none or since >= interval) -%}water
-        {%- elif season == 'Growing season' -%}skip_recent
+        {%- elif dd is none -%}skip_nodata
+        {%- elif final_due and (since is none or since >= 1) and deficit >= thr / 2 -%}water_final
+        {%- elif deficit < thr -%}skip_moist
+        {%- elif season == 'Growing season' -%}water
         {%- elif high is number and high < win_t -%}skip_cold
-        {%- elif rain_win < win_dry and (since is none or since >= interval) -%}water_winter
-        {%- else -%}skip_winter{%- endif -%}
-      ago: >-
-        {{ ('last watered ' ~ since ~ (' day ago' if since == 1 else ' days ago')) if since is not none else 'no watering logged yet' }}
+        {%- else -%}water_winter{%- endif -%}
+      since_txt: >-
+        {%- if since is none -%}With no watering logged in the last 60 days,
+        {%- elif since == 1 -%}Since you watered yesterday,
+        {%- elif since < 7 -%}Since you watered on {{ as_datetime(lw).strftime('%A') }},
+        {%- else -%}Since you watered on {{ as_datetime(lw).strftime('%b %-d') }},{%- endif -%}
+      # HA trims rendered variables, so the reason adds the leading space.
+      rain_txt: "{{ ('after ' ~ dd.rain ~ ' in of rain') if dd and dd.rain > 0 else '' }}"
       reason: >-
-        {%- if decision == 'done_today' -%}Watered today at {{ as_datetime(lw).strftime('%-I:%M %p') }}. Next one due around {{ next_due }}{{ ', on a day above ' ~ (win_t | round(0)) ~ '°F if it stays dry' if season == 'Winter' else '' }}.
+        {%- if decision == 'done_today' -%}Watered today at {{ as_datetime(lw).strftime('%-I:%M %p') }}. At this week's weather the next one is due around {{ next_due }}{{ ', on a day above ' ~ (win_t | round(0)) ~ '°F' if season == 'Winter' else '' }}.
         {%- elif decision == 'skip_wet' -%}Soil sensor reads {{ moist | round(0) }}% (wet at {{ wet_pct | round(0) }}%), so the root zone still has water.
         {%- elif decision == 'skip_frozen' -%}Ground stays frozen all day (warmest {{ soil_max | round(0) }}°F at 2 in deep), so water would run off or ice over.
         {%- elif decision == 'skip_snow' -%}{{ snow }} in of snow on the ground; it will melt into the root zone.
-        {%- elif decision == 'skip_rain' -%}{{ rain2 if rain2 >= t2 else rain7 }} in of rain in the last {{ '48 hours' if rain2 >= t2 else '7 days' }}{{ (', so the soil is already moist ahead of the hard freeze ' ~ hard_when) if final_due else '' }}.
+        {%- elif decision == 'skip_nodata' -%}No weather data from Open-Meteo right now, so no call today. Check the soil by hand: water if it's dry 2-3 in down.
         {%- elif decision == 'water_final' -%}Hard freeze ({{ hard[1] | round(0) }}°F) expected {{ hard_when }}. Give them a final deep soak so the roots go into winter moist.
-        {%- elif decision == 'water' -%}Only {{ rain7 }} in of rain in 7 days, and {{ ago }} (new trees: every {{ interval }} days).
-        {%- elif decision == 'skip_recent' -%}{{ ago | capitalize }}; next watering due in {{ interval - since }} day{{ '' if interval - since == 1 else 's' }}. {{ rain7 }} in of rain this week.
-        {%- elif decision == 'skip_cold' -%}Today's high is only {{ high | round(0) }}°F; winter watering needs a day above {{ win_t | round(0) }}°F so it soaks in.
-        {%- elif decision == 'water_winter' -%}Only {{ rain_win }} in of rain or snowmelt in {{ interval }} days, {{ ago }}, the ground thaws today, and the high is {{ high | round(0) if high is number else '?' }}°F: a good winter watering day.
-        {%- elif since is not none and since < interval -%}Winter: {{ ago }}; next soak due around {{ next_due }} on a day above {{ win_t | round(0) }}°F if it stays dry.
-        {%- else -%}Winter: {{ rain_win }} in of rain or snowmelt in the last {{ interval }} days is enough for now ({{ ago }}).
+        {%- elif decision == 'skip_moist' -%}{{ since_txt }} the soil has dried by {{ deficit }} in{{ (' ' ~ rain_txt) if rain_txt else '' }}; water at {{ thr }} in. {{ ('That leaves it moist ahead of the hard freeze ' ~ hard_when ~ '.') if final_due else ("At this week's weather that's around " ~ next_due ~ ('' if season == 'Growing season' else (', on a day above ' ~ (win_t | round(0)) ~ '°F')) ~ '.') }}
+        {%- elif decision == 'water' and since is none -%}No watering logged yet, so the soil is well past the {{ thr }} in mark.
+        {%- elif decision == 'water' -%}{{ since_txt }} sun and wind have dried the soil by {{ deficit }} in{{ (' ' ~ rain_txt) if rain_txt else '' }}, past the {{ thr }} in mark.
+        {%- elif decision == 'skip_cold' -%}The soil has dried by {{ deficit }} in, enough to water, but today's high is only {{ high | round(0) }}°F; winter watering needs a day above {{ win_t | round(0) }}°F so it soaks in.
+        {%- else -%}{{ since_txt }} the soil has dried by {{ deficit }} in{{ (' ' ~ rain_txt) if rain_txt else '' }} (water at {{ thr }} in), the ground thaws today, and the high is {{ high | round(0) if high is number else '?' }}°F: a good winter watering day.
         {%- endif -%}
     sensor:
       - name: Trees watering decision
@@ -801,7 +785,12 @@ template:
           reason: "{{ reason }}"
           how_much: >-
             {%- set deep = decision in ['water_final', 'water_winter'] -%}
-            {%- set per = states('input_number.trees_gal_per_inch_deep') | float(10) if deep else states('input_number.trees_gal_per_inch_regular') | float(1.5) -%}
+            {%- set deep_per = states('input_number.trees_gal_per_inch_deep') | float(10) -%}
+            {%- set reg_per = states('input_number.trees_gal_per_inch_regular') | float(1.5) -%}
+            {#- Routine waterings refill what was used: soil dried well past the mark gets more,
+                up to a deep soak. -#}
+            {%- set scale = [deficit / thr, 1] | max if thr > 0 and since is not none else 1 -%}
+            {%- set per = deep_per if deep else [reg_per * scale, deep_per] | min -%}
             {%- set hw = states('input_number.trees_caliper_hot_wings') | float(1) -%}
             {%- set se = states('input_number.trees_caliper_sensation') | float(1) -%}
             {#- Hose time from a bucket test: seconds to fill 5 gal at the flow you'll use. -#}
@@ -812,6 +801,7 @@ template:
             {%- elif hw == se -%}{{ (hw * per) | round(1) }} gal per tree: about {{ hose(hw * per) }} of hose on each, {{ where }}.
             {%- else -%}Hot Wings maple {{ (hw * per) | round(1) }} gal (about {{ hose(hw * per) }} of hose), Sensation boxelder {{ (se * per) | round(1) }} gal (about {{ hose(se * per) }}), {{ where }}.
             {%- endif -%}
+            {%- if decision == 'water' and scale >= 1.25 %} More than the usual {{ (reg_per * hw) | round(1) }} gal: it has dried well past the mark.{%- endif -%}
             {%- if decision.startswith('water') and ([hw, se] | max) * per / 5 * bucket > 30 %} Split it into 2-3 passes a few minutes apart so it soaks in instead of running off.{%- endif -%}
           when: >-
             {%- if not decision.startswith('water') -%}—
@@ -823,8 +813,14 @@ template:
           rain_48h: "{{ rain2 }}"
           soil_temp: "{{ soil }}"
           soil_today_max: "{{ soil_max }}"
+          rain_today: "{{ states('sensor.trees_rain_today_so_far') | float(none) }}"
           days_since_rain: "{{ dry }}"
-          precip_winter_window: "{{ rain_win }}"
+          dry_down: "{{ deficit }}"
+          dry_down_at: "{{ thr }}"
+          water_used: "{{ dd.et if dd else none }}"
+          rain_counted: "{{ dd.rain if dd else none }}"
+          # Days from a watering today to the next one, at the forecast weather.
+          cycle_days: "{{ dd.cycle if dd else none }}"
           days_since_watered: "{{ since }}"
           last_watered: "{{ lw }}"
           next_due: "{{ next_due }}"
@@ -872,40 +868,32 @@ automation:
     alias: "Trees & air: apply default settings"
     description: >-
       One-time defaults for the tuning helpers. Helpers keep their own value across restarts,
-      so this runs once (until input_boolean.trees_air_defaults_v3 is turned off again).
+      so this runs once (until input_boolean.trees_air_defaults_v4 is turned off again).
     triggers:
       - trigger: homeassistant
         event: start
       - trigger: state
-        entity_id: input_boolean.trees_air_defaults_v3
+        entity_id: input_boolean.trees_air_defaults_v4
         to: "off"
     conditions:
       - condition: state
-        entity_id: input_boolean.trees_air_defaults_v3
+        entity_id: input_boolean.trees_air_defaults_v4
         state: "off"
     actions:
       - variables:
           defaults:
-            # Fort Collins/CSU ~1 in/week target; a full inch within 7 days replaces a deep watering.
-            input_number.trees_rain_skip_7d: 1.0
-            # Half an inch in 48 h soaks a new tree's root ball (CSU: soak to ~12 in).
-            input_number.trees_rain_skip_48h: 0.5
+            # 0.6 in of ET0 is ~3 days in July (GardenNotes #635: every 2-3 days), ~6 in October.
+            input_number.trees_dry_down_in: 0.6
             # Showers under 0.1 in mostly wet the surface and evaporate.
             input_number.trees_min_effective_rain: 0.1
             input_number.trees_soil_frozen_temp: 32
             input_number.trees_moisture_wet_pct: 35
-            # GardenNotes #635: every 2-3 days for several months after planting.
-            input_number.trees_interval_days: 3
             input_number.trees_freeze_temp: 32
             # NWS hard freeze: 28 F or colder.
             input_number.trees_hard_freeze_temp: 28
             input_number.trees_final_watering_lead_days: 2
             # CSU 7.211: water only when air is above 40 F.
             input_number.trees_winter_min_air_temp: 40
-            # CSU 7.211: about once or twice a month in dry spells; new trees are most susceptible.
-            input_number.trees_winter_interval_days: 14
-            # Under half an inch of rain/snowmelt in the 14-day window counts as a dry spell.
-            input_number.trees_winter_dry_in: 0.5
             # 30 s per 5 gal = 10 gal/min, a typical 3/4" hose fully open; replace with a bucket test.
             input_number.trees_bucket_fill_seconds: 30
             input_number.trees_snow_cover_in: 0.5
@@ -969,7 +957,7 @@ automation:
             - input_boolean.trees_city_hours
       - action: input_boolean.turn_on
         target:
-          entity_id: input_boolean.trees_air_defaults_v3
+          entity_id: input_boolean.trees_air_defaults_v4
     mode: single
 
   - id: trees_daily_watering_notification
@@ -1035,13 +1023,14 @@ automation:
             sequence:
               - variables:
                   logged_at: "{{ as_datetime(trigger.to_state.state).strftime('%-I:%M %p') }}"
+                  # cycle_days doesn't depend on the last watering, so it's right even if the
+                  # decision sensor hasn't re-rendered for this one yet.
                   next_due: >-
-                    {% set n = states('input_number.trees_interval_days') | int(3) if is_state('sensor.trees_season', 'Growing season') else states('input_number.trees_winter_interval_days') | int(14) %}
-                    {{ (now() + timedelta(days=n)).strftime('%a %b %-d') }}
+                    {{ (now() + timedelta(days=state_attr('sensor.trees_watering_decision', 'cycle_days') | int(7))).strftime('%a %b %-d') }}
               - action: script.notify_phones
                 data:
                   title: "Trees: watered ✓"
-                  message: "Logged at {{ logged_at }}. Next watering due around {{ next_due }}."
+                  message: "Logged at {{ logged_at }}. At this week's weather the next watering is due around {{ next_due }}."
                   tag: trees-watering
                   channel: Trees
                   # Replaces the pinned morning alert quietly; stays until swiped away.
