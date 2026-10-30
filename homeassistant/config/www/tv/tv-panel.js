@@ -1043,7 +1043,7 @@ class TvPanel extends HTMLElement {
       detail = "Home Assistant can't read the UniFi client list right now.";
     } else if (w.busy) {
       state = `Moving to ${w.pref}…`;
-      detail = "The Roku reconnects in under a minute.";
+      detail = "The Roku reconnects and settles in, which can take up to 2 minutes.";
       btn = `<button class="wifi-btn" disabled>Moving…</button>`;
     } else if (w.ok) {
       cls = "ok";

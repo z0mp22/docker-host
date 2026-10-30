@@ -9,8 +9,8 @@
 # ignores them). It got knocked off Middle floor by UniFi's 3 AM channel change on 2026-10-30 and
 # stayed on garage AP.
 #
-# Disconnecting the Roku makes it choose an AP again, and from where it sits it has picked Middle floor
-# every time. It isn't locked to Middle floor (UniFi "Lock to AP") on purpose: a locked client stays
+# Disconnecting the Roku makes it choose an AP again. From where it sits it ends up on Middle floor,
+# sometimes after rejoining another AP for under a minute and then roaming over by itself. It isn't locked to Middle floor (UniFi "Lock to AP") on purpose: a locked client stays
 # offline while its AP is down, and this one can fall back to another AP. The basement Roku is locked
 # to the UDM instead, since the UDM being down means no internet anyway.
 #
@@ -82,8 +82,8 @@ script:
   living_room_roku_wifi_move:
     alias: "Living room Roku: move to Middle floor Wi-Fi"
     description: >-
-      Disconnects the Living room Roku so it reconnects, which has always put it on Middle floor. Tries
-      twice. Skips when Middle floor is offline. Interrupts playback for 10-35 s. Responds with
+      Disconnects the Living room Roku so it reconnects and settles on Middle floor (up to 2.5 min).
+      Tries twice. Skips when Middle floor is offline. Interrupts playback for 10-35 s. Responds with
       {ok, ap, reason}.
     icon: mdi:access-point
     mode: single
@@ -137,7 +137,9 @@ script:
                     result: { ok: false, ap: "{{ states(wifi) }}", reason: "UniFi refused the disconnect (HTTP {{ kick.status if kick is defined else 'error' }})" }
                 - stop: UniFi refused the disconnect
                   response_variable: result
-            # Wait for it to show up again with a new connection time (up to ~80 s).
+            # Wait up to 2.5 min for it to land on Middle floor. Don't judge the first AP it rejoins:
+            # in the live test (2026-10-30) it came back on upstairs ap, then roamed to Middle floor
+            # by itself 50 s later. A second disconnect in that window would undo that.
             - repeat:
                 sequence:
                   - delay: "00:00:10"
@@ -147,8 +149,8 @@ script:
                 until:
                   - condition: template
                     value_template: >
-                      {{ repeat.index >= 8 or (state_attr(wifi, 'connected_at') not in ['', none, since]
-                         and states(wifi) not in ['Not connected', 'unavailable', 'unknown']) }}
+                      {{ repeat.index >= 15 or (is_state(wifi, 'Middle floor')
+                         and state_attr(wifi, 'connected_at') not in ['', none, since]) }}
           until:
             - condition: template
               value_template: "{{ is_state(wifi, 'Middle floor') or repeat.index >= 2 }}"
