@@ -262,7 +262,8 @@ rest:
         unique_id: driveway_stream_active
         value_template: "{{ 'Encode[0].MainFormat[0].VideoEnable=true' in value }}"
 
-  # UniFi Network Integration API, read-only via API key. Feeds the Network panel.
+  # UniFi Network Integration API via API key; these sensors only read. Feeds the Network panel.
+  # The key itself can also send commands (rest_command.unifi_reconnect_client, packages/roku_wifi.yaml).
   # Unlike the core unifi integration (username/password), an API key never hits
   # /api/auth/login, so it can't trip or prolong the UDM's login lockout.
   # Device ids below are also listed in panel_custom's network-panel config.
@@ -519,7 +520,7 @@ panel_custom:
     url_path: tv
     sidebar_title: TV
     sidebar_icon: mdi:television-play
-    module_url: /local/tv/tv-panel.js?v=7
+    module_url: /local/tv/tv-panel.js?v=8
     config:
       # Each room: the Roku (core roku integration), its remote, and the Plex client on it, which
       # supplies titles, artwork and seeking. Icons: mdiSofa, mdiStairsDown, mdiTelevision.
@@ -529,6 +530,10 @@ panel_custom:
           roku: media_player.z_roku_ultra
           remote: remote.z_roku_ultra
           plex: media_player.plex_plex_for_roku_z_roku_ultra
+          # Which Wi-Fi AP it's on and a "Move to Middle floor" button (packages/roku_wifi.yaml).
+          wifi:
+            sensor: sensor.living_room_roku_wi_fi
+            script: script.living_room_roku_wifi_move
         - name: Basement
           icon: mdiStairsDown
           roku: media_player.basement_roku

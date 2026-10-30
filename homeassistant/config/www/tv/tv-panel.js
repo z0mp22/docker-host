@@ -37,6 +37,7 @@ const ICONS = {
   mdiRecordRec: "M12.5,5A7.5,7.5 0 0,0 5,12.5A7.5,7.5 0 0,0 12.5,20A7.5,7.5 0 0,0 20,12.5A7.5,7.5 0 0,0 12.5,5M7,10H9A1,1 0 0,1 10,11V12C10,12.5 9.62,12.9 9.14,12.97L10.31,15H9.15L8,13V15H7M12,10H14V11H12V12H14V13H12V14H14V15H12A1,1 0 0,1 11,14V11A1,1 0 0,1 12,10M16,10H18V11H16V14H18V15H16A1,1 0 0,1 15,14V11A1,1 0 0,1 16,10M8,11V12H9V11",
   mdiCalendarClock: "M15,13H16.5V15.82L18.94,17.23L18.19,18.53L15,16.69V13M19,8H5V19H9.67C9.24,18.09 9,17.07 9,16A7,7 0 0,1 16,9C17.07,9 18.09,9.24 19,9.67V8M5,21C3.89,21 3,20.1 3,19V5C3,3.89 3.89,3 5,3H6V1H8V3H16V1H18V3H19A2,2 0 0,1 21,5V11.1C22.24,12.36 23,14.09 23,16A7,7 0 0,1 16,23C14.09,23 12.36,22.24 11.1,21H5M16,11.15A4.85,4.85 0 0,0 11.15,16C11.15,18.68 13.32,20.85 16,20.85A4.85,4.85 0 0,0 20.85,16C20.85,13.32 18.68,11.15 16,11.15Z",
   mdiCheckCircleOutline: "M12 2C6.5 2 2 6.5 2 12S6.5 22 12 22 22 17.5 22 12 17.5 2 12 2M12 20C7.59 20 4 16.41 4 12S7.59 4 12 4 20 7.59 20 12 16.41 20 12 20M16.59 7.58L10 14.17L7.41 11.59L6 13L10 17L18 9L16.59 7.58Z",
+  mdiWifi: "M12,21L15.6,16.2C14.6,15.45 13.35,15 12,15C10.65,15 9.4,15.45 8.4,16.2L12,21M12,3C7.95,3 4.21,4.34 1.2,6.6L3,9C5.5,7.12 8.62,6 12,6C15.38,6 18.5,7.12 21,9L22.8,6.6C19.79,4.34 16.05,3 12,3M12,9C9.3,9 6.81,9.89 4.8,11.4L6.6,13.8C8.1,12.67 9.97,12 12,12C14.03,12 15.9,12.67 17.4,13.8L19.2,11.4C17.19,9.89 14.7,9 12,9Z",
   mdiWifiOff: "M2.28,3L1,4.27L2.47,5.74C2.04,6 1.61,6.29 1.2,6.6L3,9C3.53,8.6 4.08,8.25 4.66,7.93L6.89,10.16C6.15,10.5 5.44,10.91 4.8,11.4L6.6,13.8C7.38,13.22 8.26,12.77 9.2,12.47L11.75,15C10.5,15.07 9.34,15.5 8.4,16.2L12,21L14.46,17.73L17.74,21L19,19.72M12,3C9.85,3 7.8,3.38 5.9,4.07L8.29,6.47C9.5,6.16 10.72,6 12,6C15.38,6 18.5,7.11 21,9L22.8,6.6C19.79,4.34 16.06,3 12,3M12,9C11.62,9 11.25,9 10.88,9.05L14.07,12.25C15.29,12.53 16.43,13.07 17.4,13.8L19.2,11.4C17.2,9.89 14.7,9 12,9Z",
   mdiArrowRight: "M4,11V13H16L10.5,18.5L11.92,19.92L19.84,12L11.92,4.08L10.5,5.5L16,11H4Z",
   mdiInformationOutline: "M11,9H13V7H11M12,20C7.59,20 4,16.41 4,12C4,7.59 7.59,4 12,4C16.41,4 20,7.59 20,12C20,16.41 16.41,20 12,20M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M11,17H13V11H11V17Z",
@@ -151,13 +152,33 @@ function sumGames(entries, start, end, today) {
 
 // What a room's TV is doing, merged from the Roku itself and the Plex client running on it.
 // Plex knows titles, artwork and position; the Roku knows the app and whether it's on at all.
+// Which Wi-Fi access point the Roku is on, and the script that moves it to its preferred AP
+// (packages/roku_wifi.yaml). On the wrong AP this Roku buffered badly (2026-10-29).
+function readWifi(states, cfg) {
+  if (!cfg?.sensor) return null;
+  const s = states[cfg.sensor];
+  const known = !!s && !DEAD.has(s.state);
+  const pref = s?.attributes?.preferred || "";
+  return {
+    known,
+    ap: known ? s.state : "",
+    pref,
+    ok: known && s.state === pref,
+    gone: known && s.state === "Not connected",
+    prefOnline: s?.attributes?.preferred_online !== false,
+    busy: !!cfg.script && states[cfg.script]?.state === "on",
+    script: cfg.script,
+  };
+}
+
 function readRoom(states, cfg, now) {
   const r = states[cfg.roku];
   const p = cfg.plex ? states[cfg.plex] : null;
   const online = !!r && !DEAD.has(r.state);
   const ps5 = readPs5(states, cfg.ps5);
   const tv = readTv(states, cfg.tv);
-  const room = { ...cfg, ps5, tv, online, exists: !!r, state: r?.state || "missing", app: r?.attributes?.app_name || "", sources: r?.attributes?.source_list || [] };
+  const wifi = readWifi(states, cfg.wifi);
+  const room = { ...cfg, ps5, tv, wifi, online, exists: !!r, state: r?.state || "missing", app: r?.attributes?.app_name || "", sources: r?.attributes?.source_list || [] };
   room.gaming = !!ps5?.on && !(online && (PLAYING.has(r.state) || (p && PLAYING.has(p.state))));
   if (!online) return { ...room, mode: "dead" };
   if (["off", "standby"].includes(r.state)) return { ...room, mode: "off" };
@@ -411,6 +432,16 @@ h1 { margin: 0; font-size: 34px; font-weight: 700; letter-spacing: -.01em; line-
 .inp:disabled { opacity: .5; }
 .tv-foot { display: flex; align-items: center; gap: 14px; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); font-size: 15px; }
 .tv-foot .grow { flex: 1; min-width: 0; }
+.wifi { display: flex; align-items: center; gap: 12px; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); }
+.wifi > .ic { flex: none; width: 22px; height: 22px; color: var(--muted); }
+.wifi.ok > .ic { color: var(--green); }
+.wifi.warn > .ic { color: var(--amber); }
+.wifi .grow { flex: 1; min-width: 0; }
+.wifi b { display: block; font-size: 15px; font-weight: 600; }
+.wifi small { display: block; font-size: 13px; color: var(--muted); margin-top: 2px; line-height: 1.35; }
+.wifi-btn { flex: none; height: 40px; padding: 0 14px; border-radius: 12px; background: #1a2435; border: 1.5px solid rgba(245,176,65,.45); color: #fde3b3; font-size: 14px; font-weight: 600; }
+.wifi-btn:not(:disabled):active { transform: scale(.97); }
+.wifi-btn:disabled { opacity: .5; border-color: var(--line); color: var(--muted); }
 .tv-foot small { display: block; font-size: 13px; color: var(--muted); margin-top: 2px; }
 .sw { width: 52px; height: 30px; border-radius: 15px; background: #243044; position: relative; flex: none; }
 .sw::after { content: ""; position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%; background: #8593a8; transition: left .15s; }
@@ -490,6 +521,8 @@ h1 { margin: 0; font-size: 34px; font-weight: 700; letter-spacing: -.01em; line-
   .inp b { font-size: 14.5px; }
   .inp small { font-size: 12px; }
   .tv-foot { font-size: 14px; }
+  .wifi { gap: 10px; }
+  .wifi-btn { height: 38px; padding: 0 12px; font-size: 13.5px; }
 }
 `;
 
@@ -721,6 +754,12 @@ class TvPanel extends HTMLElement {
         return;
       case "tv-autooff":
         if (room?.tv?.auto_off) this._call("automation", room.tv.autoOff ? "turn_off" : "turn_on", { entity_id: room.tv.auto_off });
+        return;
+      case "wifi-move":
+        if (room?.wifi?.script && !room.wifi.busy) {
+          navigator.vibrate?.(8);
+          this._call("script", "turn_on", { entity_id: room.wifi.script });
+        }
         return;
       case "more-apps":
         this._showAllApps = !this._showAllApps;
@@ -987,7 +1026,42 @@ class TvPanel extends HTMLElement {
           <input name="q" type="search" placeholder="Search Roku for a show or movie" value="${esc(this._query)}" autocomplete="off" enterkeyhint="search" ${dis}>
           <button data-action="search" ${dis}>${svg("mdiMagnify")}Search</button>
         </div>
-      </div></section>`;
+      </div>${this._wifiRow(r)}</section>`;
+  }
+
+  // Which access point this Roku is on. Off its preferred AP it can buffer, so offer the move (a
+  // disconnect: the Roku drops for 10-35 s and reconnects). The self-heal does the same when idle.
+  _wifiRow(r) {
+    const w = r.wifi;
+    if (!w) return "";
+    let cls = "";
+    let state;
+    let detail;
+    let btn = "";
+    if (!w.known) {
+      state = "Wi-Fi unknown";
+      detail = "Home Assistant can't read the UniFi client list right now.";
+    } else if (w.busy) {
+      state = `Moving to ${w.pref}…`;
+      detail = "The Roku reconnects in under a minute.";
+      btn = `<button class="wifi-btn" disabled>Moving…</button>`;
+    } else if (w.ok) {
+      cls = "ok";
+      state = `Wi-Fi · ${w.ap}`;
+      detail = "The best access point for this room.";
+    } else if (w.gone) {
+      cls = "warn";
+      state = "Not on Wi-Fi";
+      detail = "UniFi doesn't see this Roku. Check that it has power.";
+    } else {
+      cls = "warn";
+      state = `Wi-Fi · ${w.ap}`;
+      if (!w.prefOnline) detail = `Can buffer here, but ${w.pref} is offline, so it stays put.`;
+      else if (r.mode === "media") detail = `Can buffer here. Moving it pauses the show for up to 30 s.`;
+      else detail = `Can buffer here. ${w.pref} is the better access point.`;
+      btn = `<button class="wifi-btn" data-action="wifi-move" ${w.prefOnline ? "" : "disabled"}>Move to ${esc(w.pref)}</button>`;
+    }
+    return `<div class="wifi ${cls}">${svg("mdiWifi")}<div class="grow"><b>${esc(state)}</b><small>${esc(detail)}</small></div>${btn}</div>`;
   }
 
   // Volume through the Roku remote's keys. A room can set `volume:` to a note instead, when its sound

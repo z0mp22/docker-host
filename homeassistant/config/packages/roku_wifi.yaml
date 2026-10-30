@@ -1,0 +1,233 @@
+# Living room Roku Wi-Fi: which access point it's on, a one-tap "move it back to Middle floor" (the
+# /tv panel's Living room remote card), and a self-heal that does the same while nobody's watching.
+#
+# Why (2026-10-29): Plex on this Roku buffered and then failed because it was on "upstairs ap", the one
+# AP with no cable. That AP relays through "garage AP" over Wi-Fi on the same 5 GHz channel, so the
+# channel was ~93% busy and pings to the Roku hit 1-4 s. On Middle floor (wired, its own channel) it
+# streamed cleanly: ping p90 5 ms, no TCP retransmits. A Roku never moves back on its own, though: it
+# stays on whatever AP it joined while the link is "good enough" (BSS transition hints are on and it
+# ignores them). It got knocked off Middle floor by UniFi's 3 AM channel change on 2026-10-30 and
+# stayed on garage AP.
+#
+# Disconnecting the Roku makes it choose an AP again, and from where it sits it has picked Middle floor
+# every time. It isn't locked to Middle floor (UniFi "Lock to AP") on purpose: a locked client stays
+# offline while its AP is down, and this one can fall back to another AP. The basement Roku is locked
+# to the UDM instead, since the UDM being down means no internet anyway.
+#
+# - Client matched by hostname prefix, not MAC (public repo; see packages/presence.yaml). The MAC for
+#   the disconnect is read from the UDM client list at run time.
+# - sensor.network_clients / sensor.network_devices (configuration.yaml) poll the UniFi API every
+#   60 s; the script refreshes them on demand while it waits.
+# - The disconnect is UniFi's "kick-sta" on the classic API with the same API key (it has write
+#   access). The Roku is offline for 10-35 s while it reconnects.
+
+template:
+  - sensor:
+      - name: Living room Roku Wi-Fi
+        unique_id: living_room_roku_wifi_ap
+        icon: mdi:access-point
+        availability: "{{ has_value('sensor.network_clients') and has_value('sensor.network_devices') }}"
+        # The AP's name, "Wired", or "Not connected" (missing from the client list).
+        state: >
+          {%- set c = state_attr('sensor.network_clients', 'data') | default([], true)
+             | selectattr('name', 'string') | selectattr('name', 'match', 'ZRokuUltra( |$)') | list -%}
+          {%- if not c -%}Not connected
+          {%- elif c[0].type != 'WIRELESS' -%}Wired
+          {%- else -%}
+            {%- set d = state_attr('sensor.network_devices', 'data') | default([], true)
+               | selectattr('id', 'eq', c[0].uplinkDeviceId) | list -%}
+            {{ d[0].name if d else 'Unknown AP' }}
+          {%- endif -%}
+        attributes:
+          preferred: Middle floor
+          preferred_online: >
+            {{ state_attr('sensor.network_devices', 'data') | default([], true)
+               | selectattr('name', 'eq', 'Middle floor') | selectattr('state', 'eq', 'ONLINE') | list | count > 0 }}
+          mac: >
+            {% set c = state_attr('sensor.network_clients', 'data') | default([], true)
+               | selectattr('name', 'string') | selectattr('name', 'match', 'ZRokuUltra( |$)') | list %}
+            {{ c[0].macAddress if c else '' }}
+          connected_at: >
+            {% set c = state_attr('sensor.network_clients', 'data') | default([], true)
+               | selectattr('name', 'string') | selectattr('name', 'match', 'ZRokuUltra( |$)') | list %}
+            {{ c[0].connectedAt if c else '' }}
+
+  - binary_sensor:
+      - name: Living room Roku on Middle floor Wi-Fi
+        unique_id: living_room_roku_on_middle_floor
+        icon: mdi:access-point-check
+        availability: "{{ has_value('sensor.living_room_roku_wi_fi') }}"
+        state: "{{ is_state('sensor.living_room_roku_wi_fi', 'Middle floor') }}"
+
+rest_command:
+  # Disconnects one Wi-Fi client so it reconnects and picks an AP again. UniFi answers 200 with
+  # meta.rc "ok", or 400 with "api.err.UnknownStation" when that MAC isn't connected.
+  unifi_reconnect_client:
+    url: "https://10.0.0.1/proxy/network/api/s/default/cmd/stamgr"
+    method: post
+    headers:
+      X-API-KEY: !secret unifi_api_key
+    content_type: application/json
+    payload: '{"cmd": "kick-sta", "mac": "{{ mac }}"}'
+    verify_ssl: false
+    timeout: 15
+
+counter:
+  living_room_roku_wifi_moves_today:
+    name: Living room Roku Wi-Fi moves today
+    icon: mdi:access-point-network
+    restore: true
+
+script:
+  living_room_roku_wifi_move:
+    alias: "Living room Roku: move to Middle floor Wi-Fi"
+    description: >-
+      Disconnects the Living room Roku so it reconnects, which has always put it on Middle floor. Tries
+      twice. Skips when Middle floor is offline. Interrupts playback for 10-35 s. Responds with
+      {ok, ap, reason}.
+    icon: mdi:access-point
+    mode: single
+    max_exceeded: silent
+    sequence:
+      - action: homeassistant.update_entity
+        target:
+          entity_id: [sensor.network_clients, sensor.network_devices]
+      - variables:
+          wifi: sensor.living_room_roku_wi_fi
+      - if:
+          - condition: state
+            entity_id: sensor.living_room_roku_wi_fi
+            state: Middle floor
+        then:
+          - variables:
+              result: { ok: true, ap: Middle floor, reason: Already on Middle floor }
+          - stop: Already on Middle floor
+            response_variable: result
+      - if:
+          - condition: template
+            value_template: "{{ not state_attr(wifi, 'preferred_online') }}"
+        then:
+          - variables:
+              result: { ok: false, ap: "{{ states(wifi) }}", reason: Middle floor AP is offline }
+          - stop: Middle floor AP is offline
+            response_variable: result
+      - if:
+          - condition: template
+            value_template: "{{ not state_attr(wifi, 'mac') }}"
+        then:
+          - variables:
+              result: { ok: false, ap: "{{ states(wifi) }}", reason: The Roku isn't on Wi-Fi }
+          - stop: The Roku isn't on Wi-Fi
+            response_variable: result
+      - repeat:
+          sequence:
+            - variables:
+                since: "{{ state_attr(wifi, 'connected_at') }}"
+            # Newer HA raises on a 4xx/5xx answer; carry on and report it instead.
+            - action: rest_command.unifi_reconnect_client
+              continue_on_error: true
+              data:
+                mac: "{{ state_attr(wifi, 'mac') }}"
+              response_variable: kick
+            - if:
+                - condition: template
+                  value_template: "{{ kick is not defined or kick.status != 200 }}"
+              then:
+                - variables:
+                    result: { ok: false, ap: "{{ states(wifi) }}", reason: "UniFi refused the disconnect (HTTP {{ kick.status if kick is defined else 'error' }})" }
+                - stop: UniFi refused the disconnect
+                  response_variable: result
+            # Wait for it to show up again with a new connection time (up to ~80 s).
+            - repeat:
+                sequence:
+                  - delay: "00:00:10"
+                  - action: homeassistant.update_entity
+                    target:
+                      entity_id: sensor.network_clients
+                until:
+                  - condition: template
+                    value_template: >
+                      {{ repeat.index >= 8 or (state_attr(wifi, 'connected_at') not in ['', none, since]
+                         and states(wifi) not in ['Not connected', 'unavailable', 'unknown']) }}
+          until:
+            - condition: template
+              value_template: "{{ is_state(wifi, 'Middle floor') or repeat.index >= 2 }}"
+      - variables:
+          result:
+            ok: "{{ is_state(wifi, 'Middle floor') }}"
+            ap: "{{ states(wifi) }}"
+            reason: "{{ 'Moved to Middle floor' if is_state(wifi, 'Middle floor') else 'It reconnected to ' ~ states(wifi) ~ ' twice' }}"
+      - stop: Done
+        response_variable: result
+
+automation:
+  - id: living_room_roku_wifi_self_heal
+    alias: "Living room Roku: back to Middle floor Wi-Fi when nothing's playing"
+    description: >-
+      When the Living room Roku has been off Middle floor for 10 minutes, after UniFi's 3 AM channel
+      changes, when playback ends, or hourly: move it back, but only while nothing is playing on it and
+      Middle floor is online. At most 3 tries a day; one push if two in a row don't take.
+    mode: single
+    max_exceeded: silent
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.living_room_roku_on_middle_floor_wi_fi
+        to: "off"
+        for: "00:10:00"
+      # UniFi's nightly channel optimization runs at 03:00 and can knock it off Middle floor.
+      - trigger: time
+        at: "03:15:00"
+      # Finished watching while on the wrong AP: fix it before the next show.
+      - trigger: state
+        entity_id: [media_player.z_roku_ultra, media_player.plex_plex_for_roku_z_roku_ultra]
+        from: [playing, paused, buffering]
+        for: "00:02:00"
+      - trigger: time_pattern
+        minutes: "17"
+    conditions:
+      - condition: state
+        entity_id: binary_sensor.living_room_roku_on_middle_floor_wi_fi
+        state: "off"
+      - condition: template
+        value_template: "{{ state_attr('sensor.living_room_roku_wi_fi', 'preferred_online') }}"
+      - condition: not
+        conditions:
+          - condition: state
+            entity_id: [media_player.z_roku_ultra, media_player.plex_plex_for_roku_z_roku_ultra]
+            state: [playing, paused, buffering]
+            match: any
+      - condition: numeric_state
+        entity_id: counter.living_room_roku_wifi_moves_today
+        below: 3
+    actions:
+      - action: counter.increment
+        target:
+          entity_id: counter.living_room_roku_wifi_moves_today
+      - action: script.living_room_roku_wifi_move
+        response_variable: moved
+      - if:
+          - condition: template
+            value_template: "{{ not moved.ok and states('counter.living_room_roku_wifi_moves_today') | int(0) == 2 }}"
+        then:
+          - action: script.notify_phones
+            data:
+              title: Living room Roku keeps landing on the wrong Wi-Fi
+              message: >-
+                Two tries today and it's still on {{ moved.ap }} ({{ moved.reason }}). It may buffer there.
+                Try Move on the TV panel, or lock it to Middle floor in UniFi.
+              tag: living-room-roku-wifi
+              channel: Network
+              data:
+                clickAction: /tv
+                url: /tv
+
+  - id: living_room_roku_wifi_reset_count
+    alias: "Living room Roku: reset the daily Wi-Fi move count"
+    mode: single
+    triggers:
+      - trigger: time
+        at: "00:00:00"
+    actions:
+      - action: counter.reset
+        target:
+          entity_id: counter.living_room_roku_wifi_moves_today
