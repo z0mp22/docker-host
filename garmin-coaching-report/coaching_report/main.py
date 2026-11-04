@@ -94,6 +94,9 @@ def main() -> int:
     since = _parse_since(os.environ.get("SINCE", ""), report_date, reports_dir)
     through = _parse_through(os.environ.get("THROUGH", ""), report_date)
     dry_run = os.environ.get("DRY_RUN", "").strip().lower() in ("1", "true", "yes")
+    # PREVIEW: call Claude and print the report, but save and email nothing
+    # (a saved report would move SINCE=last and become next week's previous_report).
+    preview = os.environ.get("PREVIEW", "").strip().lower() in ("1", "true", "yes")
 
     try:
         client = connect_with_tokens(config.garmin)
@@ -123,7 +126,10 @@ def main() -> int:
             f"[coaching-report] window {wr['start']}..{wr['end']} "
             f"({wr.get('days', n_days)} days) — {n_acts} activities, "
             f"{n_days} daily-health days, {n_hist} history entries, "
-            f"{n_strength} strength-training sessions",
+            f"{n_strength} strength-training sessions, "
+            f"{len(payload.get('athlete_notes') or [])} athlete notes, "
+            f"previous report {(payload.get('previous_report') or {}).get('report_date', 'none')}, "
+            f"forecast {'yes' if payload.get('forecast') else 'no'}",
             file=sys.stderr,
         )
 
@@ -143,6 +149,14 @@ def main() -> int:
             max_output_tokens=config.max_output_tokens,
             enable_prompt_cache=config.enable_prompt_cache,
         )
+        if preview:
+            print(result.report_markdown)
+            print(
+                f"[coaching-report] PREVIEW: {len(result.report_markdown.split())} words, "
+                f"{result.input_tokens} in / {result.output_tokens} out; nothing saved or emailed",
+                file=sys.stderr,
+            )
+            return 0
         md_path = save_outputs(config, report_date, result, user_content, payload)
         full_md = md_path.read_text(encoding="utf-8")
         send_report_email(config, report_date, full_md)

@@ -63,6 +63,9 @@ def _prepare_user_content(
         "history_range": payload["history_range"],
         "nutrition_history": payload.get("nutrition_history") or [],
         "strength_training_log": payload.get("strength_training_log") or [],
+        "previous_report": payload.get("previous_report"),
+        "athlete_notes": payload.get("athlete_notes") or [],
+        "forecast": payload.get("forecast"),
         "history_compression_applied": history_level,
         "week_compression_applied": week_level,
     }
@@ -84,6 +87,9 @@ def _split_user_content(user_content: dict[str, Any]) -> tuple[dict[str, Any], d
         "athlete_context": user_content.get("athlete_context"),
         "week_full": user_content["week_full"],
         "strength_training_log": user_content.get("strength_training_log") or [],
+        "previous_report": user_content.get("previous_report"),
+        "athlete_notes": user_content.get("athlete_notes") or [],
+        "forecast": user_content.get("forecast"),
     }
     return cached, dynamic
 

@@ -36,6 +36,9 @@ class AppConfig:
     hevy_routine_title: str
     hevy_fingerboard_routine_title: str
     lift_history_sessions: int
+    # Where the weekly plan's forecast comes from (Open-Meteo). Defaults to Fort Collins.
+    forecast_lat: float = 40.5853
+    forecast_lon: float = -105.0844
 
 
 def load_app_config() -> AppConfig:
@@ -87,4 +90,6 @@ def load_app_config() -> AppConfig:
         hevy_fingerboard_routine_title=os.environ.get("HEVY_FINGERBOARD_ROUTINE_TITLE", "").strip()
         or "Next Fingerboard Session",
         lift_history_sessions=int(os.environ.get("LIFT_HISTORY_SESSIONS", "6")),
+        forecast_lat=float(os.environ.get("FORECAST_LAT", "40.5853")),
+        forecast_lon=float(os.environ.get("FORECAST_LON", "-105.0844")),
     )
