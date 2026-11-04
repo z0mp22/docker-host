@@ -20,7 +20,7 @@ import anthropic
 from pydantic import BaseModel, Field, field_validator
 
 from .errors import LiftPlanError
-from .prompts import fingerboard_prompt_version, lift_prompt_version, load_fingerboard_prompt, load_lift_prompt
+from .prompts import lift_prompt_version, load_lift_prompt
 
 # Only RIR targets the athlete can actually log back in Hevy -- Hevy records
 # effort as RPE on a fixed picker (6, 7, 7.5, 8, 8.5, 9, 9.5, 10), so RIR
@@ -134,16 +134,13 @@ def generate_lift_session(
     in what fails isolated from what (see run-lift-session.sh's own lock and
     Actions concurrency group).
 
-    A fingerboard session (payload session_type "fingerboard") uses its own
-    prompt. `revise` = (the plan from the first call, lift_review problems):
+    Fingerboard sessions never come here; lift_fingerboard_plan.py plans
+    them by rules (ADR 0012). `revise` = (the plan from the first call, lift_review problems):
     the same conversation continues with that plan as the assistant turn and
     the problems as the next user turn, so the coach fixes them in context.
     """
     client = anthropic.Anthropic(api_key=api_key)
-    if payload.get("session_type") == "fingerboard":
-        system, pver = load_fingerboard_prompt(), fingerboard_prompt_version()
-    else:
-        system, pver = load_lift_prompt(), lift_prompt_version()
+    system, pver = load_lift_prompt(), lift_prompt_version()
 
     user_json = json.dumps(payload, default=str, ensure_ascii=False)
     messages: list[dict[str, Any]] = [{"role": "user", "content": user_json}]
