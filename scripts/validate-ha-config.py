@@ -16,8 +16,6 @@ HA_URL = os.environ.get("HA_URL", "http://127.0.0.1:8123")
 SECRETS = Path("/docker/homeassistant/secrets.yaml")
 RECORDER_DB = Path("/docker/homeassistant/home-assistant_v2.db")
 MAX_WAIT_S = 180
-# ThermoPro BLE thermometers advertise intermittently; allow a generous freshness window.
-BT_TEMP_MAX_AGE_S = int(os.environ.get("BT_TEMP_MAX_AGE_S", "1800"))
 # Same lookup as script.notify_phones in homeassistant/config/scripts.yaml.
 MOBILE_NOTIFIER_TEMPLATE = (
     "{{ integration_entities('mobile_app') | select('match', '^notify\\\\.')"
@@ -255,7 +253,15 @@ def latest_recorder_state(entity_id: str) -> tuple[str, float] | None:
 
 
 def validate_bluetooth_temp_sensors() -> int:
-    """Hard gate: ThermoPro BLE temperature sensors must be present and fresh."""
+    """Hard gate: ThermoPro BLE temperature sensors must be present and reporting.
+
+    Same signal as binary_sensor.bluetooth_thermometers_stale (packages/bluetooth_health.yaml):
+    HA marks a passive BLE sensor unavailable after 15 min without an advert. The row's age is
+    shown but not judged. A thermometer in a steady room writes no new state for hours while
+    advertising every few seconds (thermopro-ble skips adverts that repeat a reading it already
+    has), and a 30 min age limit failed the 2026-11-04 deploy on a Basement sensor that was
+    reading correctly.
+    """
     now = time.time()
     failures: list[str] = []
     for entity_id in REQUIRED_BT_TEMP_SENSORS:
@@ -268,10 +274,7 @@ def validate_bluetooth_temp_sensors() -> int:
         if state in {"unavailable", "unknown", ""}:
             failures.append(f"{entity_id} state={state}")
             continue
-        if age > BT_TEMP_MAX_AGE_S:
-            failures.append(f"{entity_id} stale ({int(age)}s old, state={state})")
-            continue
-        log(f"OK bluetooth temp {entity_id}={state} ({int(age)}s old)")
+        log(f"OK bluetooth temp {entity_id}={state} (unchanged for {int(age)}s)")
     if failures:
         log("FAIL bluetooth temperature sensors: " + "; ".join(failures))
         return 1
