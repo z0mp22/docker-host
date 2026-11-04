@@ -416,7 +416,7 @@ panel_custom:
     url_path: house
     sidebar_title: Home
     sidebar_icon: mdi:home
-    module_url: /local/home/home-panel.js?v=12
+    module_url: /local/home/home-panel.js?v=13
     config:
       person: person.cody
       # Header "who's home" chips: a person.* (phone app GPS) or a presence binary_sensor
@@ -445,6 +445,10 @@ panel_custom:
         photo: camera.porch_package
         brought_in: script.porch_package_brought_in
         dismiss: script.porch_package_dismiss_taken
+      # Claude-confirmed wild animals on any Frigate camera (same package), until "Got it" or a day.
+      wildlife:
+        sensor: binary_sensor.wildlife_spotted
+        dismiss: script.wildlife_dismiss
       # Garage door tile: Frigate's garage_door classifier (packages/garage_door.yaml), since there's
       # no door sensor. It carries a Garage camera still so a misread is easy to spot.
       garage:
@@ -516,6 +520,7 @@ panel_custom:
         recordings: /recordings
         network: /network
         media: /tv
+        wildlife: /wildlife
   - name: tv-panel
     url_path: tv
     sidebar_title: TV
