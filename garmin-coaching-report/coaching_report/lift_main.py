@@ -10,9 +10,12 @@ groups, separate alert-email subjects) so a Hevy outage or a lift-session bug
 can never affect the mountain report and vice versa.
 """
 
+import json
 import os
 import sys
 import traceback
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from .config import load_app_config
 from .emailer import save_lift_outputs, send_alert_email
@@ -31,6 +34,7 @@ from .lift_collector import build_fingerboard_payload, build_lift_payload, last_
 from .lift_equipment import home_gym_catalog, snap_free_weights
 from .lift_feedback import append_feedback
 from .lift_fingerboard import assert_fingerboard_safe, board_blocks, resolve_warmup_id, without_board_exercises
+from .lift_fingerboard_plan import RULES_VERSION, load_board_prescriptions, plan_fingerboard_session
 from .lift_review import enforce_hinge_limits, fingerboard_problems, name_problems, review_plan
 from .lift_safety import assert_session_plan_safe, resolve_banned_exercise_ids
 from .hevy_client import HevyClient
@@ -241,9 +245,11 @@ def _run_fingerboard(
     config, garmin_client, hevy_client, full_catalog, banned_ids,
     shoulder_flag, finger_flag, session_date, dry_run,
 ) -> int:
-    """A board-only session, written to its own Hevy routine. Raises
-    FingerboardBlockedError (no Claude call at all) when the board is off
-    today: finger flag on, or already two board days this week."""
+    """A board-only session, written to its own Hevy routine. Planned by
+    rules (lift_fingerboard_plan.py, ADR 0012), with no Claude call. Raises
+    FingerboardBlockedError when the board is off today: finger flag on, or
+    already two board days this week. A dry run prints the plan and writes
+    nothing."""
     payload = build_fingerboard_payload(
         garmin_client, hevy_client, config, full_catalog, shoulder_flag, finger_flag, session_date
     )
@@ -262,37 +268,41 @@ def _run_fingerboard(
         raise FingerboardBlockedError(
             f"The board is off today: {fb['limits']['blocked_reason']}. Nothing was written to Hevy."
         )
-    if dry_run:
-        print("[lift-session] DRY_RUN: fingerboard payload validated; skipping Claude call and Hevy write",
-              file=sys.stderr)
-        return 0
 
-    plan, model_meta = _generate(config, payload)
-    catalog_by_id = {ex["id"]: ex for ex in payload["exercise_catalog"]}
-    warmup_id = resolve_warmup_id(full_catalog)
-
-    def check(p):
-        assert_session_plan_safe(p.exercises, catalog_by_id, banned_ids)
-        assert_fingerboard_safe(p.exercises, full_catalog, fb)
-
-    check(plan)
-    plan, model_meta = _review_and_revise(
-        config, payload, plan, model_meta, catalog_by_id,
-        lambda p: review_plan(p.exercises, "fingerboard", catalog_by_id)
-        + fingerboard_problems(p.exercises, p.summary_text, warmup_id),
-        check,
+    now = datetime.now(ZoneInfo(payload["athlete_context"]["timezone"])).replace(tzinfo=None)
+    plan, progression = plan_fingerboard_session(
+        payload, load_board_prescriptions(config.report_output_dir), now
     )
-    plan_ids = {ex["id"] for ex in fb["plan_exercises"]}
-    if not any(ex.exercise_id in plan_ids for ex in plan.exercises):
-        raise LiftPlanError("Fingerboard session came back with no board exercise")
-    for change in snap_free_weights(plan.exercises, catalog_by_id):
-        plan.flags_considered.append(f"Load adjusted after generation: {change}")
+    catalog_by_id = {ex["id"]: ex for ex in payload["exercise_catalog"]}
+    # The rules are written to stay inside these; a failure here is a bug in
+    # lift_fingerboard_plan.py, and nothing is written.
+    assert_session_plan_safe(plan.exercises, catalog_by_id, banned_ids)
+    assert_fingerboard_safe(plan.exercises, full_catalog, fb)
+    problems = (
+        review_plan(plan.exercises, "fingerboard", catalog_by_id)
+        + fingerboard_problems(plan.exercises, plan.summary_text, resolve_warmup_id(full_catalog))
+    )
+    if problems:
+        raise LiftPlanError("Fingerboard rules made a session that fails review: " + "; ".join(problems))
+
+    if dry_run:
+        print(
+            "[lift-session] DRY_RUN: fingerboard plan below; nothing written to Hevy\n"
+            f"{plan.rationale}\n\n{plan.summary_text}\n\n"
+            + "\n".join(f"- {f}" for f in plan.flags_considered)
+            + "\n\n" + "\n".join(f"{ex.exercise_name}: {ex.notes}" for ex in plan.exercises)
+            + f"\n\nprogression={json.dumps(progression)}",
+            file=sys.stderr,
+        )
+        return 0
 
     routine_id = hevy_client.upsert_session_routine(
         plan, config.hevy_fingerboard_routine_title, "fingerboard"
     )
     save_lift_outputs(
-        config, session_date, plan, model_meta, routine_id, "fingerboard",
+        config, session_date, plan,
+        {"model": "rules", "prompt_version": RULES_VERSION, "input_tokens": 0, "output_tokens": 0},
+        routine_id, "fingerboard",
         extra_meta={
             "fingerboard": {k: fb[k] for k in (
                 "phase", "phase_name", "phase_started", "weeks_in_phase", "ramp_week",
@@ -300,6 +310,8 @@ def _run_fingerboard(
             )},
             # Set-by-set structure for the Coach panel's Fingerboard card.
             "blocks": board_blocks(plan.exercises, fb["limits"]["sets_per_round"]),
+            # Where on the phase ladder this session sits; the next plan reads it back.
+            "progression": progression,
         },
     )
     print(

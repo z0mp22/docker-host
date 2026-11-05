@@ -6,12 +6,13 @@
 | [0003](0003-lift-coach-hevy.md) | Lift coach moves from self-hosted wger to Hevy | Accepted |
 | [0004](0004-mountain-project-feed.md) | Mountain Project feed: RSS first, page scrape as fallback | Accepted |
 | [0005](0005-fingerboard-ramp.md) | Fingerboard ramp inside the lift coach | Amended by 0006 |
-| [0006](0006-lift-coach-variety-home-gym-separate-fingerboard.md) | Goal-first lift sessions for the home gym; fingerboard as its own session | Accepted |
+| [0006](0006-lift-coach-variety-home-gym-separate-fingerboard.md) | Goal-first lift sessions for the home gym; fingerboard as its own session | Accepted; board planning amended by 0012 |
 | [0007](0007-tuner-signal-per-channel.md) | Tuner Signal: per-tuner live view, per-channel trend sensors | Accepted |
 | [0008](0008-ps5-presence.md) | Basement PS5: LAN power check for presence, PSN only for game titles | Accepted |
 | [0009](0009-cloudflare-edge.md) | Cloudflare edge: filter at Cloudflare, show what it stopped, one-tap travel and lockdown | Accepted |
 | [0010](0010-basement-samsung-tv.md) | Basement Samsung TV: local control only, input guessed from the active device | Accepted |
 | [0011](0011-lift-coach-deadlift-back-limits.md) | Back-safety limits on deadlifts and other barbell hinges | Accepted |
+| [0012](0012-fingerboard-sessions-from-rules.md) | Fingerboard sessions from rules, not Claude | Accepted |
 | [0013](0013-weekly-coach-in-home-assistant.md) | The weekly coach lives in Home Assistant, and talks back | Accepted |
 
 Related DVR library decisions live in [czampino/plex_recordings](https://github.com/czampino/plex_recordings/tree/main/docs/decisions).

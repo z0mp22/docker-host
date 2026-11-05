@@ -148,7 +148,7 @@ rest_command:
     payload: >-
       {"ref":"main","inputs":{"session_type":"shoulder_pt","shoulder_flag":"{{ 'true' if is_state('input_boolean.lift_shoulder_flag','on') else 'false' }}","finger_flag":"{{ 'true' if is_state('input_boolean.lift_finger_flag','on') else 'false' }}","dry_run":"false"}}
     timeout: 30
-  # Board-only session (prompts/fingerboard_system.md) -> "Next Fingerboard
+  # Board-only session (rules in lift_fingerboard_plan.py, no Claude) -> "Next Fingerboard
   # Session" in Hevy. Same workflow, its own session_type.
   lift_session_dispatch_fingerboard:
     url: "https://api.github.com/repos/z0mp22/docker-host/actions/workflows/run-lift-session.yml/dispatches"

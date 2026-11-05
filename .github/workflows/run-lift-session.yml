@@ -5,7 +5,7 @@ name: Run Lift Session
 # cron here, fired at variable timing from Home Assistant (or manually).
 #   session_type=heavy_1h|light_30m|shoulder_pt -> which lift session the
 #     athlete asked for (see prompts/lift_system.md); fingerboard -> a board-only
-#     session written to "Next Fingerboard Session" (prompts/fingerboard_system.md)
+#     session written to "Next Fingerboard Session" (rules, no Claude call)
 #   shoulder_flag=true -> the athlete has flagged the shoulder/soreness this session
 #   finger_flag=true -> fingers/elbows are tweaky: no fingerboard work at all
 #   feedback_only=true + feedback_text="..." -> append to the persistent

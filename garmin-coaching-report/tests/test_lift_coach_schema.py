@@ -130,7 +130,7 @@ def test_duration_hold_parses():
     assert plan.exercises[0].duration_seconds == 30
 
 
-def test_revision_continues_the_conversation_and_fingerboard_uses_its_own_prompt(monkeypatch):
+def test_revision_continues_the_conversation(monkeypatch):
     from types import SimpleNamespace
 
     from coaching_report import lift_coach
@@ -155,9 +155,6 @@ def test_revision_continues_the_conversation_and_fingerboard_uses_its_own_prompt
     assert roles == ["user", "assistant", "user"]
     assert "too many repeats" in calls[0]["messages"][2]["content"]
     assert "Lift Session Coach" in calls[0]["system"]
-
-    generate_lift_session({"session_type": "fingerboard"}, "k", "m", 100)
-    assert "Fingerboard Session Coach" in calls[1]["system"]
 
 
 def test_every_exercise_names_its_goal_and_why():

@@ -45,25 +45,6 @@ def lift_prompt_version() -> str:
     return f"mtime-{int(stat.st_mtime)}"
 
 
-# Fingerboard sessions (session_type "fingerboard") have their own prompt:
-# the board ramp is a separate session from lifting since 2026-10-07.
-
-
-def fingerboard_prompt_path() -> Path:
-    return Path(__file__).resolve().parent.parent / "prompts" / "fingerboard_system.md"
-
-
-def load_fingerboard_prompt() -> str:
-    return fingerboard_prompt_path().read_text(encoding="utf-8")
-
-
-def fingerboard_prompt_version() -> str:
-    path = fingerboard_prompt_path()
-    if not path.exists():
-        return "missing"
-    return f"mtime-{int(path.stat().st_mtime)}"
-
-
 # --- Weekly coach, mid-week replies (coach_chat.py) ---------------------------
 # The coaching rules are the weekly report's own (system.md, up to its output
 # section), so the coach that replies mid-week is the one that wrote Monday's
