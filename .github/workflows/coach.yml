@@ -5,16 +5,17 @@ name: Coach
 #   mode=message|answer -> save what you said, reply live, maybe change plan days
 #   mode=day            -> mark a plan day done/skipped (no Claude call)
 #   mode=check          -> mark past plan days from Garmin + Hevy (also nightly from cron)
+#   mode=sync           -> mark days incl. today, log every day, check in if it changes the plan (cron, every 30 min)
 # No concurrency group: GitHub keeps only one pending run per group, which would
 # drop messages sent in a row. run-coach.sh queues them with flock instead.
 on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "message, answer, day or check"
+        description: "message, answer, day, check or sync"
         type: choice
         default: message
-        options: [message, answer, day, check]
+        options: [message, answer, day, check, sync]
       text:
         description: "What you said"
         type: string

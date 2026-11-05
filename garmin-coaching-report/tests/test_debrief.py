@@ -168,3 +168,44 @@ def test_a_reply_can_add_a_day_the_plan_doesnt_have_yet():
     assert [r["date"] for r in s["plan"]][-1] == "2026-11-07"
     sat = s["plan"][-1]
     assert (sat["weekday"], sat["status"], sat["title"]) == ("Saturday", "planned", "Lumpy Ridge")
+
+
+def test_today_is_marked_once_something_is_logged_but_never_unknown():
+    s = _state()
+    today = date(2026, 11, 4)  # Wed is today; Tue is past
+    assert db.check_days(s, [], [], today, include_today=True) == ["Tue Nov 3"]
+    assert s["plan"][1]["status"] == "planned"  # nothing logged yet today
+    lift = {"date": "2026-11-04", "logs": [{"exercise_name": "Pull Up (Band)"}]}
+    assert db.check_days(s, [], [lift], today, include_today=True) == ["Wed Nov 4"]
+    assert s["plan"][1]["status"] == "done"
+
+
+def test_logged_days_cover_unplanned_days_with_a_short_label():
+    acts = [_act("2026-11-03", "indoor_climbing", 53), _act("2026-11-03", "bouldering", 3), _act("2026-11-04", "e_bike_fitness", 60)]
+    logged = db.logged_days(acts, [], date(2026, 11, 2), date(2026, 11, 4))
+    assert set(logged) == {"2026-11-03", "2026-11-04"}
+    assert logged["2026-11-03"]["summary"] == "Indoor climbing 53 min, Bouldering 3 min"
+    assert logged["2026-11-03"]["short"] == "Climb" and logged["2026-11-04"]["short"] == "Cardio"
+    assert logged["2026-11-04"]["hard"] is False
+    assert db.logged_days([_act("2026-11-04", "mountain_biking", 50)], [], date(2026, 11, 4), date(2026, 11, 4))["2026-11-04"]["hard"] is True
+
+
+def test_events_only_for_changes_and_hard_efforts_on_easy_days_once():
+    s = _state()  # Tue climb, Wed lift, Thu open light day
+    today = date(2026, 11, 5)
+    acts = [_act("2026-11-04", "e_bike_fitness", 60), _act("2026-11-05", "mountain_biking", 120)]
+    db.check_days(s, acts, [], today, include_today=True)
+    logged = db.logged_days(acts, [], date(2026, 11, 3), today)
+    events = db.find_events(s, logged, today)
+    assert [(e["date"], e["why"]) for e in events] == [
+        ("2026-11-04", "did something other than the plan"),
+        ("2026-11-05", "a hard effort on an easy, rest or unplanned day"),
+    ]
+    assert events[0]["planned"] == {"kind": "lift", "title": "Pull-up focus"}
+    s["noticed"] = [e["key"] for e in events]
+    assert db.find_events(s, logged, today) == []
+    # A day that went to plan is not an event.
+    s2 = _state()
+    acts2 = [_act("2026-11-04", "strength_training", 60)]
+    db.check_days(s2, acts2, [], today, include_today=True)
+    assert db.find_events(s2, db.logged_days(acts2, [], date(2026, 11, 3), today), today) == []

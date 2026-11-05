@@ -11,6 +11,13 @@ chosen by COACH_MODE:
   No Claude call.
 - check: the nightly pass that marks past plan days from Garmin and Hevy.
   No Claude call.
+- sync: every 30 minutes in the day (cron). Marks plan days from Garmin and
+  Hevy, today included once something is logged, and keeps what was logged
+  on every recent day (logged_days) for the panel. When what you did changes
+  the plan (a different session, or a hard effort on an easy, rest or
+  unplanned day), the coach takes one short look and checks in, and may move
+  coming days. Each such event is looked at once; at most
+  MAX_CHECKINS_PER_DAY check-ins a day, none outside CHECKIN_HOURS.
 
 message and answer save what you said first, then ask Claude for a reply and
 any plan changes, then save those. COACH_CID is the panel's id for the
@@ -39,6 +46,8 @@ from .debrief import (
     append_feedback_note,
     apply_plan_changes,
     check_days,
+    find_events,
+    logged_days,
     load_state,
     locked_state,
     now_iso,
@@ -48,7 +57,10 @@ from .prompts import load_chat_prompt
 from .report_context import athlete_notes, forecast
 from .timezone_util import athlete_tz_name
 
-MODES = ("message", "answer", "day", "check")
+MODES = ("message", "answer", "day", "check", "sync")
+LOGGED_DAYS_BACK = 7
+MAX_CHECKINS_PER_DAY = 2
+CHECKIN_HOURS = (7, 21)  # local, start inclusive, end exclusive
 DAY_VALUES = ("done", "skipped")
 MAX_TEXT = 600
 REPLY_MAX_TOKENS = 1500
@@ -73,9 +85,9 @@ def _activity_brief(a: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _logs_since(config, start: date, end: date, garmin_client) -> tuple[list[dict], list[dict], list[dict]]:
+def _logs_since(config, start: date, end: date, garmin_client, recovery_too: bool = True) -> tuple[list[dict], list[dict], list[dict]]:
     """(Garmin activity summaries, Hevy sessions, compact recovery), each
-    empty when its source is unavailable."""
+    empty when its source is unavailable (recovery also when not asked for)."""
     activities: list[dict] = []
     recovery: list[dict] = []
     if garmin_client is not None:
@@ -84,12 +96,16 @@ def _logs_since(config, start: date, end: date, garmin_client) -> tuple[list[dic
         except Exception as exc:
             _log(f"Garmin activities unavailable: {exc}")
         try:
+            if not recovery_too:
+                raise LookupError("not needed")
             raw = collect_recent_health(garmin_client, days=2, today=end)
             recovery = compress_week(
                 {"athlete_context": {"timezone": athlete_tz_name(config.athlete_timezone)},
                  "activity_details": [], "daily_health": raw},
                 "compact",
             )["daily_health"]
+        except LookupError:
+            pass
         except Exception as exc:
             _log(f"Garmin recovery unavailable: {exc}")
     try:
@@ -172,9 +188,11 @@ def _reply(config, state: dict[str, Any], msg: dict[str, Any], now: datetime) ->
         },
         "thread": [{k: m.get(k) for k in ("role", "text", "at")} for m in state.get("thread", []) if m is not msg and m.get("id") != msg.get("id")][-30:],
         "message": {
-            "text": msg["text"],
+            "text": msg["text"] or None,
             "answers": {"id": q["id"], "question": q["text"]} if q else None,
             "about_day": _about_day(state, msg.get("about_day")),
+            # He didn't write: Garmin or Hevy logged something that may change the plan.
+            "checkin": msg.get("checkin"),
         },
         "since_report": {
             "activities": [_activity_brief(a) for a in activities],
@@ -196,6 +214,56 @@ def _reply(config, state: dict[str, Any], msg: dict[str, Any], now: datetime) ->
         raise RuntimeError(f"coach reply incomplete (stop_reason={response.stop_reason})")
     usage = response.usage
     return response.parsed_output, {"model": config.anthropic_model, "input_tokens": usage.input_tokens, "output_tokens": usage.output_tokens}
+
+
+def _sync(config, reports_dir, now: datetime) -> int:
+    today = now.date()
+    state = load_state(reports_dir)
+    window_end = date.fromisoformat((state.get("window") or {}).get("end") or state["report_date"])
+    start = min(today - timedelta(days=LOGGED_DAYS_BACK), window_end + timedelta(days=1))
+    client = _garmin(config)
+    if client is None:
+        return 1  # keep what's there rather than marking days from Hevy alone
+    activities, lifts, _ = _logs_since(config, start, today, client, recovery_too=False)
+    with locked_state(reports_dir) as state:
+        changed = check_days(state, activities, lifts, today, include_today=True)
+        logged = logged_days(activities, lifts, today - timedelta(days=LOGGED_DAYS_BACK), today)
+        if changed or logged != state.get("logged_days"):
+            state["logged_days"] = logged
+            state["updated_at"] = now_iso()
+        events = find_events(state, logged, today)
+        checkins_today = sum(1 for m in state.get("thread", []) if m.get("checkin_date") == today.isoformat())
+    _log(f"sync: {', '.join(changed) or 'no day changes'}; {len(logged)} days logged; {len(events)} new events")
+    if not events:
+        return 0
+    if not CHECKIN_HOURS[0] <= now.hour < CHECKIN_HOURS[1]:
+        return 0  # looked at in the morning; yesterday's events stay in the window
+    if checkins_today >= MAX_CHECKINS_PER_DAY:
+        with locked_state(reports_dir) as state:
+            state["noticed"] = (state.get("noticed") or []) + [e["key"] for e in events]
+        _log("check-in cap reached; events noted without a message")
+        return 0
+    try:
+        reply, meta = _reply(config, state, {"id": None, "text": "", "checkin": events}, now)
+    except Exception as exc:
+        _log(f"check-in failed, will retry next sync: {exc}")
+        return 1
+    with locked_state(reports_dir) as state:
+        state["noticed"] = ((state.get("noticed") or []) + [e["key"] for e in events])[-60:]
+        if not reply.reply.strip() or not (reply.worth_saying or reply.plan_changes):
+            _log("check-in: nothing worth saying")
+            return 0
+        moved = apply_plan_changes(state, reply.plan_changes, today)
+        at = now_iso()
+        state["thread"].append({
+            "id": f"m{len(state['thread']) + 1}", "role": "coach", "text": reply.reply.strip(), "at": at,
+            "checkin": True, "checkin_date": today.isoformat(), "about_day": events[-1]["date"],
+            "plan_changes": moved, **meta,
+        })
+        state["last_coach_at"] = at
+        state["updated_at"] = at
+    _log(f"checked in ({meta['input_tokens']} in / {meta['output_tokens']} out); plan changes: {', '.join(moved) or 'none'}")
+    return 0
 
 
 def main() -> int:
@@ -245,6 +313,9 @@ def main() -> int:
                 state["updated_at"] = now_iso()
         _log(f"day check: {', '.join(changed) or 'no changes'}")
         return 0
+
+    if mode == "sync":
+        return _sync(config, reports_dir, now)
 
     if not text:
         _log("COACH_TEXT is empty")

@@ -130,6 +130,13 @@ class CoachReplySchema(BaseModel):
         default_factory=list,
         description="Your open debrief questions that the conversation has now answered, so you stop asking them",
     )
+    worth_saying: bool = Field(
+        True,
+        description=(
+            "Check-ins only (message.checkin set): true only if this changes the plan or tells him something "
+            "he doesn't already know from the conversation. False sends nothing."
+        ),
+    )
 
 
 # --- State file ----------------------------------------------------------------
@@ -300,9 +307,18 @@ def _kind_of(activity: dict[str, Any]) -> set[str]:
     return kinds
 
 
+# Garmin type keys as he'd say them; anything else is the key with spaces.
+ACTIVITY_NAMES = {
+    "e_bike_fitness": "E-bike", "e_bike_mountain": "E-MTB", "indoor_cycling": "Spin", "virtual_ride": "Spin",
+    "mountain_biking": "MTB", "road_biking": "Road ride", "indoor_climbing": "Indoor climbing",
+    "bouldering": "Bouldering", "rock_climbing": "Outdoor climbing", "strength_training": "Strength",
+    "resort_skiing_snowboarding_ws": "Snowboarding", "backcountry_skiing_snowboarding_ws": "Backcountry",
+}
+
+
 def _describe(activity: dict[str, Any]) -> str:
     minutes = round(float(activity.get("duration") or 0) / 60)
-    label = _type_key(activity).replace("_", " ") or "activity"
+    label = ACTIVITY_NAMES.get(_type_key(activity)) or _type_key(activity).replace("_", " ") or "activity"
     return f"{label[:1].upper()}{label[1:]} {minutes} min" if minutes else label.capitalize()
 
 
@@ -336,26 +352,114 @@ def match_day(
     return ("skipped" if kind == "light" else "unknown"), None
 
 
-def check_days(
-    state: dict[str, Any], activities: list[dict[str, Any]], workouts: list[dict[str, Any]], today: date
-) -> list[str]:
-    """Mark every past plan day that you haven't marked yourself. Returns the
-    labels whose status changed."""
-    by_day_acts: dict[str, list[dict[str, Any]]] = {}
+def _by_day(activities: list[dict[str, Any]], workouts: list[dict[str, Any]]) -> tuple[dict, dict]:
+    acts: dict[str, list[dict[str, Any]]] = {}
     for a in activities:
-        by_day_acts.setdefault(str(a.get("startTimeLocal") or "")[:10], []).append(a)
-    by_day_lifts: dict[str, list[dict[str, Any]]] = {}
+        acts.setdefault(str(a.get("startTimeLocal") or "")[:10], []).append(a)
+    lifts: dict[str, list[dict[str, Any]]] = {}
     for w in workouts:
-        by_day_lifts.setdefault(str(w.get("date") or "")[:10], []).append(w)
+        lifts.setdefault(str(w.get("date") or "")[:10], []).append(w)
+    return acts, lifts
+
+
+def check_days(
+    state: dict[str, Any], activities: list[dict[str, Any]], workouts: list[dict[str, Any]], today: date,
+    include_today: bool = False,
+) -> list[str]:
+    """Mark every past plan day that you haven't marked yourself. With
+    include_today, today is marked too, but only once something is logged
+    (it is never "unknown" or "skipped" before the day is over). Returns the
+    labels whose status changed."""
+    acts, lifts = _by_day(activities, workouts)
     changed = []
     for row in state["plan"]:
-        if date.fromisoformat(row["date"]) >= today or row.get("status_source") == "athlete":
+        day = date.fromisoformat(row["date"])
+        if day > today or (day == today and not include_today) or row.get("status_source") == "athlete":
             continue
-        status, logged = match_day(row, by_day_acts.get(row["date"], []), by_day_lifts.get(row["date"], []))
+        status, logged = match_day(row, acts.get(row["date"], []), lifts.get(row["date"], []))
+        if day == today and status not in ("done", "changed"):
+            continue
         if (status, logged) != (row.get("status"), row.get("logged")):
             row.update({"status": status, "logged": logged, "status_source": "logs"})
             changed.append(row["label"])
     return changed
+
+
+# Short label for a logged day on the panel strip, most telling kind first.
+_SHORT = [("outdoor", "Out"), ("climb", "Climb"), ("lift", "Lift"), ("fingerboard", "Board"), ("cardio", "Cardio"), ("light", "Easy")]
+HARD_MINUTES = 75
+HARD_AEROBIC_TE = 3.0
+HARD_ANAEROBIC_TE = 2.5
+
+
+def _is_hard(activity: dict[str, Any]) -> bool:
+    return (
+        float(activity.get("duration") or 0) / 60 >= HARD_MINUTES
+        or float(activity.get("aerobicTrainingEffect") or 0) >= HARD_AEROBIC_TE
+        or float(activity.get("anaerobicTrainingEffect") or 0) >= HARD_ANAEROBIC_TE
+        or "outdoor" in _kind_of(activity)
+    )
+
+
+def logged_days(
+    activities: list[dict[str, Any]], workouts: list[dict[str, Any]], start: date, end: date
+) -> dict[str, dict[str, Any]]:
+    """What Garmin and Hevy logged each day from start to end, planned or
+    not: {date: {"summary", "short", "kinds", "hard"}}. Days with nothing
+    logged are left out."""
+    acts, lifts = _by_day(activities, workouts)
+    out = {}
+    day = start
+    while day <= end:
+        iso = day.isoformat()
+        kinds: set[str] = set()
+        for a in acts.get(iso, []):
+            kinds |= _kind_of(a)
+        _, summary = match_day({"kind": "rest"}, acts.get(iso, []), lifts.get(iso, []))
+        for w in lifts.get(iso, []):
+            names = [lg.get("exercise_name") or "" for lg in w.get("logs") or []]
+            kinds |= {"fingerboard"} if any(n.startswith("BM1000") for n in names) else set()
+            kinds |= {"lift"} if any(n and not n.startswith("BM1000") for n in names) else set()
+        if summary:
+            out[iso] = {
+                "summary": summary,
+                "short": next(label for k, label in _SHORT if k in kinds or k == "light"),
+                "kinds": sorted(kinds),
+                "hard": any(_is_hard(a) for a in acts.get(iso, [])) or "lift" in kinds,
+            }
+        day += timedelta(days=1)
+    return out
+
+
+def find_events(state: dict[str, Any], logged: dict[str, dict[str, Any]], today: date) -> list[dict[str, Any]]:
+    """What Garmin or Hevy logged yesterday or today that the coach should
+    look at: a day done differently than planned, or a hard effort on a day
+    that was meant to be easy, rest, or wasn't planned. A day that went to
+    plan is not an event. Each event has a key so it's only looked at once
+    (a new activity on the same day makes a new key)."""
+    rows = {r["date"]: r for r in state["plan"]}
+    events = []
+    for day in (today - timedelta(days=1), today):
+        iso = day.isoformat()
+        log = logged.get(iso)
+        if not log:
+            continue
+        row = rows.get(iso)
+        if row and row.get("status") == "changed" and row.get("status_source") == "logs":
+            why = "did something other than the plan"
+        elif log["hard"] and (row is None or row["kind"] in ("rest", "light")):
+            why = "a hard effort on an easy, rest or unplanned day"
+        else:
+            continue
+        events.append({
+            "key": f"{iso}:{log['summary']}",
+            "date": iso,
+            "weekday": day.strftime("%A"),
+            "planned": {"kind": row["kind"], "title": row["title"]} if row else None,
+            "logged": log["summary"],
+            "why": why,
+        })
+    return [e for e in events if e["key"] not in set(state.get("noticed") or [])]
 
 
 # --- Markdown archive ----------------------------------------------------------
