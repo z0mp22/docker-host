@@ -1,0 +1,29 @@
+{
+  "_comment": [
+    "Who owns which device, for scripts/sitewatch.py (the Online panel). Devices are keyed by MAC",
+    "because Pi-hole only sees IPs, and DHCP moves those around. Phones use a randomized MAC per",
+    "Wi-Fi network; if one changes, the device shows up under 'Not assigned' until it's added here.",
+    "'ignore' devices are left out entirely: work laptops (employer-managed, corporate background",
+    "traffic) and things nobody browses on."
+  ],
+  "people": [
+    {"name": "Cody", "devices": {"f0:57:a6:04:c3:24": "ThinkPad", "8a:96:c2:0a:94:a7": "Galaxy S20"}},
+    {"name": "Tiffany", "devices": {"7e:86:4c:2f:78:19": "Galaxy S22", "08:5b:d6:5d:3c:25": "Surface"}},
+    {"name": "Ryker", "devices": {"ee:41:cc:4c:df:60": "Tablet"}},
+    {"name": "TVs & consoles", "devices": {
+      "84:ea:ed:88:7a:33": "Living room Roku",
+      "84:ea:ed:1f:0b:e1": "Basement Roku",
+      "8c:ea:48:3c:73:8e": "Basement TV",
+      "58:b0:3e:54:49:5b": "Nintendo Switch"
+    }}
+  ],
+  "ignore": {
+    "8c:ae:4c:b6:5b:9d": "SYM-HGM06NKWQ3 work laptop (dock)",
+    "fc:b2:14:59:00:10": "SYM-HGM06NKWQ3 work laptop (Wi-Fi)",
+    "78:2b:46:e3:65:e8": "KIN228518 work laptop",
+    "3a:98:2f:61:b6:39": "KIN286669 work laptop (SentinelOne, corporate sign-in)",
+    "64:51:06:9f:17:85": "media-laptop (Plex, Sonarr)",
+    "2c:cf:67:34:b6:c3": "docker-host",
+    "e8:ff:1e:d2:a6:63": "minipc (Frigate)"
+  }
+}

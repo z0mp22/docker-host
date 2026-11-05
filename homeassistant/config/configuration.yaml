@@ -38,6 +38,8 @@ recorder:
       - sensor.mountain_project_feed
       # ~7 KB of attributes every 15 min; the panel only needs the latest (MQTT retains it).
       - sensor.network_traffic
+      # ~5 KB of attributes every 15 min; the Online panel only needs the latest (MQTT retains it).
+      - sensor.online_activity
       # ~14 KB of attributes, rewritten every 5 min; panels and automations only read the live state.
       - sensor.plex_recordings_sync_meta
       # Sonarr upcoming/queue/recent lists, rewritten every 5 min (packages/tv_shows.yaml).
@@ -698,6 +700,16 @@ panel_custom:
       # to come through as horse/cow/sheep (shown as "Large animal"), foxes and coyotes as dog.
       # Frigate must track these on the camera (frigate repo, cameras.Driveway.objects.track).
       labels: [cat, bird, bear, horse, cow, sheep]
+  # Which sites each person uses, from Pi-hole's DNS log (packages/sitewatch.yaml). Read-only.
+  - name: online-panel
+    url_path: online
+    sidebar_title: Online
+    sidebar_icon: mdi:web
+    module_url: /local/online/online-panel.js?v=1
+    config:
+      summary: sensor.online_activity
+      # sitewatch runs every 15 min; past this the panel says it stopped updating.
+      stale_minutes: 45
   - name: climbing-panel
     url_path: climbing
     sidebar_title: Climbing

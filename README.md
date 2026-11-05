@@ -97,6 +97,7 @@ docker-host/
 ├── scripts/               # deploy.sh, validate.sh, plex-mqtt-bridge.sh
 ├── cron/                  # host cron snippets (plex-mqtt-bridge, netwatch, ...)
 ├── netwatch/              # per-device DNS allowlists for scripts/netwatch.py
+├── sitewatch/             # who owns which device + domain-to-site names for scripts/sitewatch.py
 ├── udm/traffic/           # read-only collector the UDM runs for scripts/udm-traffic.py
 ├── runner/                # self-hosted runner helper
 ├── docker-compose.yml     # HA, mosquitto, npm, pihole
@@ -200,6 +201,32 @@ root because it reads that file and Pi-hole's database.
 | HA | `packages/netwatch.yaml`: `sensor.network_watch_off_allowlist_lookups` + push automation |
 
 To hear about a domain again, remove it from that device's list in `state.json`.
+
+## Online activity (sitewatch)
+
+Every 15 minutes `scripts/sitewatch.py` reads Pi-hole's query log (read-only) and works out which
+sites each person uses, for the **Online** panel. It only watches; nothing is blocked. Devices are
+matched to people by MAC in `sitewatch/people.json` (IPs come from the UniFi API, like netwatch), and
+domains become sites through `sitewatch/sites.json` (longest suffix wins; `null` drops background
+noise such as CDNs, OS services and telemetry). Lookups Pi-hole blocked are dropped too.
+
+Time is "active minutes": a 5-minute window counts for a site when the device looked up at least 3
+different hostnames of it. That filters out most apps refreshing in the background, but not all, so
+the panel calls the totals estimates. Work laptops are in `ignore`. A device with no owner shows up
+under **Not assigned** once it uses a couple of real sites; add its MAC to `people.json`.
+
+What it can't see: the Kids Guest network (it uses Cloudflare's 1.1.1.3, not Pi-hole), the Guest
+network, VPNs, and school-managed devices whose traffic goes through a filtering proxy.
+
+| Piece | Path |
+|-------|------|
+| Script + cron (every 15 min, root) | `scripts/sitewatch.py`, `cron/sitewatch` → `/usr/local/bin/sitewatch.py`, `/etc/cron.d/sitewatch` |
+| Who's who / site names | `sitewatch/people.json`, `sitewatch/sites.json` → `/etc/sitewatch/` |
+| State / log on host | `/var/lib/sitewatch/state.json` (8 days of windows, first-seen dates), `/var/log/sitewatch.log` |
+| MQTT | `home/sitewatch/summary` (retained) |
+| HA | `packages/sitewatch.yaml`: `sensor.online_activity`; panel `/online` |
+
+`sitewatch.py --dry-run` prints the summary without publishing or saving state.
 
 ## UDM traffic (udm-traffic)
 
