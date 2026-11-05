@@ -492,14 +492,19 @@ automation:
         # A running warm-up keeps its log (and its rate lesson); only the setpoint moves.
         data: {phase: "{{ 'day' if is_state('input_select.hvac_schedule_phase', 'warming') else states('input_select.hvac_schedule_phase') }}"}
 
-  # Catches a transition that was due while HA was down. A warm-up that already started counts
-  # as night; the 5-minute check above handles starting one.
+  # Catches a transition that was due while HA was down or Honeywell's cloud was unreachable
+  # (the transitions skip an unavailable thermostat). A warm-up that already started counts as
+  # night; the 5-minute check above handles starting one.
   - id: hvac_schedule_catch_up
-    alias: "HVAC schedule: catch up after a restart"
+    alias: "HVAC schedule: catch up after a restart or outage"
     mode: single
     triggers:
       - trigger: homeassistant
         event: start
+      - trigger: state
+        entity_id: climate.thermostat
+        from: unavailable
+        for: "00:02:00"
     actions:
       - delay: {minutes: 2}
       - variables:
@@ -595,6 +600,11 @@ automation:
         to: "off"
       - trigger: homeassistant
         event: start
+      # Retries a change that Honeywell's cloud dropped while it was unreachable.
+      - trigger: state
+        entity_id: climate.thermostat
+        from: unavailable
+        for: "00:02:00"
     conditions:
       - condition: state
         entity_id: input_boolean.hvac_smart_fan

@@ -74,7 +74,7 @@ const STAT_IDS = [E.gasCost, E.elecOn, E.elecOff, E.therms, E.kwhOn, E.kwhOff];
 const ASSUMPTIONS = [
   { entity: "input_number.hvac_ac_kw", label: "AC condenser", unit: "kW", step: 0.1, digits: 1, help: "Condenser nameplate: RLA × 240 V ÷ 1000" },
   { entity: "input_number.hvac_fan_kw", label: "Blower, fan only", unit: "kW", step: 0.01, digits: 2, help: "Continuous fan; the XV95's variable-speed blower is ~0.1–0.2 kW" },
-  { entity: "input_number.hvac_blower_kw", label: "Furnace blower", unit: "kW", step: 0.05, digits: 2, help: "Runs whenever heating, cooling or fan-only is on" },
+  { entity: "input_number.hvac_blower_kw", label: "Furnace blower", unit: "kW", step: 0.05, digits: 2, help: "While heating or cooling (fan-only uses the row above)" },
   { entity: "input_number.hvac_furnace_btuh", label: "Furnace gas input", unit: "BTU/h", step: 5000, digits: 0, help: "“Input” on the furnace rating plate" },
   { entity: "input_number.hvac_gas_usd_per_therm", label: "Gas price per therm", unit: "$/therm", step: 0.01, digits: 3, help: "Xcel usage charges + taxes; refreshed monthly, edits hold until then" },
 ];
@@ -859,7 +859,7 @@ class ClimatePanel extends HTMLElement {
     if (s[E.trial]?.state === "on") {
       const d0 = s[E.trialStart]?.state;
       const day = d0 && !BAD.has(d0) ? Math.floor((new Date().setHours(0, 0, 0, 0) - new Date(`${d0}T00:00:00`).getTime()) / 864e5) : null;
-      const why = "It alternates daily so both settings see the same weather; results come as a push.";
+      const why = `It alternates daily so both settings see the same weather; results come as a push.${s[E.smartFan]?.state === "on" ? " The smart fan takes over after." : ""}`;
       trial = day == null || day < 0
         ? `<div class="trial">${svg("mdiFan")}<span>Fan trial starts ${esc(d0 || "soon")}. ${why}</span></div>`
         : `<div class="trial">${svg("mdiFan")}<span>Fan trial · day ${Math.min(day + 1, TRIAL_DAYS)} of ${TRIAL_DAYS} · fan <b>${day % 2 === 0 ? "Auto" : "On"}</b> today. ${why}</span></div>`;
