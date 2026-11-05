@@ -209,3 +209,28 @@ def test_events_only_for_changes_and_hard_efforts_on_easy_days_once():
     acts2 = [_act("2026-11-04", "strength_training", 60)]
     db.check_days(s2, acts2, [], today, include_today=True)
     assert db.find_events(s2, db.logged_days(acts2, [], date(2026, 11, 3), today), today) == []
+
+
+def test_plan_days_keep_how_why_and_goals():
+    d = _debrief(plan=[{"date": "2026-11-04", "kind": "lift", "lift_type": "heavy_1h", "title": "Pull-up test",
+                        "focus": "f", "how": ["Warm up 10 min", "Pull-ups first"], "why": "Fresh before Lumpy.",
+                        "goals": ["physique", "climbing"], "if_cooked": "c"}], week_shape="Two climbs, one lift.")
+    s = db.new_week_state(d, PLAN_DAYS, "2026-11-02", {}, {})
+    wed = s["plan"][1]
+    assert (wed["how"], wed["why"], wed["goals"]) == (["Warm up 10 min", "Pull-ups first"], "Fresh before Lumpy.", ["physique", "climbing"])
+    assert s["week_note"] == "Two climbs, one lift."
+
+
+def test_week_balance_counts_goals_and_flags_missing_ones():
+    s = _state()  # Tue climb, Wed lift, Thu open light day
+    s["plan"][0].update({"status": "done", "logged": "Indoor climbing 53 min"})
+    s["plan"].append({"date": "2026-11-06", "weekday": "Friday", "label": "Fri Nov 6", "kind": "outdoor",
+                      "title": "MTB, trail ride", "focus": "Punchy climbs", "status": "planned"})
+    s["logged_days"] = {"2026-11-03": {"summary": "Indoor climbing 53 min", "kinds": ["climb", "light"]}}
+    b = db.week_balance(s, date(2026, 11, 4))
+    assert b["goals"]["climbing"] == {"done": 1, "planned": 1}  # Tue done, Wed lift planned
+    assert b["goals"]["physique"] == {"done": 0, "planned": 1}
+    assert b["goals"]["mtb"] == {"done": 0, "planned": 1} and b["goals"]["snowboard"]["planned"] == 1
+    assert b["easy_or_rest_days"] == 1
+    assert db.day_goals({"kind": "outdoor", "title": "Lumpy Ridge, multi-pitch", "focus": "", "status": "planned"}) == ["climbing"]
+    assert db.day_goals(None, {"summary": "E-bike 60 min", "kinds": ["cardio", "light"]}) == ["mtb", "snowboard"]

@@ -26,6 +26,28 @@ const SESSIONS = [
   { id: "fingerboard", label: "Board", script: "script.lift_session_run_fingerboard" },
 ];
 const BASEMENT_KINDS = ["lift", "fingerboard", "cardio"];
+const GOALS = [
+  ["climbing", "Climbing"],
+  ["mtb", "MTB"],
+  ["snowboard", "Snowboard legs"],
+  ["physique", "Physique"],
+];
+// Goals a day serves when its plan row doesn't say (mirrors debrief.day_goals).
+const KIND_GOALS = { climb: ["climbing"], fingerboard: ["climbing"], lift: ["physique", "climbing"], cardio: ["mtb", "snowboard"], light: [], rest: [] };
+const RIDE = /mtb|ride|bik|trail/i;
+function dayGoals(r, log) {
+  if (r?.goals?.length) return r.goals;
+  if (r?.kind === "outdoor") return RIDE.test(`${r.title} ${r.focus}`) ? ["mtb", "snowboard"] : ["climbing"];
+  if (r && KIND_GOALS[r.kind] && (r.status !== "changed" || !log)) return KIND_GOALS[r.kind];
+  if (!log) return [];
+  const k = new Set(log.kinds || []);
+  const out = new Set();
+  const climbed = /climb|boulder/i.test(log.summary || "");
+  if (k.has("climb") || k.has("fingerboard") || (k.has("outdoor") && climbed)) out.add("climbing");
+  if (k.has("lift")) out.add("physique").add("climbing");
+  if (k.has("cardio") || (k.has("outdoor") && !climbed)) out.add("mtb").add("snowboard");
+  return [...out];
+}
 
 const esc = (s) =>
   String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -38,6 +60,7 @@ const addDays = (iso, n) => {
 const dayName = (iso) => new Date(`${iso}T12:00:00`).toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
 const weekday = (iso) => new Date(`${iso}T12:00:00`).toLocaleDateString([], { weekday: "short" });
 const session = (id) => SESSIONS.find((s) => s.id === id) || SESSIONS[0];
+const m_note = (d) => d.week_shape || "";
 
 export const COACH_SHELL = `
   <div data-region="coachtop"></div>
@@ -80,6 +103,22 @@ export const WEEK_CSS = `
 .wc-detail .st .ic { width: 18px; height: 18px; }
 .st.done { color: #8fe3ad; } .st.changed { color: #9fdcff; } .st.unknown { color: #f7c77a; } .st.skipped, .st.planned { color: var(--muted); } .st.moved { color: var(--violet); }
 .wc-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.wc-note { margin-top: 10px; font-size: 16px; line-height: 1.5; color: #c3cedd; }
+.wc-bal { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 14px; }
+.wc-bal div { padding: 10px 12px; border-radius: 14px; background: #121a28; border: 1px solid var(--line); min-width: 0; }
+.wc-bal b { display: block; font-size: 13px; font-weight: 600; color: var(--muted); }
+.wc-bal span { display: block; margin-top: 3px; font-size: 15px; font-weight: 600; }
+.wc-bal .zero { border-color: rgba(245,176,65,.4); } .wc-bal .zero span { color: #f7c77a; }
+.wc-replan { margin-top: 10px; }
+.wc-detail .lead { font-size: 17px; color: var(--text); }
+.wc-how { margin: 12px 0 0; padding: 0; list-style: none; counter-reset: h; display: flex; flex-direction: column; gap: 8px; }
+.wc-how li { counter-increment: h; display: flex; gap: 10px; font-size: 15.5px; line-height: 1.45; color: #c3cedd; }
+.wc-how li::before { content: counter(h); flex: none; width: 24px; height: 24px; border-radius: 8px; display: grid; place-items: center; font-size: 13px; font-weight: 700; color: #fff;
+  background: linear-gradient(160deg, #b3a1ff, var(--violet-2)); }
+.wc-why { margin-top: 14px; padding: 12px 14px; border-radius: 14px; background: #121a28; border: 1px solid var(--line); font-size: 15px; line-height: 1.5; color: #c3cedd; }
+.wc-why b { color: var(--text); font-weight: 600; }
+.wc-serves { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.wc-serves span { font-size: 12.5px; font-weight: 600; padding: 4px 10px; border-radius: 8px; background: rgba(167,139,250,.14); color: #d9d0ff; }
 .wc-sec { margin-top: 18px; padding-top: 18px; border-top: 1px dashed rgba(148,170,200,.16); }
 .wc-flags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .fl { height: 36px; padding: 0 12px; border-radius: 12px; background: #172234; border: 1px solid var(--line); font-size: 14px; color: #c3cedd; display: inline-flex; align-items: center; gap: 8px; }
@@ -125,6 +164,7 @@ export const WEEK_CSS = `
   .wc-day { border-radius: 11px; padding: 7px 0; }
   .wc-day span { font-size: 11px; } .wc-day b { font-size: 12px; }
   .wc-other { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .wc-bal { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .wc-q { padding: 14px; }
   .msg { font-size: 15px; max-width: 92%; }
 }`;
@@ -176,6 +216,7 @@ export class WeekCard {
       thread: Array.isArray(a.thread) ? a.thread : [],
       // What Garmin and Hevy logged each recent day, planned or not (synced every 30 min).
       logged: a.logged_days || {},
+      weekNote: a.week_note || m_note(d),
       today: isoDay(new Date()),
     };
   }
@@ -251,6 +292,10 @@ export class WeekCard {
     } else if (act === "wk-mark") {
       this.marks[el.dataset.date] = el.dataset.value;
       this.p._call("script", "coach_send", { mode: "day", ref: el.dataset.date, value: el.dataset.value });
+    } else if (act === "wk-replan") {
+      if (!window.confirm("Your coach rewrites today through next week's same day, keeping what you've agreed. Go?")) return;
+      this._send("replan", "Re-plan the rest of my week.");
+      return;
     } else if (act === "wk-gen") {
       this._start(el.dataset.type);
       return;
@@ -404,11 +449,36 @@ export class WeekCard {
     const isToday = this.sel === m.today;
     this.p._set(
       "today",
-      `<div class="eyebrow">${isToday ? `Today · ${esc(dayName(m.today))}` : esc(dayName(this.sel))}</div>
+      `<div class="eyebrow">Your week</div>
+       ${m.weekNote ? `<div class="wc-note">${esc(m.weekNote)}</div>` : ""}
+       ${this._balance(m, days)}
        <div class="wc-days">${pills}</div>
+       <div class="eyebrow" style="margin-top:22px">${isToday ? `Today · ${esc(dayName(m.today))}` : esc(dayName(this.sel))}</div>
        ${this._detail(m, m.byDate[this.sel], status)}
        ${isToday ? this._todayActions(m, m.byDate[m.today], pm, job, busy) : ""}`,
     );
+  }
+
+  // Sessions per goal across the strip's days: done (logged) and still planned. A goal with nothing
+  // this week shows in amber, so an all-easy week can't hide.
+  _balance(m, days) {
+    const count = Object.fromEntries(GOALS.map(([g]) => [g, { done: 0, planned: 0 }]));
+    for (const date of days) {
+      const r = m.byDate[date];
+      const log = m.logged[date];
+      const st = this.marks[date] || r?.status || (log ? "done" : null);
+      if (["skipped", "unknown"].includes(st) || (date < m.today && !log && st !== "done")) continue;
+      const bucket = st === "done" || st === "changed" || (log && !r) ? "done" : "planned";
+      for (const g of dayGoals(r, log)) count[g][bucket] += 1;
+    }
+    const tiles = GOALS.map(([g, label]) => {
+      const c = count[g];
+      const total = c.done + c.planned;
+      const txt = !total ? "Nothing this week" : [c.done ? `${c.done} done` : "", c.planned ? `${c.planned} planned` : ""].filter(Boolean).join(" · ");
+      return `<div class="${total ? "" : "zero"}"><b>${esc(label)}</b><span>${esc(txt)}</span></div>`;
+    }).join("");
+    return `<div class="wc-bal">${tiles}</div>
+      <div class="wc-replan"><button class="disclose" data-action="wk-replan" style="margin-top:0">${this.p.icon("mdiRefresh")} Re-plan my week</button></div>`;
   }
 
   _detail(m, r, status) {
@@ -454,7 +524,15 @@ export class WeekCard {
       // Today's change lives under "Do something else today".
       if (date !== m.today) acts = `<button class="btn2" data-action="wk-about" data-date="${date}">Change this day</button>`;
     }
-    return `<div class="wc-detail"><h2>${esc(r.title)}</h2><p>${esc(r.focus)}</p>
+    const how = (r.how || []).length ? `<ol class="wc-how">${r.how.map((x) => `<li><span>${esc(x)}</span></li>`).join("")}</ol>` : "";
+    const goals = dayGoals(r, m.logged[date]);
+    const serves = goals.length
+      ? `<div class="wc-serves">${goals.map((g) => `<span>${esc((GOALS.find(([k]) => k === g) || [g, g])[1])}</span>`).join("")}</div>`
+      : "";
+    return `<div class="wc-detail"><h2>${esc(r.title)}</h2><p class="lead">${esc(r.focus)}</p>
+      ${how}
+      ${r.why ? `<div class="wc-why"><b>Why today.</b> ${esc(r.why)}</div>` : ""}
+      ${serves}
       <p class="cooked">If you're cooked: ${esc(r.if_cooked)}</p>${st}
       ${acts ? `<div class="wc-acts">${acts}</div>` : ""}</div>`;
   }

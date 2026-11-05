@@ -4,6 +4,8 @@ Run by scripts/run-coach.sh (from the `Coach` GitHub workflow that Home
 Assistant dispatches, or from cron for the nightly check). One run, one job,
 chosen by COACH_MODE:
 
+- replan: the panel's "Re-plan my week": the coach rewrites every day from
+  today through six days out, keeping what was agreed and balancing goals.
 - message: you wrote to the coach (COACH_TEXT; COACH_REF is a plan date when
   it's about one day, e.g. "Changed: did a road ride instead").
 - answer: you answered a question from the debrief (COACH_REF is its id).
@@ -27,6 +29,7 @@ message, so a retry never adds it twice. Everything outside the state file
 
 from __future__ import annotations
 
+import copy
 import json
 import os
 import sys
@@ -46,8 +49,10 @@ from .debrief import (
     append_feedback_note,
     apply_plan_changes,
     check_days,
+    balance_problems,
     find_events,
     logged_days,
+    week_balance,
     load_state,
     locked_state,
     now_iso,
@@ -57,7 +62,9 @@ from .prompts import load_chat_prompt
 from .report_context import athlete_notes, forecast
 from .timezone_util import athlete_tz_name
 
-MODES = ("message", "answer", "day", "check", "sync")
+MODES = ("message", "answer", "day", "check", "sync", "replan")
+REPLAN_TEXT = "Re-plan the rest of my week."
+REPLAN_DAYS = 6
 LOGGED_DAYS_BACK = 7
 MAX_CHECKINS_PER_DAY = 2
 CHECKIN_HOURS = (7, 21)  # local, start inclusive, end exclusive
@@ -134,6 +141,8 @@ def _record_message(reports_dir, mode: str, text: str, ref: str, cid: str, today
         if existing:
             return existing
         msg: dict[str, Any] = {"id": f"m{len(thread) + 1}", "role": "athlete", "text": text, "at": now_iso(), "cid": cid or None}
+        if mode == "replan":
+            msg["replan"] = True
         if mode == "answer":
             q = next((q for q in state["debrief"].get("questions", []) if q["id"] == ref), None)
             if q:
@@ -185,6 +194,10 @@ def _reply(config, state: dict[str, Any], msg: dict[str, Any], now: datetime) ->
             "debrief": state["debrief"],
             "plan": state["plan"],
             "answers": state.get("answers", {}),
+            "week_note": state.get("week_note"),
+            # Sessions per goal from yesterday through 5 days out, done and still planned.
+            "week_balance": week_balance(state, today),
+            "logged_days": state.get("logged_days") or {},
         },
         "thread": [{k: m.get(k) for k in ("role", "text", "at")} for m in state.get("thread", []) if m is not msg and m.get("id") != msg.get("id")][-30:],
         "message": {
@@ -193,6 +206,11 @@ def _reply(config, state: dict[str, Any], msg: dict[str, Any], now: datetime) ->
             "about_day": _about_day(state, msg.get("about_day")),
             # He didn't write: Garmin or Hevy logged something that may change the plan.
             "checkin": msg.get("checkin"),
+            # The panel's "Re-plan my week": rewrite today through replan_through.
+            "replan": msg.get("replan") or False,
+            "replan_through": (today + timedelta(days=REPLAN_DAYS)).isoformat() if msg.get("replan") else None,
+            # Your previous answer to this same message broke these rules: return the whole answer, fixed.
+            "revise": msg.get("revise"),
         },
         "since_report": {
             "activities": [_activity_brief(a) for a in activities],
@@ -214,6 +232,33 @@ def _reply(config, state: dict[str, Any], msg: dict[str, Any], now: datetime) ->
         raise RuntimeError(f"coach reply incomplete (stop_reason={response.stop_reason})")
     usage = response.usage
     return response.parsed_output, {"model": config.anthropic_model, "input_tokens": usage.input_tokens, "output_tokens": usage.output_tokens}
+
+
+def _reviewed(config, state: dict[str, Any], msg: dict[str, Any], now: datetime) -> tuple[CoachReplySchema, dict]:
+    """The reply, checked like lift_review checks a lift session: if its plan
+    changes leave the rolling week without a lift or a ride, or with easy days
+    stacked up, it goes back once with the problems."""
+    reply, meta = _reply(config, state, msg, now)
+    if not (reply.plan_changes or msg.get("replan")):
+        return reply, meta
+    trial = copy.deepcopy(state)
+    apply_plan_changes(trial, reply.plan_changes, now.date())
+    problems = balance_problems(trial, now.date())
+    if not problems:
+        return reply, meta
+    _log("balance review: " + " | ".join(problems))
+    revised, meta2 = _reply(config, state, {**msg, "revise": {"previous": reply.model_dump(), "problems": problems}}, now)
+    trial = copy.deepcopy(state)
+    apply_plan_changes(trial, revised.plan_changes, now.date())
+    left = balance_problems(trial, now.date())
+    if left:
+        _log("still after revision: " + " | ".join(left))
+    return revised, {
+        **meta2,
+        "input_tokens": meta["input_tokens"] + meta2["input_tokens"],
+        "output_tokens": meta["output_tokens"] + meta2["output_tokens"],
+        "revised_for": problems,
+    }
 
 
 def _sync(config, reports_dir, now: datetime) -> int:
@@ -244,7 +289,7 @@ def _sync(config, reports_dir, now: datetime) -> int:
         _log("check-in cap reached; events noted without a message")
         return 0
     try:
-        reply, meta = _reply(config, state, {"id": None, "text": "", "checkin": events}, now)
+        reply, meta = _reviewed(config, state, {"id": None, "text": "", "checkin": events}, now)
     except Exception as exc:
         _log(f"check-in failed, will retry next sync: {exc}")
         return 1
@@ -254,6 +299,8 @@ def _sync(config, reports_dir, now: datetime) -> int:
             _log("check-in: nothing worth saying")
             return 0
         moved = apply_plan_changes(state, reply.plan_changes, today)
+        if moved and reply.week_note.strip():
+            state["week_note"] = reply.week_note.strip()
         at = now_iso()
         state["thread"].append({
             "id": f"m{len(state['thread']) + 1}", "role": "coach", "text": reply.reply.strip(), "at": at,
@@ -317,6 +364,8 @@ def main() -> int:
     if mode == "sync":
         return _sync(config, reports_dir, now)
 
+    if mode == "replan":
+        text = text or REPLAN_TEXT
     if not text:
         _log("COACH_TEXT is empty")
         return 1
@@ -327,7 +376,7 @@ def main() -> int:
         _log("already replied to this message (a retry); nothing to do")
         return 0
     try:
-        reply, meta = _reply(config, load_state(reports_dir), msg, now)
+        reply, meta = _reviewed(config, load_state(reports_dir), msg, now)
     except Exception as exc:
         _log(f"reply failed: {exc}")
         traceback.print_exc(file=sys.stderr)
@@ -340,6 +389,8 @@ def main() -> int:
 
     with locked_state(reports_dir) as state:
         moved = apply_plan_changes(state, reply.plan_changes, now.date())
+        if moved and reply.week_note.strip():
+            state["week_note"] = reply.week_note.strip()
         # Questions the conversation answered stop showing and stop being pushed.
         open_ids = {q["id"] for q in state["debrief"].get("questions", [])} - set(state.get("answers", {}))
         for a in reply.answered:
