@@ -1,0 +1,49 @@
+name: Coach
+
+# Mid-week with the weekly coach (garmin-coaching-report/coaching_report/coach_chat.py),
+# dispatched by Home Assistant (script.coach_send):
+#   mode=message|answer -> save what you said, reply live, maybe change plan days
+#   mode=day            -> mark a plan day done/skipped (no Claude call)
+#   mode=check          -> mark past plan days from Garmin + Hevy (also nightly from cron)
+# No concurrency group: GitHub keeps only one pending run per group, which would
+# drop messages sent in a row. run-coach.sh queues them with flock instead.
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "message, answer, day or check"
+        type: choice
+        default: message
+        options: [message, answer, day, check]
+      text:
+        description: "What you said"
+        type: string
+        default: ""
+      ref:
+        description: "Question id (answer) or plan date (day, or a message about a day)"
+        type: string
+        default: ""
+      value:
+        description: "done or skipped (day)"
+        type: string
+        default: ""
+      cid:
+        description: "Panel message id, so a retry isn't saved twice"
+        type: string
+        default: ""
+
+jobs:
+  coach:
+    runs-on: [self-hosted, docker-host]
+    steps:
+      - name: Update the weekly coach
+        # Inputs reach the shell only as environment variables, never pasted into the script.
+        env:
+          COACH_MODE: ${{ inputs.mode }}
+          COACH_TEXT: ${{ inputs.text }}
+          COACH_REF: ${{ inputs.ref }}
+          COACH_VALUE: ${{ inputs.value }}
+          COACH_CID: ${{ inputs.cid }}
+        run: |
+          echo "coach: mode=${COACH_MODE} ref=${COACH_REF:-<none>} value=${COACH_VALUE:-<none>} cid=${COACH_CID:-<none>}"
+          bash /docker/garmin-coaching-report/scripts/run-coach.sh

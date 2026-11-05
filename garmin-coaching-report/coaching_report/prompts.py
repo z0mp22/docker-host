@@ -62,3 +62,17 @@ def fingerboard_prompt_version() -> str:
     if not path.exists():
         return "missing"
     return f"mtime-{int(path.stat().st_mtime)}"
+
+
+# --- Weekly coach, mid-week replies (coach_chat.py) ---------------------------
+# The coaching rules are the weekly report's own (system.md, up to its output
+# section), so the coach that replies mid-week is the one that wrote Monday's
+# debrief. coach_chat.md replaces the output section.
+
+CHAT_CUT = "Where this goes\n"
+
+
+def load_chat_prompt() -> str:
+    base = load_system_prompt().split(CHAT_CUT)[0].rstrip()
+    chat = (prompt_path().parent / "coach_chat.md").read_text(encoding="utf-8")
+    return f"{base}\n\n{chat}"

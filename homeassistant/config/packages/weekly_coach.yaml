@@ -1,0 +1,351 @@
+# Weekly coach: the Monday debrief, its questions, and the week's conversation, on the Coach
+# panel (/coach) and on the phone. Replaces the weekly report email (2026-11-04).
+#
+# garmin-coaching-report keeps the week in reports/weekly_coach.json (the debrief, the plan with each
+# day's status, your answers, and the thread with the coach). run-report.sh and run-coach.sh copy it to
+# /config/weekly_coach_state.json, which sensor.weekly_coach reads.
+#
+# Pushes:
+# - Monday's debrief: the headline, tap to read.
+# - Each question, one at a time: 7:30 PM, or 2 minutes after a coach reply while one is still open.
+#   Two tap answers plus Reply.
+# - The coach's replies, with Reply, so the conversation can stay in the notification.
+# - 7:30 AM, only when yesterday's planned session left nothing in Garmin or Hevy: Done / Skipped /
+#   Changed (Reply).
+# Everything you send goes through script.coach_send -> the Coach GitHub workflow -> run-coach.sh,
+# which replies live (Claude) for messages and answers, and just records day check-offs.
+
+command_line:
+  - sensor:
+      name: Weekly coach
+      unique_id: weekly_coach_file
+      command: cat /config/weekly_coach_state.json 2>/dev/null || echo '{}'
+      # Short, so a live reply shows up quickly after run-coach.sh copies the file.
+      scan_interval: 15
+      value_template: "{{ value_json.report_date | default('none yet', true) }}"
+      json_attributes:
+        - week_label
+        - generated_at
+        - updated_at
+        - last_coach_at
+        - window
+        - debrief
+        - plan
+        - answers
+        - thread
+
+input_text:
+  # "<report_date>:q1,q2" -- which of this week's questions were already pushed.
+  coach_pushed:
+    name: Coach questions pushed
+    max: 64
+  # The last plan date the 7:30 AM "did it happen?" push asked about.
+  coach_day_asked:
+    name: Coach day check asked
+    max: 16
+
+rest_command:
+  coach_dispatch:
+    url: "https://api.github.com/repos/z0mp22/docker-host/actions/workflows/coach.yml/dispatches"
+    method: post
+    headers:
+      Authorization: !secret github_coaching_report_token
+      Accept: "application/vnd.github+json"
+      X-GitHub-Api-Version: "2022-11-28"
+      User-Agent: "home-assistant-coaching-report"
+    content_type: "application/json"
+    # workflow_dispatch wants every input as a JSON string.
+    payload: >-
+      {"ref":"main","inputs":{"mode":{{ mode | tojson }},"text":{{ text | default('', true) | tojson }},"ref":{{ ref | default('', true) | string | tojson }},"value":{{ value | default('', true) | tojson }},"cid":{{ cid | default('', true) | tojson }}}}
+    timeout: 30
+
+script:
+  coach_send:
+    alias: "Coach: send to the weekly coach"
+    icon: mdi:message-reply-text-outline
+    mode: queued
+    fields:
+      mode:
+        description: message, answer or day
+        required: true
+        example: message
+        selector:
+          text:
+      text:
+        description: What you said (message, answer)
+        example: Saturday's out, family thing
+        selector:
+          text:
+      ref:
+        description: Question id (answer) or plan date (day, or a message about one day)
+        example: q1
+        selector:
+          text:
+      value:
+        description: done or skipped (day)
+        example: done
+        selector:
+          text:
+      cid:
+        description: The panel's id for the message, so a retry isn't saved twice
+        selector:
+          text:
+      source:
+        description: '"push" when it came from a notification, so a failure is pushed back'
+        example: push
+        selector:
+          text:
+    sequence:
+      - action: rest_command.coach_dispatch
+        response_variable: dispatch
+        continue_on_error: true
+        data:
+          mode: "{{ mode }}"
+          text: "{{ text | default('', true) }}"
+          ref: "{{ ref | default('', true) }}"
+          value: "{{ value | default('', true) }}"
+          # Pushes have no panel id; give every message one so a retry is never saved twice.
+          cid: "{{ cid | default('h' ~ (now().timestamp() | int), true) }}"
+      - variables:
+          ok: "{{ dispatch is defined and dispatch.status == 204 }}"
+      # The panel reads this to show "sent" or the error under the message.
+      - action: persistent_notification.create
+        data:
+          notification_id: coach_dispatch
+          title: "{{ 'Sent to your coach' if ok else 'Coach message FAILED' }}"
+          message: >-
+            {% if ok %}{{ cid | default('', true) }}
+            {% elif dispatch is not defined %}Could not reach GitHub (network error). Nothing was sent.
+            {% else %}GitHub rejected the request — HTTP {{ dispatch.status }}.{% endif %}
+      - if:
+          - condition: template
+            value_template: "{{ not ok and source | default('') == 'push' }}"
+        then:
+          - action: script.notify_phones
+            data:
+              title: Couldn't reach your coach
+              message: Nothing was sent. Try again from the Coach panel.
+              tag: coach-send-failed
+              channel: Coach
+              data:
+                url: /coach?week
+                clickAction: /coach?week
+
+automation:
+  - id: weekly_coach_debrief_push
+    alias: "Coach: push Monday's debrief headline"
+    triggers:
+      - trigger: state
+        entity_id: sensor.weekly_coach
+    conditions:
+      - condition: template
+        value_template: >-
+          {{ trigger.from_state is not none
+             and trigger.from_state.state not in ['unavailable', 'unknown']
+             and trigger.to_state.state not in ['unavailable', 'unknown', 'none yet']
+             and trigger.to_state.state != trigger.from_state.state }}
+    actions:
+      - action: script.notify_phones
+        data:
+          title: "{{ state_attr('sensor.weekly_coach', 'week_label') or 'Your week' }}"
+          message: "{{ (state_attr('sensor.weekly_coach', 'debrief') or {}).get('push_line') or 'Your coach sent this week’s debrief.' }}"
+          tag: coach-debrief
+          channel: Coach
+          data:
+            url: /coach?week
+            clickAction: /coach?week
+    mode: single
+
+  - id: weekly_coach_reply_push
+    alias: "Coach: push each live reply"
+    triggers:
+      - trigger: state
+        entity_id: sensor.weekly_coach
+        attribute: last_coach_at
+    conditions:
+      - condition: template
+        value_template: >-
+          {{ trigger.from_state is not none
+             and trigger.to_state.attributes.get('last_coach_at') not in [None, '']
+             and trigger.to_state.attributes.get('last_coach_at') != trigger.from_state.attributes.get('last_coach_at') }}
+    actions:
+      - variables:
+          last: "{{ (state_attr('sensor.weekly_coach', 'thread') or []) | selectattr('role', 'eq', 'coach') | list | last | default({}, true) }}"
+      - action: script.notify_phones
+        data:
+          title: "{{ 'Coach · plan updated' if last.get('plan_changes') else 'Coach' }}"
+          message: "{{ last.get('text') or 'Your coach replied.' }}"
+          tag: coach-reply
+          channel: Coach
+          data:
+            url: /coach?week
+            clickAction: /coach?week
+            actions:
+              - action: REPLY
+                title: Reply
+    mode: queued
+
+  - id: weekly_coach_question_push
+    alias: "Coach: push the next open question"
+    triggers:
+      - trigger: time
+        at: "19:30:00"
+      # After a reply, the next question follows a little later instead of on top of it.
+      - trigger: state
+        entity_id: sensor.weekly_coach
+        attribute: last_coach_at
+        for: "00:02:00"
+    conditions:
+      - condition: template
+        value_template: "{{ next_q is not none }}"
+    variables:
+      report: "{{ states('sensor.weekly_coach') }}"
+      pushed_raw: "{{ states('input_text.coach_pushed') }}"
+      pushed: >-
+        {{ (pushed_raw.split(':', 1)[1].split(',') if pushed_raw.startswith(report ~ ':') else []) | reject('eq', '') | list }}
+      answers: "{{ state_attr('sensor.weekly_coach', 'answers') or {} }}"
+      next_q: >-
+        {% set qs = ((state_attr('sensor.weekly_coach', 'debrief') or {}).get('questions') or [])
+                    | rejectattr('id', 'in', answers.keys() | list) | rejectattr('id', 'in', pushed) | list %}
+        {{ qs[0] if qs else none }}
+    actions:
+      - action: script.notify_phones
+        data:
+          title: "Coach asks: {{ next_q.text }}"
+          message: "{{ next_q.context }}"
+          tag: "coach-q-{{ next_q.id }}"
+          channel: Coach
+          data:
+            url: /coach?week
+            clickAction: /coach?week
+            # Android shows three actions at most: two tap answers, then Reply.
+            actions: >-
+              {% set ns = namespace(a=[]) %}
+              {% for ans in (next_q.answers or [])[:2] %}
+                {% set ns.a = ns.a + [{'action': 'COACH_A_' ~ next_q.id ~ '_' ~ loop.index0, 'title': ans}] %}
+              {% endfor %}
+              {{ ns.a + [{'action': 'REPLY', 'title': 'Reply'}] }}
+      - action: input_text.set_value
+        target:
+          entity_id: input_text.coach_pushed
+        data:
+          value: "{{ report }}:{{ (pushed + [next_q.id]) | join(',') }}"
+    mode: single
+
+  - id: weekly_coach_day_check_push
+    alias: "Coach: ask whether yesterday's session happened"
+    triggers:
+      - trigger: time
+        at: "07:30:00"
+    variables:
+      yesterday: "{{ (now() - timedelta(days=1)).date().isoformat() }}"
+      row: >-
+        {{ (state_attr('sensor.weekly_coach', 'plan') or []) | selectattr('date', 'eq', yesterday) | list | first | default(none, true) }}
+    conditions:
+      - condition: template
+        value_template: >-
+          {{ row is not none and row.status == 'unknown' and states('input_text.coach_day_asked') != yesterday }}
+    actions:
+      - action: script.notify_phones
+        data:
+          title: "Did yesterday's {{ row.title | lower }} happen?"
+          message: Nothing showed up in Garmin or Hevy. Tap one, or reply with what you did instead.
+          tag: "coach-day-{{ yesterday }}"
+          channel: Coach
+          data:
+            url: /coach?week
+            clickAction: /coach?week
+            # Built as a template: the lint reads a literal templated "action:" key as a hidden service call.
+            actions: >-
+              {{ [{'action': 'COACH_DAY_DONE_' ~ yesterday, 'title': 'Done'},
+                  {'action': 'COACH_DAY_SKIP_' ~ yesterday, 'title': 'Skipped'},
+                  {'action': 'REPLY', 'title': 'Changed…'}] }}
+      - action: input_text.set_value
+        target:
+          entity_id: input_text.coach_day_asked
+        data:
+          value: "{{ yesterday }}"
+    mode: single
+
+  - id: weekly_coach_push_action
+    alias: "Coach: handle a tap or reply on a coach push"
+    triggers:
+      - trigger: event
+        event_type: mobile_app_notification_action
+    variables:
+      act: "{{ trigger.event.data.action | default('', true) }}"
+      tag: "{{ trigger.event.data.tag | default('', true) }}"
+      reply: "{{ (trigger.event.data.reply_text | default('', true) | trim)[:600] }}"
+    conditions:
+      - condition: template
+        value_template: "{{ act.startswith('COACH_') or (act == 'REPLY' and tag.startswith('coach-') and reply != '') }}"
+    actions:
+      - choose:
+          # A tap answer: COACH_A_<question id>_<answer index>
+          - conditions: "{{ act.startswith('COACH_A_') }}"
+            sequence:
+              - variables:
+                  qid: "{{ act[8:].rsplit('_', 1)[0] }}"
+                  idx: "{{ act.rsplit('_', 1)[1] | int(-1) }}"
+                  q: >-
+                    {{ ((state_attr('sensor.weekly_coach', 'debrief') or {}).get('questions') or [])
+                       | selectattr('id', 'eq', qid) | list | first | default({}, true) }}
+                  answer: "{{ (q.get('answers') or [])[idx] if 0 <= idx < (q.get('answers') or []) | count else '' }}"
+              - condition: template
+                value_template: "{{ answer != '' }}"
+              - action: script.notify_phones
+                data:
+                  message: clear_notification
+                  tag: "coach-q-{{ qid }}"
+              - action: script.coach_send
+                data:
+                  mode: answer
+                  text: "{{ answer }}"
+                  ref: "{{ qid }}"
+                  source: push
+          # Done / Skipped on the day check: COACH_DAY_DONE_<date> / COACH_DAY_SKIP_<date>
+          - conditions: "{{ act.startswith('COACH_DAY_') }}"
+            sequence:
+              - variables:
+                  day: "{{ act.rsplit('_', 1)[1] }}"
+              - action: script.notify_phones
+                data:
+                  message: clear_notification
+                  tag: "coach-day-{{ day }}"
+              - action: script.coach_send
+                data:
+                  mode: day
+                  ref: "{{ day }}"
+                  value: "{{ 'done' if act.startswith('COACH_DAY_DONE_') else 'skipped' }}"
+                  source: push
+          - conditions: "{{ tag.startswith('coach-q-') }}"
+            sequence:
+              - action: script.notify_phones
+                data:
+                  message: clear_notification
+                  tag: "coach-q-{{ tag[8:] }}"
+              - action: script.coach_send
+                data:
+                  mode: answer
+                  text: "{{ reply }}"
+                  ref: "{{ tag[8:] }}"
+                  source: push
+          - conditions: "{{ tag.startswith('coach-day-') }}"
+            sequence:
+              - action: script.notify_phones
+                data:
+                  message: clear_notification
+                  tag: "coach-day-{{ tag[10:] }}"
+              - action: script.coach_send
+                data:
+                  mode: message
+                  text: "{{ reply }}"
+                  ref: "{{ tag[10:] }}"
+                  source: push
+        default:
+          - action: script.coach_send
+            data:
+              mode: message
+              text: "{{ reply }}"
+              source: push
+    mode: queued

@@ -1,0 +1,46 @@
+# ADR 0013: The weekly coach lives in Home Assistant, and talks back
+
+- **Status:** Accepted
+- **Date:** 2026-11-04
+- **Deciders:** Cody
+- **Tags:** garmin-coaching-report, home-assistant, coach
+
+## Context
+
+The weekly mountain report was a 3,000-word email: a recap of each activity's heart
+rate, no memory of the previous week, and a guessed forecast. Cody wanted it to coach
+him the way a person would, and to be able to answer it. Email is one-way.
+
+## Decision
+
+- **The debrief is data, not an email.** Claude returns a structured debrief
+  (`debrief.DebriefSchema`: headline, last week's plan versus what happened, insights,
+  goals, a plan row per day, questions with tap answers). It is kept with the plan,
+  Cody's answers and the week's conversation in `reports/weekly_coach.json`, copied to
+  HA as `sensor.weekly_coach`. A markdown copy is still written for the archive and
+  `SINCE=last`.
+- **One place to read and answer: the Coach panel.** A week card shows the headline,
+  one open question with tap answers, the week as a strip of days (green done, blue
+  changed, amber nothing logged), goals, the full debrief behind a toggle, and the
+  conversation with a message box. A lift or board day has "Build in Hevy".
+- **Phone first.** The Monday push carries the headline. Questions are pushed one at a
+  time (7:30 PM, or after a reply) with two tap answers and Reply. Coach replies are
+  pushed with Reply, so a whole exchange can happen in notifications.
+- **Live replies.** A message or answer goes HA → `Coach` GitHub workflow →
+  `run-coach.sh` → `coach_chat.py`, which saves it, asks Claude with the week, the
+  thread, what Garmin and Hevy logged since Monday, and a fresh forecast, then saves the
+  reply and any plan changes (today onward only). About a minute end to end.
+- **Days check themselves.** A nightly cron pass marks past plan days from Garmin and
+  Hevy; only a planned session that left nothing gets a 7:30 AM Done / Skipped /
+  Changed push. Next Monday's debrief reads these statuses instead of guessing.
+- **No fixed days.** Weekends vary; the plan puts the outdoor day where the forecast
+  and the conversation say, and changes when Cody says a day won't work.
+
+## Consequences
+
+- No report email; failures still alert by email.
+- Each reply is a small Claude call (the week, thread and a few days of logs), much
+  smaller than the weekly report.
+- The state file has three writers (weekly report, replies, nightly check); all write
+  under one lock after re-reading the file.
+- The workflow passes text only through environment variables, never into the script.

@@ -248,6 +248,8 @@ deploy_garmin_coaching_report() {
     "${DEPLOY_ROOT}/garmin-coaching-report/scripts/run-report.sh" 755
   install_file "${REPO_ROOT}/garmin-coaching-report/scripts/run-lift-session.sh" \
     "${DEPLOY_ROOT}/garmin-coaching-report/scripts/run-lift-session.sh" 755
+  install_file "${REPO_ROOT}/garmin-coaching-report/scripts/run-coach.sh" \
+    "${DEPLOY_ROOT}/garmin-coaching-report/scripts/run-coach.sh" 755
   install_file "${REPO_ROOT}/garmin-coaching-report/cron/garmin-coaching-report" \
     "/etc/cron.d/garmin-coaching-report" 644
   (

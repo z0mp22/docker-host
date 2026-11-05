@@ -47,6 +47,8 @@ recorder:
       # Cloudflare summaries: rewritten every 5 min (MQTT retains the latest); rule expressions.
       - sensor.cloudflare_edge
       - sensor.cloudflare_edge_rules
+      # The weekly coach's debrief + plan + thread (packages/weekly_coach.yaml); the panel reads it live.
+      - sensor.weekly_coach
 
 # Load frontend themes from the themes folder
 frontend:
@@ -594,7 +596,7 @@ panel_custom:
     url_path: coach
     sidebar_title: Coaching
     sidebar_icon: mdi:dumbbell
-    module_url: /local/coach/coach-panel.js?v=7
+    module_url: /local/coach/coach-panel.js?v=8
   - name: network-panel
     url_path: network
     sidebar_title: Network
