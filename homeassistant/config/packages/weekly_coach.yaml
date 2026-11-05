@@ -9,7 +9,9 @@
 # - Monday's debrief: the headline, tap to read.
 # - Each question, one at a time: 7:30 PM, or 2 minutes after a coach reply while one is still open.
 #   Two tap answers plus Reply.
-# - The coach's replies, with Reply, so the conversation can stay in the notification.
+# - The coach's replies, with Reply, so the conversation can stay in the notification. That includes
+#   check-ins: every 30 min run-coach.sh syncs Garmin + Hevy (cron), and when what you did changes the
+#   plan the coach says so on its own ("Coach saw your training").
 # - 7:30 AM, only when yesterday's planned session left nothing in Garmin or Hevy: Done / Skipped /
 #   Changed (Reply).
 # Everything you send goes through script.coach_send -> the Coach GitHub workflow -> run-coach.sh,
@@ -33,6 +35,7 @@ command_line:
         - plan
         - answers
         - thread
+        - logged_days
 
 input_text:
   # "<report_date>:q1,q2" -- which of this week's questions were already pushed.
@@ -173,7 +176,9 @@ automation:
           last: "{{ (state_attr('sensor.weekly_coach', 'thread') or []) | selectattr('role', 'eq', 'coach') | list | last | default({}, true) }}"
       - action: script.notify_phones
         data:
-          title: "{{ 'Coach · plan updated' if last.get('plan_changes') else 'Coach' }}"
+          title: >-
+            {{ 'Coach · plan updated' if last.get('plan_changes')
+               else ('Coach saw your training' if last.get('checkin') else 'Coach') }}
           message: "{{ last.get('text') or 'Your coach replied.' }}"
           tag: coach-reply
           channel: Coach

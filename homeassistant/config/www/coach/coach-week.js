@@ -174,6 +174,8 @@ export class WeekCard {
       byDate: Object.fromEntries(plan.map((r) => [r.date, r])),
       answers: a.answers || {},
       thread: Array.isArray(a.thread) ? a.thread : [],
+      // What Garmin and Hevy logged each recent day, planned or not (synced every 30 min).
+      logged: a.logged_days || {},
       today: isoDay(new Date()),
     };
   }
@@ -337,7 +339,8 @@ export class WeekCard {
     const qText = (id) => (m.d.questions || []).find((q) => q.id === id)?.text;
     for (const x of shown) {
       const at = typeof x.at === "number" ? x.at : Date.parse(x.at);
-      const meta = x.mode === "answer" ? `Answer · ${esc(qText(x.ref) || "")}` : at ? esc(p._fmtTime(at)) : "";
+      const meta =
+        x.mode === "answer" ? `Answer · ${esc(qText(x.ref) || "")}` : x.checkin ? `Saw it in Garmin · ${esc(p._fmtTime(at))}` : at ? esc(p._fmtTime(at)) : "";
       parts.push(
         `<div class="msg ${x.role}">${esc(x.text)}${
           x.role === "coach" && x.plan_changes?.length ? `<span class="moved">Plan updated: ${esc(x.plan_changes.join(", "))}</span>` : ""
@@ -385,14 +388,17 @@ export class WeekCard {
     for (let i = -DAYS_BACK; i <= DAYS_AHEAD; i++) days.push(addDays(m.today, i));
     if (!days.includes(this.sel)) this.sel = m.today;
     const status = (r) => this.marks[r.date] || r.status;
+    // Past days show how they went; today only once something is logged.
+    const shown = (r) => (r.date < m.today || ["done", "changed"].includes(status(r)) ? status(r) : "planned");
     const pills = days
       .map((date) => {
         const r = m.byDate[date];
-        const st = !r ? "none" : date < m.today ? status(r) : "planned";
+        const log = m.logged[date];
+        const st = r ? shown(r) : log ? "changed" : "none";
         const cls = [st, date === m.today ? "today" : "", date === this.sel ? "sel" : ""].join(" ");
         return `<button class="wc-day ${cls}" data-action="wk-day" data-date="${date}" aria-label="${esc(`${dayName(date)}: ${r ? r.title : "nothing planned"}`)}">
           ${r?.changed_at && date >= m.today ? '<i class="moved" aria-hidden="true"></i>' : ""}
-          <span>${date === m.today ? "Today" : esc(weekday(date))}</span><b>${r ? esc(KIND[r.kind] || r.kind) : "—"}</b></button>`;
+          <span>${date === m.today ? "Today" : esc(weekday(date))}</span><b>${r ? esc(KIND[r.kind] || r.kind) : log ? esc(log.short) : "—"}</b></button>`;
       })
       .join("");
     const isToday = this.sel === m.today;
@@ -409,6 +415,11 @@ export class WeekCard {
     const p = this.p;
     const date = this.sel;
     const past = date < m.today;
+    const log = m.logged[date];
+    if (!r && log) {
+      return `<div class="wc-detail"><h2>Not on the plan</h2>
+        <div class="st changed">Logged · ${esc(log.summary)}</div></div>`;
+    }
     if (!r) {
       const [title, sub] = past
         ? ["Nothing was planned", "This day was before the current plan."]
@@ -436,7 +447,10 @@ export class WeekCard {
           <button class="btn2" data-action="wk-about" data-date="${date}">Did something else</button>`;
       }
     } else {
-      if (r.changed_at) st = `<div class="st moved">Moved here by your coach</div>`;
+      const s = status(r);
+      if (date === m.today && ["done", "changed"].includes(s)) {
+        st = `<div class="st ${esc(s)}">${s === "done" ? p.icon("mdiCheck") : ""}${esc(s === "done" ? `Done · ${r.logged}` : `Changed · ${r.logged}`)}</div>`;
+      } else if (r.changed_at) st = `<div class="st moved">Moved here by your coach</div>`;
       // Today's change lives under "Do something else today".
       if (date !== m.today) acts = `<button class="btn2" data-action="wk-about" data-date="${date}">Change this day</button>`;
     }

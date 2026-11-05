@@ -128,3 +128,63 @@ def test_a_message_about_a_future_or_unplanned_day_names_it_without_marking_it(e
     assert msg["about_day"] == "2099-01-02"
     assert all(r["status"] == "planned" for r in env.state()["plan"])
     assert cc._about_day(env.state(), "2099-01-02") == {"date": "2099-01-02", "weekday": "Friday", "planned": None}
+
+
+def _sync_env(env, monkeypatch, acts, hour=15, day=(2026, 11, 4)):
+    monkeypatch.setattr(cc, "_garmin", lambda config: object())
+    monkeypatch.setattr(cc, "_logs_since", lambda *a, **k: (acts, [], []))
+
+    class Now(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return datetime(*day, hour, 0, tzinfo=tz)
+
+    monkeypatch.setattr(cc, "datetime", Now)
+
+
+def _act(day, type_key, minutes):
+    return {"startTimeLocal": f"{day} 12:00:00", "activityType": {"typeKey": type_key}, "duration": minutes * 60}
+
+
+def test_sync_checks_in_once_when_a_session_changed(env, monkeypatch):
+    _sync_env(env, monkeypatch, [_act("2026-11-04", "e_bike_fitness", 60)])  # Wed was a lift
+    assert env.run(mode="sync") == 0
+    s = env.state()
+    assert s["plan"][1]["status"] == "changed" and s["logged_days"]["2026-11-04"]["short"] == "Cardio"
+    coach = [m for m in s["thread"] if m.get("checkin")]
+    assert len(coach) == 1 and coach[0]["about_day"] == "2026-11-04" and coach[0]["checkin_date"] == "2026-11-04"
+    assert env.calls[0][1]["checkin"][0]["logged"] == "E-bike 60 min"
+    assert s["last_coach_at"] == coach[0]["at"]
+    assert env.run(mode="sync") == 0  # same activity: not looked at again
+    assert len(env.calls) == 1
+
+
+def test_sync_says_nothing_when_the_day_went_to_plan_or_at_night(env, monkeypatch):
+    _sync_env(env, monkeypatch, [_act("2026-11-04", "strength_training", 60)])
+    assert env.run(mode="sync") == 0
+    assert env.calls == [] and env.state()["plan"][1]["status"] == "done"
+    _sync_env(env, monkeypatch, [_act("2026-11-04", "e_bike_fitness", 60)], hour=22)
+    assert env.run(mode="sync") == 0
+    assert env.calls == []  # quiet hours; looked at in the morning
+
+
+def test_sync_empty_reply_posts_nothing_but_notes_the_event(env, monkeypatch):
+    monkeypatch.setattr(cc, "_reply", lambda *a: (db.CoachReplySchema(reply="  "), {"model": "m", "input_tokens": 1, "output_tokens": 1}))
+    _sync_env(env, monkeypatch, [_act("2026-11-04", "e_bike_fitness", 60)])
+    assert env.run(mode="sync") == 0
+    s = env.state()
+    assert s["thread"] == [] and s["noticed"] and s.get("last_coach_at") is None
+
+
+def test_sync_without_garmin_changes_nothing(env, monkeypatch):
+    monkeypatch.setattr(cc, "_garmin", lambda config: None)
+    before = env.state()
+    assert env.run(mode="sync") == 1
+    assert env.state() == before
+
+
+def test_sync_sends_nothing_when_the_coach_says_it_isnt_worth_saying(env, monkeypatch):
+    monkeypatch.setattr(cc, "_reply", lambda *a: (db.CoachReplySchema(reply="Nothing changes.", worth_saying=False), {"model": "m", "input_tokens": 1, "output_tokens": 1}))
+    _sync_env(env, monkeypatch, [_act("2026-11-04", "e_bike_fitness", 60)])
+    assert env.run(mode="sync") == 0
+    assert env.state()["thread"] == [] and env.state()["noticed"]

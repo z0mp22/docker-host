@@ -36,6 +36,14 @@ him the way a person would, and to be able to answer it. Email is one-way.
 - **No fixed days.** Weekends vary; the plan puts the outdoor day where the forecast
   and the conversation say, and changes when Cody says a day won't work.
 
+- **Garmin sync, and the coach checks in on its own** (added 2026-11-04). Every 30
+  minutes in the day, cron runs `COACH_MODE=sync`: plan days are marked from Garmin and
+  Hevy (today too, once something is logged), and every recent day's activity is kept
+  for the panel, planned or not. When what was logged changes the plan (a different
+  session, or a hard effort on an easy, rest or unplanned day), the coach takes one look
+  and sends a short note only if it's worth saying, and may move coming days. Each event
+  is looked at once, at most two check-ins a day, none from 9 PM to 7 AM.
+
 ## Consequences
 
 - No report email; failures still alert by email.

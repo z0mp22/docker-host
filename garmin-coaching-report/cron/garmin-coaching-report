@@ -5,3 +5,5 @@ PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 0 9 * * 1 root /docker/garmin-coaching-report/scripts/run-report.sh >> /docker/garmin-coaching-report/cron.log 2>&1
 # Weekly coach: mark last night's plan days from Garmin + Hevy before the 7:30 AM "did it happen?" push.
 50 3 * * * root COACH_MODE=check /docker/garmin-coaching-report/scripts/run-coach.sh >> /docker/garmin-coaching-report/coach.log 2>&1
+# Weekly coach: sync Garmin + Hevy every 30 min in the day; the coach checks in only when what you did changes the plan.
+*/30 6-21 * * * root COACH_MODE=sync /docker/garmin-coaching-report/scripts/run-coach.sh >> /docker/garmin-coaching-report/coach.log 2>&1
