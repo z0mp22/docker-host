@@ -1,0 +1,591 @@
+# Heating schedule run by Home Assistant instead of the Honeywell's own program, plus a fan
+# trial and a monthly rules-based advisor. All of it is on the /hvac panel.
+#
+# Schedule (input_boolean.hvac_schedule):
+# - While on, the thermostat sits in permanent hold and HA moves the setpoint: night temp at the
+#   setback time, day temp once the warm-up starts. Turning it off drops the hold, so the
+#   thermostat's own program takes over again (also the fallback if HA is down for long).
+# - Warm-up replaces Honeywell's adaptive recovery: it starts (gap to day temp ÷ learned rate
+#   + 15 min) before the "warm by" time, capped at 3 h. The rate (°F/h) is re-learned from every
+#   warm-up and clamped to 0.5–8.
+# - HA only changes the setpoint at those transitions, so a manual change (thermostat, panel,
+#   app) holds until the next one. input_select.hvac_schedule_phase is what HA last applied; a
+#   restart re-applies a transition only if HA was down when it was due.
+# - Heat mode only. Cooling season is left to the thermostat.
+#
+# Fan trial (input_boolean.hvac_fan_trial): 14 days from input_datetime.hvac_fan_trial_start,
+# Auto on even days and On on odd days, switched at midnight, so both settings see the same
+# weather. Afterwards the fan goes back to On and the advisor pushes the comparison. The advisor
+# tells days apart by fan-only runtime, so nothing extra is logged.
+#
+# Advisor: shell/hvac_advisor.py reads the recorder DB read-only (long-term stats for the
+# month, the last 10 days of states for burn lengths and warm-ups), applies fixed rules and
+# writes /config/hvac_advice.json, which sensor.hvac_advice reads. It runs at 07:00 on the 1st
+# for the month just ended and pushes the actionable items; the panel can also run it for this
+# month so far. Suggestions with an `apply` block get a one-tap button on the panel. Nothing is
+# changed without that tap, except the warm-up rate, which learns on its own.
+
+input_boolean:
+  hvac_schedule:
+    name: "HVAC: HA runs the heating schedule"
+    icon: mdi:calendar-clock
+  hvac_fan_trial:
+    name: "HVAC: fan trial running"
+    icon: mdi:fan-clock
+  hvac_fan_peak_auto:
+    name: "HVAC: fan on Auto during on-peak hours"
+    icon: mdi:fan-clock
+
+input_datetime:
+  hvac_wake_weekday:
+    name: "HVAC: warm by (Mon–Fri)"
+    has_date: false
+    has_time: true
+  hvac_wake_weekend:
+    name: "HVAC: warm by (Sat–Sun)"
+    has_date: false
+    has_time: true
+  hvac_setback:
+    name: "HVAC: night setback starts"
+    has_date: false
+    has_time: true
+  hvac_fan_trial_start:
+    name: "HVAC: fan trial day 1"
+    has_date: true
+    has_time: false
+
+input_number:
+  hvac_day_temp:
+    name: "HVAC: day temperature"
+    icon: mdi:sun-thermometer
+    min: 55
+    max: 75
+    step: 1
+    unit_of_measurement: "°F"
+    mode: box
+  hvac_night_temp:
+    name: "HVAC: night temperature"
+    icon: mdi:weather-night
+    min: 50
+    max: 72
+    step: 1
+    unit_of_measurement: "°F"
+    mode: box
+  # Not a setpoint: the bedroom temperature the advisor checks nights against.
+  hvac_sleep_target:
+    name: "HVAC: bedroom sleep target"
+    icon: mdi:bed
+    min: 55
+    max: 72
+    step: 1
+    unit_of_measurement: "°F"
+    mode: box
+  hvac_preheat_rate:
+    name: "HVAC: warm-up rate (learned)"
+    icon: mdi:trending-up
+    min: 0.5
+    max: 8
+    step: 0.1
+    unit_of_measurement: "°F/h"
+    mode: box
+
+input_select:
+  hvac_schedule_phase:
+    name: "HVAC: schedule phase last applied"
+    icon: mdi:theme-light-dark
+    options: [day, night, warming]
+
+input_text:
+  # JSON for the current/last warm-up: start, t0, target, wake, done, reached, early_min.
+  hvac_warmup:
+    name: "HVAC: last warm-up"
+    icon: mdi:timer-sand
+    max: 255
+
+template:
+  - sensor:
+      # weather.home keeps its temperature in an attribute, which gets no long-term statistics.
+      - name: Outdoor temperature
+        unique_id: outdoor_temperature
+        device_class: temperature
+        state_class: measurement
+        unit_of_measurement: "°F"
+        availability: "{{ state_attr('weather.home', 'temperature') is number }}"
+        state: "{{ state_attr('weather.home', 'temperature') }}"
+
+      - name: Thermostat setpoint
+        unique_id: thermostat_setpoint
+        device_class: temperature
+        state_class: measurement
+        unit_of_measurement: "°F"
+        availability: "{{ state_attr('climate.thermostat', 'temperature') is number }}"
+        state: "{{ state_attr('climate.thermostat', 'temperature') }}"
+
+      # Next "warm by" time: today's if it's still ahead, else tomorrow's (weekend times on Sat/Sun).
+      - name: HVAC warm by
+        unique_id: hvac_warm_by
+        device_class: timestamp
+        icon: mdi:alarm
+        state: >
+          {% set ns = namespace(t=none) %}
+          {% for i in [0, 1] %}
+            {% set d = now() + timedelta(days=i) %}
+            {% set h = 'input_datetime.hvac_wake_weekend' if d.weekday() >= 5 else 'input_datetime.hvac_wake_weekday' %}
+            {% set t = today_at(states(h)) + timedelta(days=i) %}
+            {% if ns.t is none and t > now() %}{% set ns.t = t %}{% endif %}
+          {% endfor %}
+          {{ ns.t.isoformat() if ns.t is not none else none }}
+
+      - name: HVAC warm-up start
+        unique_id: hvac_warm_up_start
+        device_class: timestamp
+        icon: mdi:radiator
+        availability: "{{ has_value('sensor.hvac_warm_by') }}"
+        state: >
+          {% set wake = states('sensor.hvac_warm_by') | as_datetime %}
+          {% set cur = state_attr('climate.thermostat', 'current_temperature') %}
+          {% set day = states('input_number.hvac_day_temp') | float(67) %}
+          {% set rate = [states('input_number.hvac_preheat_rate') | float(3), 0.5] | max %}
+          {% set gap = [day - (cur if cur is number else day - 4), 0] | max %}
+          {% set hours = [gap / rate + 0.25, 3] | min %}
+          {{ (wake - timedelta(hours=hours)).isoformat() }}
+
+      # Minutes the last finished warm-up reached the day temperature before its warm-by time
+      # (negative = late). Kept as a statistic so the advisor can look back a whole month.
+      - name: HVAC warm-up minutes early
+        unique_id: hvac_warm_up_minutes_early
+        unit_of_measurement: min
+        state_class: measurement
+        icon: mdi:timer-check-outline
+        availability: >
+          {% set w = states('input_text.hvac_warmup') | from_json(default={}) %}
+          {{ w.done | default(false) and w.early_min is number }}
+        state: "{{ (states('input_text.hvac_warmup') | from_json(default={})).early_min }}"
+
+shell_command:
+  # period: last_month | month_to_date | trial (the script rejects anything else).
+  hvac_advice: python3 /config/shell/hvac_advisor.py {{ period }}
+
+command_line:
+  - sensor:
+      name: HVAC advice
+      unique_id: hvac_advice
+      command: cat /config/hvac_advice.json 2>/dev/null || echo '{}'
+      scan_interval: 3600
+      availability: "{{ value_json is defined and value_json.schema is defined }}"
+      value_template: "{{ value_json.generated }}"
+      json_attributes:
+        - period
+        - summary
+        - metrics
+        - suggestions
+        - trial
+        - errors
+
+script:
+  hvac_schedule_apply:
+    alias: "HVAC schedule: apply a phase"
+    description: Holds the thermostat at the day or night temperature and records the phase.
+    mode: queued
+    fields:
+      phase:
+        description: day, night or warming
+        example: night
+    sequence:
+      - variables:
+          setpoint: >
+            {{ states('input_number.hvac_night_temp' if phase == 'night' else 'input_number.hvac_day_temp') | float(0) | int }}
+      - condition: template
+        value_template: "{{ phase in ['day', 'night', 'warming'] and setpoint > 0 }}"
+      - action: input_select.select_option
+        target: {entity_id: input_select.hvac_schedule_phase}
+        data: {option: "{{ phase }}"}
+      - if:
+          - condition: template
+            value_template: "{{ phase == 'warming' }}"
+        then:
+          - action: input_text.set_value
+            target: {entity_id: input_text.hvac_warmup}
+            data:
+              value: >
+                {{ {'start': now().isoformat(timespec='minutes'),
+                    't0': state_attr('climate.thermostat', 'current_temperature'),
+                    'target': setpoint,
+                    'wake': (states('sensor.hvac_warm_by') | as_datetime).isoformat(timespec='minutes'),
+                    'done': false} | to_json }}
+      # Permanent hold first, so the setpoint below sticks instead of lasting one program period.
+      # Honeywell's cloud is slow and sometimes errors, so each step gets two tries.
+      - repeat:
+          sequence:
+            - if:
+                - condition: template
+                  value_template: "{{ not state_attr('climate.thermostat', 'permanent_hold') }}"
+              then:
+                - action: climate.set_preset_mode
+                  target: {entity_id: climate.thermostat}
+                  data: {preset_mode: hold}
+                  continue_on_error: true
+            - action: climate.set_temperature
+              target: {entity_id: climate.thermostat}
+              data: {temperature: "{{ setpoint }}"}
+              continue_on_error: true
+            - wait_template: "{{ state_attr('climate.thermostat', 'temperature') | float(0) == setpoint }}"
+              timeout: "00:03:00"
+          until: "{{ wait.completed or repeat.index >= 2 }}"
+      - if:
+          - condition: template
+            value_template: "{{ state_attr('climate.thermostat', 'temperature') | float(0) != setpoint }}"
+        then:
+          - action: script.notify_phones
+            data:
+              title: Thermostat didn't take the schedule
+              message: >
+                Tried twice to set {{ setpoint }}° for the {{ 'warm-up' if phase == 'warming' else phase }}; it's still at
+                {{ state_attr('climate.thermostat', 'temperature') }}°. Honeywell's cloud may be down.
+              tag: hvac-schedule-failed
+              data:
+                clickAction: /hvac
+                url: /hvac
+
+  hvac_advice_refresh:
+    alias: "HVAC advice: refresh (this month so far)"
+    icon: mdi:lightbulb-on-outline
+    mode: single
+    sequence:
+      - action: shell_command.hvac_advice
+        data: {period: month_to_date}
+        response_variable: result
+      - action: homeassistant.update_entity
+        target: {entity_id: sensor.hvac_advice}
+
+automation:
+  - id: hvac_schedule_setback
+    alias: "HVAC schedule: night setback"
+    mode: single
+    triggers:
+      - trigger: time
+        at: input_datetime.hvac_setback
+    conditions:
+      - condition: state
+        entity_id: input_boolean.hvac_schedule
+        state: "on"
+      - condition: state
+        entity_id: climate.thermostat
+        state: heat
+    actions:
+      - action: script.hvac_schedule_apply
+        data: {phase: night}
+
+  - id: hvac_schedule_warm_up
+    alias: "HVAC schedule: start the morning warm-up"
+    mode: single
+    triggers:
+      - trigger: time_pattern
+        minutes: "/5"
+    conditions:
+      - condition: state
+        entity_id: input_boolean.hvac_schedule
+        state: "on"
+      - condition: state
+        entity_id: climate.thermostat
+        state: heat
+      - condition: state
+        entity_id: input_select.hvac_schedule_phase
+        state: night
+      - condition: template
+        value_template: >
+          {{ has_value('sensor.hvac_warm_up_start')
+             and states('sensor.hvac_warm_up_start') | as_datetime <= now() < states('sensor.hvac_warm_by') | as_datetime }}
+    actions:
+      - action: script.hvac_schedule_apply
+        data: {phase: warming}
+
+  # The warm-by time itself: the day starts whether or not the house got there.
+  - id: hvac_schedule_warm_by
+    alias: "HVAC schedule: day starts"
+    mode: single
+    triggers:
+      - trigger: time
+        at: input_datetime.hvac_wake_weekday
+        id: weekday
+      - trigger: time
+        at: input_datetime.hvac_wake_weekend
+        id: weekend
+    conditions:
+      - condition: state
+        entity_id: input_boolean.hvac_schedule
+        state: "on"
+      - condition: state
+        entity_id: climate.thermostat
+        state: heat
+      - condition: template
+        value_template: "{{ (now().weekday() >= 5) == (trigger.id == 'weekend') }}"
+    actions:
+      - choose:
+          - conditions: "{{ is_state('input_select.hvac_schedule_phase', 'night') }}"
+            sequence:
+              - action: script.hvac_schedule_apply
+                data: {phase: day}
+          - conditions: "{{ is_state('input_select.hvac_schedule_phase', 'warming') }}"
+            sequence:
+              - action: input_select.select_option
+                target: {entity_id: input_select.hvac_schedule_phase}
+                data: {option: day}
+
+  # Learns the warm-up rate when the thermostat first reads the day temperature.
+  - id: hvac_schedule_warm_up_reached
+    alias: "HVAC schedule: learn the warm-up rate"
+    mode: queued
+    triggers:
+      - trigger: state
+        entity_id: climate.thermostat
+        attribute: current_temperature
+    variables:
+      w: "{{ states('input_text.hvac_warmup') | from_json(default={}) }}"
+    conditions:
+      - condition: template
+        value_template: >
+          {{ w.start is defined and not w.done and trigger.to_state.attributes.current_temperature is number
+             and trigger.to_state.attributes.current_temperature >= w.target
+             and now() - (w.start | as_datetime) < timedelta(hours=6) }}
+    actions:
+      - variables:
+          hours: "{{ ((now() - (w.start | as_datetime)).total_seconds() / 3600) | round(3) }}"
+          gap: "{{ (w.target - (w.t0 if w.t0 is number else w.target)) }}"
+          observed: "{{ ([[gap / hours if hours > 0 else 0, 0.5] | max, 8] | min) | round(2) }}"
+          early: "{{ (((w.wake | as_datetime) - now()).total_seconds() / 60) | round(0) | int }}"
+      - action: input_text.set_value
+        target: {entity_id: input_text.hvac_warmup}
+        data:
+          value: >
+            {{ dict(w, done=true, reached=now().isoformat(timespec='minutes'), early_min=early) | to_json }}
+      # A gap under 2° is mostly the thermostat's rounding, so it doesn't teach the rate anything.
+      - if:
+          - condition: template
+            value_template: "{{ gap >= 2 and hours > 0.1 }}"
+        then:
+          - action: input_number.set_value
+            target: {entity_id: input_number.hvac_preheat_rate}
+            data:
+              value: "{{ (0.7 * states('input_number.hvac_preheat_rate') | float(3) + 0.3 * observed) | round(1) }}"
+
+  - id: hvac_schedule_toggle
+    alias: "HVAC schedule: turned on or off"
+    mode: restart
+    triggers:
+      - trigger: state
+        entity_id: input_boolean.hvac_schedule
+        to: ["on", "off"]
+    actions:
+      - choose:
+          - conditions: "{{ trigger.to_state.state == 'on' and is_state('climate.thermostat', 'heat') }}"
+            sequence:
+              - action: script.hvac_schedule_apply
+                data:
+                  phase: >
+                    {% set h = 'input_datetime.hvac_wake_weekend' if now().weekday() >= 5 else 'input_datetime.hvac_wake_weekday' %}
+                    {{ 'day' if today_at(states(h)) <= now() < today_at(states('input_datetime.hvac_setback')) else 'night' }}
+          - conditions: "{{ trigger.to_state.state == 'off' }}"
+            sequence:
+              - action: climate.set_preset_mode
+                target: {entity_id: climate.thermostat}
+                data: {preset_mode: none}
+
+  # Editing the day/night temperature on the panel moves the thermostat now if that phase is on.
+  - id: hvac_schedule_temp_changed
+    alias: "HVAC schedule: day/night temperature edited"
+    mode: restart
+    triggers:
+      - trigger: state
+        entity_id: [input_number.hvac_day_temp, input_number.hvac_night_temp]
+    conditions:
+      - condition: state
+        entity_id: input_boolean.hvac_schedule
+        state: "on"
+      - condition: state
+        entity_id: climate.thermostat
+        state: heat
+      - condition: template
+        value_template: >
+          {% set p = states('input_select.hvac_schedule_phase') %}
+          {{ trigger.from_state is not none and trigger.from_state.state not in ['unknown', 'unavailable']
+             and ((trigger.entity_id == 'input_number.hvac_night_temp') == (p == 'night')) }}
+    actions:
+      # The panel steps one degree per tap; wait for the last tap.
+      - delay: {seconds: 5}
+      - action: script.hvac_schedule_apply
+        # A running warm-up keeps its log (and its rate lesson); only the setpoint moves.
+        data: {phase: "{{ 'day' if is_state('input_select.hvac_schedule_phase', 'warming') else states('input_select.hvac_schedule_phase') }}"}
+
+  # Catches a transition that was due while HA was down. A warm-up that already started counts
+  # as night; the 5-minute check above handles starting one.
+  - id: hvac_schedule_catch_up
+    alias: "HVAC schedule: catch up after a restart"
+    mode: single
+    triggers:
+      - trigger: homeassistant
+        event: start
+    actions:
+      - delay: {minutes: 2}
+      - variables:
+          expected: >
+            {% set h = 'input_datetime.hvac_wake_weekend' if now().weekday() >= 5 else 'input_datetime.hvac_wake_weekday' %}
+            {{ 'day' if today_at(states(h)) <= now() < today_at(states('input_datetime.hvac_setback')) else 'night' }}
+          phase: "{{ states('input_select.hvac_schedule_phase') }}"
+      - condition: state
+        entity_id: input_boolean.hvac_schedule
+        state: "on"
+      - condition: state
+        entity_id: climate.thermostat
+        state: heat
+      - condition: template
+        value_template: "{{ phase != expected and not (phase == 'warming' and expected == 'night') }}"
+      - action: script.hvac_schedule_apply
+        data: {phase: "{{ expected }}"}
+
+  - id: hvac_fan_trial_daily
+    alias: "HVAC fan trial: set today's fan mode"
+    mode: single
+    triggers:
+      - trigger: time
+        at: "00:00:00"
+      - trigger: homeassistant
+        event: start
+      - trigger: state
+        entity_id: input_boolean.hvac_fan_trial
+        to: "on"
+    conditions:
+      - condition: state
+        entity_id: input_boolean.hvac_fan_trial
+        state: "on"
+    actions:
+      - variables:
+          day: >
+            {% set d = states('input_datetime.hvac_fan_trial_start') %}
+            {{ (now().date() - strptime(d, '%Y-%m-%d').date()).days if d not in ['unknown', 'unavailable', ''] else -1 }}
+      - choose:
+          - conditions: "{{ day >= 14 }}"
+            sequence:
+              - action: input_boolean.turn_off
+                target: {entity_id: input_boolean.hvac_fan_trial}
+              - action: climate.set_fan_mode
+                target: {entity_id: climate.thermostat}
+                data: {fan_mode: "on"}
+                continue_on_error: true
+              - action: shell_command.hvac_advice
+                data: {period: trial}
+                response_variable: result
+              - action: homeassistant.update_entity
+                target: {entity_id: sensor.hvac_advice}
+              - delay: {seconds: 5}
+              - action: script.notify_phones
+                data:
+                  title: Fan trial finished
+                  message: >
+                    {% set t = state_attr('sensor.hvac_advice', 'trial') %}
+                    {{ t.verdict if t and t.verdict else 'Results are on the Climate panel.' }} The fan is back on On until you choose.
+                  tag: hvac-fan-trial
+                  data:
+                    clickAction: /hvac
+                    url: /hvac
+          - conditions: "{{ 0 <= day < 14 }}"
+            sequence:
+              - variables:
+                  want: "{{ 'auto' if day % 2 == 0 else 'on' }}"
+              - condition: template
+                value_template: "{{ state_attr('climate.thermostat', 'fan_mode') != want }}"
+              - action: climate.set_fan_mode
+                target: {entity_id: climate.thermostat}
+                data: {fan_mode: "{{ want }}"}
+
+  # Optional compromise if the trial says the fan earns its keep: circulate except 5–9 pm weekdays.
+  - id: hvac_fan_peak_auto
+    alias: "HVAC fan: Auto during on-peak hours"
+    mode: queued
+    triggers:
+      - trigger: state
+        entity_id: sensor.fc_electric_tariff
+        to: [on_peak, off_peak]
+      - trigger: state
+        entity_id: input_boolean.hvac_fan_peak_auto
+    conditions:
+      - condition: state
+        entity_id: input_boolean.hvac_fan_trial
+        state: "off"
+      - condition: template
+        value_template: "{{ trigger.entity_id == 'input_boolean.hvac_fan_peak_auto' or is_state('input_boolean.hvac_fan_peak_auto', 'on') }}"
+    actions:
+      - variables:
+          want: "{{ 'auto' if is_state('input_boolean.hvac_fan_peak_auto', 'on') and is_state('sensor.fc_electric_tariff', 'on_peak') else 'on' }}"
+      - condition: template
+        value_template: "{{ state_attr('climate.thermostat', 'fan_mode') != want }}"
+      - action: climate.set_fan_mode
+        target: {entity_id: climate.thermostat}
+        data: {fan_mode: "{{ want }}"}
+
+  - id: hvac_advice_monthly
+    alias: "HVAC advice: monthly suggestions"
+    mode: single
+    triggers:
+      - trigger: time
+        at: "07:00:00"
+    conditions:
+      - condition: template
+        value_template: "{{ now().day == 1 }}"
+    actions:
+      - action: shell_command.hvac_advice
+        data: {period: last_month}
+        response_variable: result
+      - action: homeassistant.update_entity
+        target: {entity_id: sensor.hvac_advice}
+      - delay: {seconds: 5}
+      - variables:
+          todo: "{{ (state_attr('sensor.hvac_advice', 'suggestions') or []) | selectattr('kind', 'eq', 'action') | list }}"
+      - condition: template
+        value_template: "{{ todo | count > 0 }}"
+      - action: script.notify_phones
+        data:
+          title: "Heating tips for {{ (state_attr('sensor.hvac_advice', 'period') or {}).label | default('last month') }}"
+          message: >
+            {% for s in todo[:2] %}{{ s.title }}{{ ' (≈$' ~ s.usd_month | round(0) | int ~ '/mo)' if s.usd_month is number and s.usd_month >= 1 else '' }}. {% endfor %}{{ 'Plus ' ~ (todo | count - 2) ~ ' more on the panel.' if todo | count > 2 else '' }}
+          tag: hvac-advice
+          data:
+            clickAction: /hvac
+            url: /hvac
+
+  # input_datetime/input_number start empty or at their min on first load; seed once.
+  - id: hvac_schedule_seed
+    alias: "HVAC schedule: seed defaults"
+    mode: single
+    triggers:
+      - trigger: homeassistant
+        event: start
+    actions:
+      - delay: {seconds: 10}
+      - repeat:
+          for_each:
+            - {entity: input_datetime.hvac_wake_weekday, value: "04:30:00"}
+            - {entity: input_datetime.hvac_wake_weekend, value: "05:45:00"}
+            - {entity: input_datetime.hvac_setback, value: "19:45:00"}
+          sequence:
+            - if:
+                - condition: template
+                  value_template: "{{ states(repeat.item.entity) in ['00:00:00', 'unknown'] }}"
+              then:
+                - action: input_datetime.set_datetime
+                  target: {entity_id: "{{ repeat.item.entity }}"}
+                  data: {time: "{{ repeat.item.value }}"}
+      - repeat:
+          for_each:
+            - {entity: input_number.hvac_day_temp, min: 55, value: 67}
+            - {entity: input_number.hvac_night_temp, min: 50, value: 63}
+            - {entity: input_number.hvac_sleep_target, min: 55, value: 64}
+            - {entity: input_number.hvac_preheat_rate, min: 0.5, value: 3}
+          sequence:
+            - if:
+                - condition: template
+                  value_template: "{{ states(repeat.item.entity) | float(-1) == repeat.item.min }}"
+              then:
+                - action: input_number.set_value
+                  target: {entity_id: "{{ repeat.item.entity }}"}
+                  data: {value: "{{ repeat.item.value }}"}
