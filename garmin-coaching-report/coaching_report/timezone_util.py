@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -11,6 +11,12 @@ DEFAULT_ATHLETE_TIMEZONE = "America/Denver"
 
 def athlete_tz_name(config_tz: str | None = None) -> str:
     return (config_tz or DEFAULT_ATHLETE_TIMEZONE).strip() or DEFAULT_ATHLETE_TIMEZONE
+
+
+def athlete_today(config_tz: str | None = None) -> date:
+    """Today in the athlete's time zone. The containers run on UTC, so
+    date.today() is already tomorrow after 5 PM in Fort Collins."""
+    return datetime.now(ZoneInfo(athlete_tz_name(config_tz))).date()
 
 
 def format_datetime(dt: datetime, tz_name: str) -> str:

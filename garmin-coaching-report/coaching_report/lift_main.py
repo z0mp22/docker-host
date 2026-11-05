@@ -13,7 +13,6 @@ can never affect the mountain report and vice versa.
 import os
 import sys
 import traceback
-from datetime import date
 
 from .config import load_app_config
 from .emailer import save_lift_outputs, send_alert_email
@@ -35,6 +34,7 @@ from .lift_fingerboard import assert_fingerboard_safe, board_blocks, resolve_war
 from .lift_review import enforce_hinge_limits, fingerboard_problems, name_problems, review_plan
 from .lift_safety import assert_session_plan_safe, resolve_banned_exercise_ids
 from .hevy_client import HevyClient
+from .timezone_util import athlete_today
 
 SESSION_TYPES = ("heavy_1h", "light_30m", "shoulder_pt", "fingerboard")
 DEFAULT_SESSION_TYPE = "heavy_1h"
@@ -79,7 +79,7 @@ def main() -> int:
     shoulder_flag = os.environ.get("LIFT_SHOULDER_FLAG", "").strip().lower() in ("1", "true", "yes")
     finger_flag = os.environ.get("LIFT_FINGER_FLAG", "").strip().lower() in ("1", "true", "yes")
     dry_run = os.environ.get("DRY_RUN", "").strip().lower() in ("1", "true", "yes")
-    session_date = date.today()
+    session_date = athlete_today(config.athlete_timezone)
 
     try:
         garmin_client = connect_with_tokens(config.garmin)
