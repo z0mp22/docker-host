@@ -12,6 +12,7 @@ panel turns into a one-tap button.
 from __future__ import annotations
 
 import json
+import math
 import sqlite3
 import statistics
 import sys
@@ -34,15 +35,20 @@ STAT = {
     "t_base": "sensor.tp358s_f429_temperature",
     "t_out": "sensor.outdoor_temperature",
     "early": "sensor.hvac_warm_up_minutes_early",
+    "rh_bed": "sensor.tp358s_1c99_humidity",
+    "rh_base": "sensor.tp358s_f429_humidity",
+    "rh_out": "sensor.outdoor_humidity",
+    "rh_target": "sensor.indoor_humidity_target",
 }
 SUMS = {"heat_h", "fan_h", "therm", "gas_usd", "elec_usd"}
 HELPERS = [
-    "input_number.hvac_blower_kw", "input_number.hvac_furnace_btuh", "input_number.hvac_gas_usd_per_therm",
+    "input_number.hvac_blower_kw", "input_number.hvac_fan_kw", "input_number.hvac_furnace_btuh", "input_number.hvac_gas_usd_per_therm",
     "input_number.fc_rate_winter_on_peak", "input_number.fc_rate_winter_off_peak",
     "input_number.fc_rate_summer_on_peak", "input_number.fc_rate_summer_off_peak",
     "input_number.hvac_day_temp", "input_number.hvac_night_temp", "input_number.hvac_sleep_target",
     "input_number.hvac_preheat_rate", "input_datetime.hvac_setback", "input_datetime.hvac_fan_trial_start",
-    "input_boolean.hvac_schedule", "input_boolean.hvac_fan_trial", "input_boolean.hvac_fan_peak_auto",
+    "input_boolean.hvac_schedule", "input_boolean.hvac_fan_trial", "input_boolean.hvac_smart_fan",
+    "input_number.hvac_rh_target",
 ]
 BALANCE_F = 60  # house needs no heat above ~60 °F outside (sun + people), measured Oct–Nov 2026
 TRIAL_DAYS = 14
@@ -111,6 +117,23 @@ class Recorder:
         except ValueError:
             attrs = {}
         return row[0], attrs
+
+
+def moisture(temp_f, rh):
+    """Humidity ratio, g water per kg dry air, at Fort Collins pressure (~84 kPa)."""
+    if temp_f is None or rh is None:
+        return None
+    c = (temp_f - 32) / 1.8
+    pv = rh / 100 * 0.61094 * math.exp(17.625 * c / (c + 243.04))
+    return 622 * pv / (84.0 - pv)
+
+
+def window_cap(out_f: float) -> int:
+    """Highest indoor RH before double-pane windows fog (same chart as sensor.indoor_humidity_target)."""
+    for limit, cap in ((40, 45), (20, 40), (10, 35), (0, 30), (-10, 25), (-20, 20)):
+        if out_f >= limit:
+            return cap
+    return 15
 
 
 def fnum(v, default=None):
@@ -189,6 +212,9 @@ def main(argv: list[str]) -> int:
     start, end, label = period_bounds(kind, now, h)
 
     blower_kw = fnum(h["input_number.hvac_blower_kw"], 0.5)
+    fan_kw = fnum(h["input_number.hvac_fan_kw"], blower_kw)
+    rh_goal = fnum(h["input_number.hvac_rh_target"], 35)
+    smart = h.get("input_boolean.hvac_smart_fan") == "on"
     furnace = fnum(h["input_number.hvac_furnace_btuh"], 80000)
     price = fnum(h["input_number.hvac_gas_usd_per_therm"], 0.9)
     rates = {
@@ -217,9 +243,7 @@ def main(argv: list[str]) -> int:
         return sum(r[k] or 0 for r in H)
 
     therms, gas_usd, elec_usd, heat_h, fan_h = (total(k) for k in ("therm", "gas_usd", "elec_usd", "heat_h", "fan_h"))
-    fan_usd = sum((r["fan_h"] or 0) * blower_kw * rates[(on_peak(r["t"]), "summer" if 5 <= r["t"].month <= 9 else "winter")] for r in H)
-    fan_peak_usd = sum((r["fan_h"] or 0) * blower_kw * rates[(True, "winter")] for r in H if on_peak(r["t"]) and not 5 <= r["t"].month <= 9)
-    fan_peak_usd -= sum((r["fan_h"] or 0) * blower_kw * rates[(False, "winter")] for r in H if on_peak(r["t"]) and not 5 <= r["t"].month <= 9)
+    fan_usd = sum((r["fan_h"] or 0) * fan_kw * rates[(on_peak(r["t"]), "summer" if 5 <= r["t"].month <= 9 else "winter")] for r in H)
     out_hours = [r for r in H if r["t_out"] is not None]
     hdd = sum(max(0.0, BALANCE_F - r["t_out"]) for r in out_hours) / 24 if out_hours else None
     hdd_full = hdd * len(H) / len(out_hours) if out_hours and len(out_hours) >= 0.8 * len(H) else None
@@ -266,6 +290,15 @@ def main(argv: list[str]) -> int:
     b = burns(rec, recent, end)
     w = [x for x in warmups(rec, start) if x.get("start", "") < end.isoformat()]
 
+    # ---- humidity: bedroom vs the window-safe target; indoor moisture above outdoor -------
+    heat_season = [r for r in H if r["rh_bed"] is not None and r["t_out"] is not None and r["t_out"] < 55]
+    rh_bed = statistics.mean(r["rh_bed"] for r in heat_season) if heat_season else None
+    dry_h = sum(1 for r in heat_season if r["rh_bed"] < (r["rh_target"] if r["rh_target"] is not None else min(rh_goal, window_cap(r["t_out"]))) - 3)
+    fog_h = sum(1 for r in heat_season if r["t_out"] < 20 and r["rh_bed"] > window_cap(r["t_out"]) + 2)
+    excess = [moisture(r["t_bed"], r["rh_bed"]) - moisture(r["t_out"], r["rh_out"])
+              for r in heat_season if None not in (r["t_bed"], r["rh_out"])]
+    fan_share = fan_h / max(1.0, len(H) - heat_h)
+
     metrics = {
         "days": round(days_covered, 1),
         "gas_therms": round(therms, 1), "gas_usd": round(gas_usd, 2),
@@ -284,6 +317,10 @@ def main(argv: list[str]) -> int:
         "warmup_early_median_min": round(statistics.median(x["early_min"] for x in w)) if w else None,
         "warmup_rate": fnum(h["input_number.hvac_preheat_rate"]),
         "fan_mode": climate.get("fan_mode"),
+        "bedroom_rh_avg": round(rh_bed, 1) if rh_bed is not None else None,
+        "dry_hours": dry_h, "window_fog_hours": fog_h,
+        "moisture_excess_gkg": round(statistics.mean(excess), 2) if excess else None,
+        "fan_share": round(fan_share, 2),
     }
 
     S: list[dict] = []
@@ -295,37 +332,51 @@ def main(argv: list[str]) -> int:
     # ---- trial ------------------------------------------------------------------------
     trial = None
     if kind == "trial" or h.get("input_boolean.hvac_fan_trial") == "on":
-        trial = trial_result(rec, h, zone, now, rates, blower_kw)
+        trial = trial_result(rec, h, zone, now, rates, fan_kw)
         if kind == "trial" and trial:
             label = f"fan trial ({trial['days_on']} On days vs {trial['days_auto']} Auto days)"
 
     # ---- rules ------------------------------------------------------------------------
     fan_mode = climate.get("fan_mode")
     fan_month = fan_usd * per_month
+    smart_apply = {"label": "Smart fan", "service": "input_boolean.turn_on", "data": {"entity_id": "input_boolean.hvac_smart_fan"}}
     if trial and trial.get("verdict") and not h.get("input_boolean.hvac_fan_trial") == "on":
-        if trial["recommend"] == "auto":
+        if trial["recommend"] == "smart" and not smart:
+            add("fan_trial", "action", "Let the fan follow humidity", trial["verdict"], trial.get("usd_month_saved"), smart_apply)
+        elif trial["recommend"] == "auto" and not smart:
             add("fan_trial", "action", "Switch the fan to Auto", trial["verdict"], trial.get("usd_month"),
                 {"label": "Fan to Auto", "service": "climate.set_fan_mode", "data": {"entity_id": "climate.thermostat", "fan_mode": "auto"}})
-        elif trial["recommend"] == "peak_auto" and h.get("input_boolean.hvac_fan_peak_auto") != "on":
-            add("fan_trial", "action", "Keep the fan on, but not 5–9 pm on weekdays", trial["verdict"], trial.get("usd_month_peak"),
-                {"label": "Auto on-peak", "service": "input_boolean.turn_on", "data": {"entity_id": "input_boolean.hvac_fan_peak_auto"}})
         else:
-            add("fan_trial", "ok", "Fan trial: keep circulating", trial["verdict"])
+            add("fan_trial", "ok", "Fan trial results", trial["verdict"])
     elif h.get("input_boolean.hvac_fan_trial") == "on" and trial:
         add("fan_trial", "info", f"Fan trial running · day {trial['day'] + 1} of {TRIAL_DAYS}",
             f"So far {trial['days_on']} On days and {trial['days_auto']} Auto days. Results come in a push when it ends.")
-    elif fan_mode == "on" and fan_month >= 5:
-        peak_month = fan_peak_usd * per_month
+    elif fan_mode == "on" and not smart and fan_month >= 3:
         add("fan_cost", "action", f"The fan ran {fan_h:.0f} h on its own",
-            f"Continuous fan cost about ${fan_month:.0f}/month at {blower_kw:.2f} kW, ${peak_month:.0f} of it 5–9 pm on weekdays. "
-            "Auto during those hours keeps most of the mixing for less.", peak_month,
-            {"label": "Auto on-peak", "service": "input_boolean.turn_on", "data": {"entity_id": "input_boolean.hvac_fan_peak_auto"}}
-            if h.get("input_boolean.hvac_fan_peak_auto") != "on" and peak_month >= 1 else None)
+            f"About ${fan_month:.0f}/month at {fan_kw:.2f} kW. The smart fan keeps it running while the air is drier than "
+            f"{rh_goal:.0f}% (so the humidifier works) or the floors drift apart, and lets it rest otherwise.", fan_month * 0.4, smart_apply)
+
+    if rh_bed is not None and len(heat_season) >= 72 and dry_h >= 0.3 * len(heat_season):
+        if fan_share >= 0.6:
+            add("dry_air", "action", f"Bedroom air averaged {rh_bed:.0f}% even with the fan running",
+                f"Below target for {dry_h} of {len(heat_season)} cold hours. The humidifier gets air but isn't adding enough: check "
+                "that its bypass damper is on the winter setting, the water valve is open, its humidistat is above "
+                f"{rh_goal:.0f}%, and the pad isn't scaled (Fort Collins water; replace it each fall).")
+        elif not smart:
+            add("dry_air", "action", f"Bedroom air averaged {rh_bed:.0f}%",
+                f"Below target for {dry_h} of {len(heat_season)} cold hours, with the fan mostly on Auto. The humidifier only "
+                "works while the blower runs; the smart fan runs it when the air is dry.", None, smart_apply)
+    if fog_h >= 6:
+        add("window_fog", "action", f"Too humid for the cold on {fog_h} hours",
+            "Indoor humidity was above what double-pane windows tolerate at those outdoor temperatures, so expect "
+            "condensation on the glass. Turn the humidifier's own humidistat down a notch; the smart fan's target already "
+            "drops with the cold.")
 
     if b and metrics["burn_median_min"] is not None and metrics["burn_median_min"] < 5 and len(b) >= 20:
         add("short_cycles", "action", f"Furnace runs in short bursts ({metrics['burn_median_min']:.1f} min)",
             f"{len(b)} burns in the last {(end - recent).days} days. A gas furnace is least efficient in its first few minutes, "
-            "so set Heat cycle rate to 3 CPH in the thermostat's installer menu (it can't be changed from HA). "
+            "so in the thermostat's installer menu set the heating system type to high-efficiency (90%+) forced air, which is "
+            "3 cycles an hour (it can't be changed from HA). On a two-stage furnace the longer burns still stay on low fire. "
             "Expect ~2–5% less gas and slightly wider swings.", 0.035 * gas_usd * per_month)
 
     if night_rows and bed_avg is not None and len(warm_nights) >= max(3, len(night_rows) // 2):
@@ -372,10 +423,10 @@ def main(argv: list[str]) -> int:
             f"{eff:.3f} therms per degree-day vs {prev_eff:.3f} the month before. A clogged filter, a door or window left open, "
             "or a change in setpoints are the usual causes. Check the filter first.")
 
-    if abs(blower_kw - 0.5) < 1e-6 and abs(furnace - 80000) < 1 and h.get("input_number.hvac_blower_kw") is not None:
-        add("assumptions", "info", "Costs still use default equipment numbers",
-            "Enter the furnace's gas input (BTU/h) and blower size from its rating plate under “How costs are estimated”; "
-            "every dollar figure here scales with them.")
+    if abs(furnace - 80000) < 1 and h.get("input_number.hvac_furnace_btuh") is not None:
+        add("assumptions", "info", "Gas cost still uses the default furnace size",
+            "Enter the furnace's gas input (BTU/h) from its rating plate under “How costs are estimated”; every gas "
+            "figure here scales with it.")
 
     order = {"action": 0, "info": 1, "ok": 2}
     S.sort(key=lambda s: (order[s["kind"]], -(s["usd_month"] or 0)))
@@ -406,18 +457,19 @@ def main(argv: list[str]) -> int:
     return 0
 
 
-def trial_result(rec: Recorder, h: dict, zone, now: datetime, rates, blower_kw) -> dict | None:
+def trial_result(rec: Recorder, h: dict, zone, now: datetime, rates, fan_kw) -> dict | None:
     d = h.get("input_datetime.hvac_fan_trial_start")
     if not d or not d[:1].isdigit():
         return None
     start = datetime.strptime(d, "%Y-%m-%d").replace(tzinfo=zone)
     end = min(now, start + timedelta(days=TRIAL_DAYS))
-    s = {k: rec.hourly(STAT[k], start, end, k in SUMS) for k in ("fan_h", "therm", "t_mid", "t_bed", "t_base", "t_out")}
+    s = {k: rec.hourly(STAT[k], start, end, k in SUMS) for k in ("fan_h", "therm", "t_mid", "t_bed", "t_base", "t_out", "rh_bed", "rh_out")}
     days: dict = {}
     for ts in s["fan_h"]:
         t = datetime.fromtimestamp(ts, zone)
         days.setdefault(t.date(), []).append({k: s[k].get(ts) for k in s} | {"t": t})
     groups = {"on": [], "auto": []}
+    avg_of = lambda v: statistics.mean([x for x in v if x is not None]) if any(x is not None for x in v) else None
     for day, rows in sorted(days.items()):
         if len(rows) < 22:
             continue
@@ -436,8 +488,11 @@ def trial_result(rec: Recorder, h: dict, zone, now: datetime, rates, blower_kw) 
             "bed_minus_mid": avg(lambda r: r["t_bed"] - r["t_mid"]),
             "bed_night": statistics.mean(night) if night else None,
             "therms": sum(r["therm"] or 0 for r in rows), "hdd": hdd,
-            "fan_usd": sum((r["fan_h"] or 0) * blower_kw * rates[(on_peak(r["t"]), "winter")] for r in rows),
-            "fan_peak_extra": sum((r["fan_h"] or 0) * blower_kw * (rates[(True, "winter")] - rates[(False, "winter")]) for r in rows if on_peak(r["t"])),
+            "fan_usd": sum((r["fan_h"] or 0) * fan_kw * rates[(on_peak(r["t"]), "winter")] for r in rows),
+            "rh": avg_of([r["rh_bed"] for r in rs]),
+            # Moisture above outdoor air, so a dry or damp day outside doesn't decide it.
+            "excess": avg_of([moisture(r["t_bed"], r["rh_bed"]) - moisture(r["t_out"], r["rh_out"])
+                              for r in rs if None not in (r["t_bed"], r["rh_bed"], r["t_out"], r["rh_out"])]),
         })
 
     def g(mode, key):
@@ -455,7 +510,9 @@ def trial_result(rec: Recorder, h: dict, zone, now: datetime, rates, blower_kw) 
         "bed_mid_on": g("on", "bed_minus_mid"), "bed_mid_auto": g("auto", "bed_minus_mid"),
         "bed_night_on": g("on", "bed_night"), "bed_night_auto": g("auto", "bed_night"),
         "therm_per_hdd_on": eff("on"), "therm_per_hdd_auto": eff("auto"),
-        "fan_usd_day_on": g("on", "fan_usd"), "fan_peak_extra_day_on": g("on", "fan_peak_extra"),
+        "fan_usd_day_on": g("on", "fan_usd"),
+        "rh_on": g("on", "rh"), "rh_auto": g("auto", "rh"),
+        "excess_on": g("on", "excess"), "excess_auto": g("auto", "excess"),
         "verdict": None, "recommend": None,
     }
     for k, v in list(res.items()):
@@ -470,19 +527,28 @@ def trial_result(rec: Recorder, h: dict, zone, now: datetime, rates, blower_kw) 
         gas_note = f" Gas per cold degree was {abs(diff):.0f}% {'higher' if diff > 0 else 'lower'} on Auto days."
     fan_month = (res["fan_usd_day_on"] or 0) * 30.4
     res["usd_month"] = round(fan_month, 2)
-    res["usd_month_peak"] = round((res["fan_peak_extra_day_on"] or 0) * 30.4 * 5 / 7, 2)
+    # The smart fan runs roughly when it's needed; assume it saves about half the fan's cost.
+    res["usd_month_saved"] = round(fan_month * 0.5, 2)
+    # Humidity: compare moisture above outdoor air, then express it as RH points at 68 °F.
+    drier = None
+    if res["excess_on"] is not None and res["excess_auto"] is not None:
+        drier = (res["excess_on"] - res["excess_auto"]) * 6.0  # ~6 % RH per g/kg at 68 °F, 5,000 ft
+        res["rh_drop_auto"] = round(drier, 1)
+    hum = (f" Bedroom humidity: {res['rh_on']:.0f}% with the fan On, {res['rh_auto']:.0f}% on Auto"
+           + (f" (about {drier:.0f} points drier on Auto once the weather is accounted for)." if drier is not None else ".")
+           if res["rh_on"] is not None and res["rh_auto"] is not None else "")
     base = (f"Bedroom-to-basement gap: {res['spread_on']:.1f}° with the fan On, {res['spread_auto']:.1f}° on Auto "
-            f"({res['days_on']} vs {res['days_auto']} days). Bedroom overnight: {res['bed_night_on'] or 0:.1f}° vs {res['bed_night_auto'] or 0:.1f}°.")
-    if extra < 1.5:
-        res["recommend"] = "auto"
-        res["verdict"] = f"Auto kept the floors almost as even (+{max(extra, 0):.1f}°) and saves about ${fan_month:.0f}/month. {base}{gas_note}"
-    elif extra < 3:
-        res["recommend"] = "peak_auto"
-        res["verdict"] = (f"The fan evens the floors by {extra:.1f}°. Keeping it but switching to Auto 5–9 pm on weekdays "
-                          f"saves about ${res['usd_month_peak']:.0f}/month. {base}{gas_note}")
+            f"({res['days_on']} vs {res['days_auto']} days).{hum}")
+    if (drier is not None and drier >= 2) or extra >= 1.5:
+        res["recommend"] = "smart"
+        why = " and ".join(x for x in (
+            f"the air was {drier:.0f} points drier" if drier is not None and drier >= 2 else "",
+            f"the floors were {extra:.1f}° further apart" if extra >= 1.5 else "") if x)
+        res["verdict"] = (f"Without the fan {why}, so it earns its ~${fan_month:.0f}/month when it's needed. The smart fan runs it "
+                          f"only then. {base}{gas_note}")
     else:
-        res["recommend"] = "on"
-        res["verdict"] = f"The fan really does even out the house ({extra:.1f}° difference), so it's worth its ~${fan_month:.0f}/month. {base}{gas_note}"
+        res["recommend"] = "auto"
+        res["verdict"] = f"Auto kept the house about as even and as humid, and saves about ${fan_month:.0f}/month. {base}{gas_note}"
     return res
 
 

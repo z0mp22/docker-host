@@ -51,7 +51,10 @@ const E = {
   warmStart: "sensor.hvac_warm_up_start",
   trial: "input_boolean.hvac_fan_trial",
   trialStart: "input_datetime.hvac_fan_trial_start",
-  peakAuto: "input_boolean.hvac_fan_peak_auto",
+  smartFan: "input_boolean.hvac_smart_fan",
+  fanWanted: "binary_sensor.hvac_fan_wanted",
+  rhTarget: "sensor.indoor_humidity_target",
+  bedRH: "sensor.tp358s_1c99_humidity",
   advice: "sensor.hvac_advice",
   adviceRefresh: "script.hvac_advice_refresh",
 };
@@ -70,6 +73,7 @@ const STAT_IDS = [E.gasCost, E.elecOn, E.elecOff, E.therms, E.kwhOn, E.kwhOff];
 
 const ASSUMPTIONS = [
   { entity: "input_number.hvac_ac_kw", label: "AC condenser", unit: "kW", step: 0.1, digits: 1, help: "Condenser nameplate: RLA × 240 V ÷ 1000" },
+  { entity: "input_number.hvac_fan_kw", label: "Blower, fan only", unit: "kW", step: 0.01, digits: 2, help: "Continuous fan; the XV95's variable-speed blower is ~0.1–0.2 kW" },
   { entity: "input_number.hvac_blower_kw", label: "Furnace blower", unit: "kW", step: 0.05, digits: 2, help: "Runs whenever heating, cooling or fan-only is on" },
   { entity: "input_number.hvac_furnace_btuh", label: "Furnace gas input", unit: "BTU/h", step: 5000, digits: 0, help: "“Input” on the furnace rating plate" },
   { entity: "input_number.hvac_gas_usd_per_therm", label: "Gas price per therm", unit: "$/therm", step: 0.01, digits: 3, help: "Xcel usage charges + taxes; refreshed monthly, edits hold until then" },
@@ -859,8 +863,13 @@ class ClimatePanel extends HTMLElement {
       trial = day == null || day < 0
         ? `<div class="trial">${svg("mdiFan")}<span>Fan trial starts ${esc(d0 || "soon")}. ${why}</span></div>`
         : `<div class="trial">${svg("mdiFan")}<span>Fan trial · day ${Math.min(day + 1, TRIAL_DAYS)} of ${TRIAL_DAYS} · fan <b>${day % 2 === 0 ? "Auto" : "On"}</b> today. ${why}</span></div>`;
-    } else if (s[E.peakAuto]?.state === "on") {
-      trial = `<div class="trial">${svg("mdiFan")}<span>Fan circulates, except Auto 5–9 pm on weekdays (peak pricing).</span></div>`;
+    } else if (s[E.smartFan]?.state === "on") {
+      const want = s[E.fanWanted];
+      const rh = num(s[E.bedRH]);
+      const tgt = num(s[E.rhTarget]);
+      const why = want?.attributes?.reason === "dry" ? "the air is dry, so the humidifier needs it"
+        : want?.attributes?.reason === "uneven" ? "the floors have drifted apart" : "humidity and floors are fine";
+      trial = `<div class="trial">${svg("mdiFan")}<span>Smart fan · <b>${want?.state === "on" ? "On" : "Auto"}</b> — ${esc(why)}${rh != null && tgt != null ? ` (bedroom ${Math.round(rh)}%, target ${Math.round(tgt)}%)` : ""}.</span></div>`;
     }
     return `
       <section class="card sched">
@@ -1325,7 +1334,7 @@ class ClimatePanel extends HTMLElement {
     });
     const fmt = (x) => (x.value == null ? "—" : x.unit === "$/therm" ? `$${x.value.toFixed(3)}` : fmtNum(x.value, x.digits));
     const summary = vals.every((x) => x.value != null)
-      ? `AC ${fmt(vals[0])} kW · blower ${fmt(vals[1])} kW · furnace ${Math.round(vals[2].value / 1000)}k BTU/h · gas ${fmt(vals[3])}/therm`
+      ? `AC ${fmt(vals[0])} kW · fan ${fmt(vals[1])} / blower ${fmt(vals[2])} kW · furnace ${Math.round(vals[3].value / 1000)}k BTU/h · gas ${fmt(vals[4])}/therm`
       : "Equipment numbers aren't loaded — check packages/hvac_cost.yaml";
     const body = this._showAssumptions
       ? `${vals

@@ -15,8 +15,16 @@
 #
 # Fan trial (input_boolean.hvac_fan_trial): 14 days from input_datetime.hvac_fan_trial_start,
 # Auto on even days and On on odd days, switched at midnight, so both settings see the same
-# weather. Afterwards the fan goes back to On and the advisor pushes the comparison. The advisor
-# tells days apart by fan-only runtime, so nothing extra is logged.
+# weather. Afterwards the fan goes back to On (or to the smart fan, if that's on) and the advisor
+# pushes the comparison: floor spread, bedroom humidity, gas and fan cost. The advisor tells days
+# apart by fan-only runtime, so nothing extra is logged.
+#
+# Smart fan (input_boolean.hvac_smart_fan): the whole-house humidifier only works while the
+# blower runs, so the fan is On while the bedroom is drier than the humidity target or the
+# bedroom is more than the spread limit warmer than the basement, and Auto otherwise. The target
+# is capped by outdoor temperature (the usual window-condensation chart) so cold snaps don't fog
+# the windows. Hysteresis ±1 % RH / 0.5 °F plus 10/15 min delays keep it from flapping, since the
+# Honeywell cloud is slow. It stands aside during the trial.
 #
 # Advisor: shell/hvac_advisor.py reads the recorder DB read-only (long-term stats for the
 # month, the last 10 days of states for burn lengths and warm-ups), applies fixed rules and
@@ -32,9 +40,9 @@ input_boolean:
   hvac_fan_trial:
     name: "HVAC: fan trial running"
     icon: mdi:fan-clock
-  hvac_fan_peak_auto:
-    name: "HVAC: fan on Auto during on-peak hours"
-    icon: mdi:fan-clock
+  hvac_smart_fan:
+    name: "HVAC: smart fan (humidity + floors)"
+    icon: mdi:fan-auto
 
 input_datetime:
   hvac_wake_weekday:
@@ -78,6 +86,22 @@ input_number:
     min: 55
     max: 72
     step: 1
+    unit_of_measurement: "°F"
+    mode: box
+  hvac_rh_target:
+    name: "HVAC: indoor humidity target"
+    icon: mdi:water-percent
+    min: 25
+    max: 50
+    step: 1
+    unit_of_measurement: "%"
+    mode: box
+  hvac_spread_limit:
+    name: "HVAC: bedroom-over-basement limit"
+    icon: mdi:home-thermometer-outline
+    min: 2
+    max: 12
+    step: 0.5
     unit_of_measurement: "°F"
     mode: box
   hvac_preheat_rate:
@@ -150,6 +174,23 @@ template:
           {% set hours = [gap / rate + 0.25, 3] | min %}
           {{ (wake - timedelta(hours=hours)).isoformat() }}
 
+      # Highest indoor RH that won't fog double-pane windows at this outdoor temperature,
+      # never above the comfort target.
+      - name: Indoor humidity target
+        unique_id: indoor_humidity_target
+        unit_of_measurement: "%"
+        state_class: measurement
+        icon: mdi:water-percent
+        availability: "{{ has_value('input_number.hvac_rh_target') }}"
+        state: >
+          {% set t = states('sensor.outdoor_temperature') | float(50) %}
+          {% set cap = 45 if t >= 40 else 40 if t >= 20 else 35 if t >= 10 else 30 if t >= 0 else 25 if t >= -10 else 20 if t >= -20 else 15 %}
+          {{ [states('input_number.hvac_rh_target') | float(35), cap] | min | round(0) }}
+        attributes:
+          window_cap: >
+            {% set t = states('sensor.outdoor_temperature') | float(50) %}
+            {{ 45 if t >= 40 else 40 if t >= 20 else 35 if t >= 10 else 30 if t >= 0 else 25 if t >= -10 else 20 if t >= -20 else 15 }}
+
       # Minutes the last finished warm-up reached the day temperature before its warm-by time
       # (negative = late). Kept as a statistic so the advisor can look back a whole month.
       - name: HVAC warm-up minutes early
@@ -161,6 +202,40 @@ template:
           {% set w = states('input_text.hvac_warmup') | from_json(default={}) %}
           {{ w.done | default(false) and w.early_min is number }}
         state: "{{ (states('input_text.hvac_warmup') | from_json(default={})).early_min }}"
+
+  - binary_sensor:
+      # Whether the smart fan wants the blower running. Humidity only counts in heat mode (the
+      # humidifier is off otherwise); the floor spread counts year-round.
+      - name: HVAC fan wanted
+        unique_id: hvac_fan_wanted
+        icon: mdi:fan
+        delay_on: "00:10:00"
+        delay_off: "00:15:00"
+        availability: "{{ has_value('sensor.tp358s_1c99_humidity') or has_value('sensor.tp358s_1c99_temperature') }}"
+        state: >
+          {% set was = this.state == 'on' %}
+          {% set rh = states('sensor.tp358s_1c99_humidity') | float(none) %}
+          {% set tgt = states('sensor.indoor_humidity_target') | float(none) %}
+          {% set bed = states('sensor.tp358s_1c99_temperature') | float(none) %}
+          {% set base = states('sensor.tp358s_f429_temperature') | float(none) %}
+          {% set lim = states('input_number.hvac_spread_limit') | float(5) %}
+          {% set dry = is_state('climate.thermostat', 'heat') and rh is not none and tgt is not none
+                       and rh < tgt + (1 if was else -1) %}
+          {% set uneven = bed is not none and base is not none and (bed - base) > lim - (0.5 if was else 0) %}
+          {{ dry or uneven }}
+        attributes:
+          reason: >
+            {% set rh = states('sensor.tp358s_1c99_humidity') | float(none) %}
+            {% set tgt = states('sensor.indoor_humidity_target') | float(none) %}
+            {% set bed = states('sensor.tp358s_1c99_temperature') | float(none) %}
+            {% set base = states('sensor.tp358s_f429_temperature') | float(none) %}
+            {% if is_state('climate.thermostat', 'heat') and rh is not none and tgt is not none and rh < tgt %}dry
+            {% elif bed is not none and base is not none and (bed - base) > states('input_number.hvac_spread_limit') | float(5) %}uneven
+            {% else %}fine{% endif %}
+          spread: >
+            {% set bed = states('sensor.tp358s_1c99_temperature') | float(none) %}
+            {% set base = states('sensor.tp358s_f429_temperature') | float(none) %}
+            {{ (bed - base) | round(1) if bed is not none and base is not none else none }}
 
 shell_command:
   # period: last_month | month_to_date | trial (the script rejects anything else).
@@ -468,10 +543,16 @@ automation:
             sequence:
               - action: input_boolean.turn_off
                 target: {entity_id: input_boolean.hvac_fan_trial}
-              - action: climate.set_fan_mode
-                target: {entity_id: climate.thermostat}
-                data: {fan_mode: "on"}
-                continue_on_error: true
+              # The smart fan picks up from here on its own (it triggers on the trial ending).
+              - if:
+                  - condition: state
+                    entity_id: input_boolean.hvac_smart_fan
+                    state: "off"
+                then:
+                  - action: climate.set_fan_mode
+                    target: {entity_id: climate.thermostat}
+                    data: {fan_mode: "on"}
+                    continue_on_error: true
               - action: shell_command.hvac_advice
                 data: {period: trial}
                 response_variable: result
@@ -483,7 +564,7 @@ automation:
                   title: Fan trial finished
                   message: >
                     {% set t = state_attr('sensor.hvac_advice', 'trial') %}
-                    {{ t.verdict if t and t.verdict else 'Results are on the Climate panel.' }} The fan is back on On until you choose.
+                    {{ t.verdict if t and t.verdict else 'Results are on the Climate panel.' }} {{ 'The smart fan is back in charge.' if is_state('input_boolean.hvac_smart_fan', 'on') else 'The fan is back on On until you choose.' }}
                   tag: hvac-fan-trial
                   data:
                     clickAction: /hvac
@@ -498,30 +579,40 @@ automation:
                 target: {entity_id: climate.thermostat}
                 data: {fan_mode: "{{ want }}"}
 
-  # Optional compromise if the trial says the fan earns its keep: circulate except 5–9 pm weekdays.
-  - id: hvac_fan_peak_auto
-    alias: "HVAC fan: Auto during on-peak hours"
+  - id: hvac_smart_fan
+    alias: "HVAC smart fan: On when dry or uneven, else Auto"
     mode: queued
+    max: 3
     triggers:
       - trigger: state
-        entity_id: sensor.fc_electric_tariff
-        to: [on_peak, off_peak]
+        entity_id: binary_sensor.hvac_fan_wanted
+        to: ["on", "off"]
       - trigger: state
-        entity_id: input_boolean.hvac_fan_peak_auto
+        entity_id: input_boolean.hvac_smart_fan
+        to: "on"
+      - trigger: state
+        entity_id: input_boolean.hvac_fan_trial
+        to: "off"
+      - trigger: homeassistant
+        event: start
     conditions:
+      - condition: state
+        entity_id: input_boolean.hvac_smart_fan
+        state: "on"
       - condition: state
         entity_id: input_boolean.hvac_fan_trial
         state: "off"
       - condition: template
-        value_template: "{{ trigger.entity_id == 'input_boolean.hvac_fan_peak_auto' or is_state('input_boolean.hvac_fan_peak_auto', 'on') }}"
+        value_template: "{{ states('binary_sensor.hvac_fan_wanted') in ['on', 'off'] and not is_state('climate.thermostat', 'unavailable') }}"
     actions:
       - variables:
-          want: "{{ 'auto' if is_state('input_boolean.hvac_fan_peak_auto', 'on') and is_state('sensor.fc_electric_tariff', 'on_peak') else 'on' }}"
+          want: "{{ 'on' if is_state('binary_sensor.hvac_fan_wanted', 'on') else 'auto' }}"
       - condition: template
         value_template: "{{ state_attr('climate.thermostat', 'fan_mode') != want }}"
       - action: climate.set_fan_mode
         target: {entity_id: climate.thermostat}
         data: {fan_mode: "{{ want }}"}
+        continue_on_error: true
 
   - id: hvac_advice_monthly
     alias: "HVAC advice: monthly suggestions"
@@ -581,6 +672,8 @@ automation:
             - {entity: input_number.hvac_night_temp, min: 50, value: 63}
             - {entity: input_number.hvac_sleep_target, min: 55, value: 64}
             - {entity: input_number.hvac_preheat_rate, min: 0.5, value: 3}
+            - {entity: input_number.hvac_rh_target, min: 25, value: 35}
+            - {entity: input_number.hvac_spread_limit, min: 2, value: 6}
           sequence:
             - if:
                 - condition: template
