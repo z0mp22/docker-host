@@ -1,5 +1,6 @@
 // Climate panel: Honeywell thermostat state plus what the HVAC is costing at Fort Collins ToD rates.
 // Cost sensors come from packages/hvac_cost.yaml; prices from custom_templates/fc_tod.jinja.
+// Schedule, fan trial and monthly suggestions come from packages/hvac_schedule.yaml.
 
 const ICONS = {
   mdiThermostat: "M16.95,16.95L14.83,14.83C15.55,14.1 16,13.1 16,12C16,11.26 15.79,10.57 15.43,10L17.6,7.81C18.5,9 19,10.43 19,12C19,13.93 18.22,15.68 16.95,16.95M12,5C13.57,5 15,5.5 16.19,6.4L14,8.56C13.43,8.21 12.74,8 12,8A4,4 0 0,0 8,12C8,13.1 8.45,14.1 9.17,14.83L7.05,16.95C5.78,15.68 5,13.93 5,12A7,7 0 0,1 12,5M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12C22,6.47 17.5,2 12,2Z",
@@ -17,6 +18,8 @@ const ICONS = {
   mdiFlash: "M7,2V13H10V22L17,10H13L17,2H7Z",
   mdiInformationOutline: "M11,9H13V7H11M12,20C7.59,20 4,16.41 4,12C4,7.59 7.59,4 12,4C16.41,4 20,7.59 20,12C20,16.41 16.41,20 12,20M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M11,17H13V11H11V17Z",
   mdiClockOutline: "M12,20A8,8 0 0,0 20,12A8,8 0 0,0 12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20M12,2A10,10 0 0,1 22,12A10,10 0 0,1 12,22C6.47,22 2,17.5 2,12A10,10 0 0,1 12,2M12.5,7V12.25L17,14.92L16.25,16.15L11,13V7H12.5Z",
+  mdiCalendarClock: "M15,13H16.5V15.82L18.94,17.23L18.19,18.53L15,16.69V13M19,8H5V19H9.67C9.24,18.09 9,17.07 9,16A7,7 0 0,1 16,9C17.07,9 18.09,9.24 19,9.67V8M5,21C3.89,21 3,20.1 3,19V5C3,3.89 3.89,3 5,3H6V1H8V3H16V1H18V3H19A2,2 0 0,1 21,5V11.1C22.24,12.36 23,14.09 23,16A7,7 0 0,1 16,23C14.09,23 12.36,22.24 11.1,21H5M16,11.15A4.85,4.85 0 0,0 11.15,16C11.15,18.68 13.32,20.85 16,20.85A4.85,4.85 0 0,0 20.85,16C20.85,13.32 18.68,11.15 16,11.15Z",
+  mdiLightbulbOnOutline: "M20,11H23V13H20V11M1,11H4V13H1V11M13,1V4H11V1H13M4.92,3.5L7.05,5.64L5.63,7.05L3.5,4.93L4.92,3.5M16.95,5.63L19.07,3.5L20.5,4.93L18.37,7.05L16.95,5.63M12,6A6,6 0 0,1 18,12C18,14.22 16.79,16.16 15,17.2V19A1,1 0 0,1 14,20H10A1,1 0 0,1 9,19V17.2C7.21,16.16 6,14.22 6,12A6,6 0 0,1 12,6M14,21V22A1,1 0 0,1 13,23H11A1,1 0 0,1 10,22V21H14M11,18H13V15.87C14.73,15.43 16,13.86 16,12A4,4 0 0,0 12,8A4,4 0 0,0 8,12C8,13.86 9.27,15.43 11,15.87V18Z",
   mdiLinkVariantOff: "M2,5.27L3.28,4L20,20.72L18.73,22L13.9,17.17L11.29,19.78C9.34,21.73 6.17,21.73 4.22,19.78C2.27,17.83 2.27,14.66 4.22,12.71L5.71,11.22C5.7,12.04 5.83,12.86 6.11,13.65L5.64,14.12C4.46,15.29 4.46,17.19 5.64,18.36C6.81,19.54 8.71,19.54 9.88,18.36L12.5,15.76L10.88,14.15C10.87,14.39 10.77,14.64 10.59,14.83C10.2,15.22 9.56,15.22 9.17,14.83C8.12,13.77 7.63,12.37 7.72,11L2,5.27M12.71,4.22C14.66,2.27 17.83,2.27 19.78,4.22C21.73,6.17 21.73,9.34 19.78,11.29L18.29,12.78C18.3,11.96 18.17,11.14 17.89,10.36L18.36,9.88C19.54,8.71 19.54,6.81 18.36,5.64C17.19,4.46 15.29,4.46 14.12,5.64L10.79,8.97L9.38,7.55L12.71,4.22M13.41,9.17C13.8,8.78 14.44,8.78 14.83,9.17C16.2,10.54 16.61,12.5 16.06,14.23L14.28,12.46C14.23,11.78 13.94,11.11 13.41,10.59C13,10.2 13,9.56 13.41,9.17Z",
 };
 
@@ -35,12 +38,43 @@ const E = {
   fanH: "sensor.hvac_fan_runtime_monthly",
   activity: "sensor.hvac_activity",
   pricesStatus: "input_text.hvac_prices_status",
+  // packages/hvac_schedule.yaml
+  sched: "input_boolean.hvac_schedule",
+  phase: "input_select.hvac_schedule_phase",
+  wakeWd: "input_datetime.hvac_wake_weekday",
+  wakeWe: "input_datetime.hvac_wake_weekend",
+  setback: "input_datetime.hvac_setback",
+  dayT: "input_number.hvac_day_temp",
+  nightT: "input_number.hvac_night_temp",
+  rate: "input_number.hvac_preheat_rate",
+  warmBy: "sensor.hvac_warm_by",
+  warmStart: "sensor.hvac_warm_up_start",
+  trial: "input_boolean.hvac_fan_trial",
+  trialStart: "input_datetime.hvac_fan_trial_start",
+  smartFan: "input_boolean.hvac_smart_fan",
+  fanWanted: "binary_sensor.hvac_fan_wanted",
+  rhTarget: "sensor.indoor_humidity_target",
+  bedRH: "sensor.tp358s_1c99_humidity",
+  advice: "sensor.hvac_advice",
+  adviceRefresh: "script.hvac_advice_refresh",
 };
+
+const SCHEDULE_ROWS = [
+  { entity: E.wakeWd, kind: "time", label: "Warm by · Mon–Fri", help: "Starts early enough to be there by then" },
+  { entity: E.wakeWe, kind: "time", label: "Warm by · Sat–Sun", help: "" },
+  { entity: E.setback, kind: "time", label: "Cool down at", help: "Night temperature from here until the warm-up" },
+  { entity: E.dayT, kind: "temp", label: "Day", help: "" },
+  { entity: E.nightT, kind: "temp", label: "Night", help: "" },
+];
+// Advice "apply" blocks come from shell/hvac_advisor.py; only these services may be called.
+const APPLY_OK = new Set(["climate.set_fan_mode", "input_boolean.turn_on", "input_number.set_value", "input_datetime.set_datetime"]);
+const TRIAL_DAYS = 14;
 const STAT_IDS = [E.gasCost, E.elecOn, E.elecOff, E.therms, E.kwhOn, E.kwhOff];
 
 const ASSUMPTIONS = [
   { entity: "input_number.hvac_ac_kw", label: "AC condenser", unit: "kW", step: 0.1, digits: 1, help: "Condenser nameplate: RLA × 240 V ÷ 1000" },
-  { entity: "input_number.hvac_blower_kw", label: "Furnace blower", unit: "kW", step: 0.05, digits: 2, help: "Runs whenever heating, cooling or fan-only is on" },
+  { entity: "input_number.hvac_fan_kw", label: "Blower, fan only", unit: "kW", step: 0.01, digits: 2, help: "Continuous fan; the XV95's variable-speed blower is ~0.1–0.2 kW" },
+  { entity: "input_number.hvac_blower_kw", label: "Furnace blower", unit: "kW", step: 0.05, digits: 2, help: "While heating or cooling (fan-only uses the row above)" },
   { entity: "input_number.hvac_furnace_btuh", label: "Furnace gas input", unit: "BTU/h", step: 5000, digits: 0, help: "“Input” on the furnace rating plate" },
   { entity: "input_number.hvac_gas_usd_per_therm", label: "Gas price per therm", unit: "$/therm", step: 0.01, digits: 3, help: "Xcel usage charges + taxes; refreshed monthly, edits hold until then" },
 ];
@@ -181,10 +215,12 @@ h1 { margin: 0; font-size: 34px; font-weight: 700; letter-spacing: -0.01em; line
 .col { display: flex; flex-direction: column; gap: 22px; min-width: 0; }
 .card { background: linear-gradient(180deg, var(--card-2), var(--card)); border: 1px solid var(--line); border-radius: 30px; }
 .hero { order: 1; padding: 30px 28px 26px; }
-.month { order: 2; padding: 24px 28px; }
-.hist { order: 3; padding: 24px 28px; }
-.days { order: 4; padding: 24px 28px; }
-.assume { order: 5; padding: 8px 12px; }
+.sched { order: 2; padding: 24px 28px; }
+.advice { order: 3; padding: 24px 28px; }
+.month { order: 4; padding: 24px 28px; }
+.hist { order: 5; padding: 24px 28px; }
+.days { order: 6; padding: 24px 28px; }
+.assume { order: 7; padding: 8px 12px; }
 
 .card-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
 .eyebrow { font-size: 13px; letter-spacing: 0.12em; font-weight: 600; color: var(--muted); text-transform: uppercase; }
@@ -311,6 +347,37 @@ th { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: 
 .stepper.sm .val span { display: block; font-size: 11px; color: var(--muted); }
 .as-foot { padding: 4px 12px 14px; }
 
+/* Schedule */
+.toggle { display: inline-flex; align-items: center; gap: 10px; height: 40px; padding: 0 6px 0 14px; border-radius: 14px; background: #1a2435; border: 1px solid var(--line); font-weight: 600; font-size: 15px; color: #c3cedd; }
+.toggle i { width: 44px; height: 26px; border-radius: 13px; background: #2a364a; position: relative; transition: background .15s; }
+.toggle i::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #8593a8; transition: transform .15s, background .15s; }
+.toggle.on { color: var(--text); }
+.toggle.on i { background: rgba(34, 197, 94, 0.35); }
+.toggle.on i::after { transform: translateX(18px); background: var(--green); }
+.toggle:disabled { opacity: 0.45; }
+.sched-rows { margin-top: 10px; }
+.sched-rows .as-row { padding: 10px 0; }
+.sched-rows .as-row + .as-row { border-top: 1px solid var(--line); }
+.sched-next { margin-top: 14px; padding: 14px 16px; border-radius: 16px; background: #1a2435; font-size: 15px; line-height: 1.45; color: #c3cedd; }
+.sched-next b { color: var(--text); font-weight: 600; }
+.trial { margin-top: 12px; display: flex; gap: 10px; align-items: flex-start; font-size: 14px; color: var(--muted); line-height: 1.45; }
+.trial .ic { width: 20px; height: 20px; color: var(--accent); margin-top: 1px; }
+
+/* Suggestions */
+.adv-sum { margin-top: 10px; font-size: 17px; color: #c3cedd; line-height: 1.4; }
+.tips { margin-top: 14px; display: flex; flex-direction: column; }
+.tip-row { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto; gap: 12px; padding: 14px 0; align-items: start; }
+.tip-row + .tip-row { border-top: 1px solid var(--line); }
+.tip-row .k { width: 10px; height: 10px; border-radius: 50%; margin-top: 7px; background: #64748b; }
+.tip-row .k.action { background: var(--amber); }
+.tip-row .k.ok { background: var(--green); }
+.tip-title { font-size: 17px; font-weight: 600; line-height: 1.35; }
+.tip-detail { margin-top: 4px; font-size: 14px; color: var(--muted); line-height: 1.5; }
+.tip-usd { font-size: 15px; font-weight: 600; color: #ffe1ad; white-space: nowrap; font-variant-numeric: tabular-nums; padding-top: 2px; }
+.apply { margin-top: 10px; height: 40px; padding: 0 16px; border-radius: 13px; background: #222e42; border: 1px solid rgba(238, 243, 250, 0.22); font-weight: 600; font-size: 15px; }
+.apply:disabled { opacity: 0.6; }
+.apply.done { border-color: rgba(34, 197, 94, 0.45); color: #b9f5cf; }
+
 .toast { position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%); padding: 14px 20px; border-radius: 14px; background: #3a1d24; border: 1px solid rgba(240,97,109,0.5); color: #ffd3d7; z-index: 10; max-width: 90vw; }
 
 @container (max-width: 980px) {
@@ -332,7 +399,14 @@ th { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: 
   .grid { gap: 14px; }
   .card { border-radius: 24px; }
   .hero { padding: 20px 16px 18px; }
-  .month, .hist, .days { padding: 18px 16px; }
+  .month, .hist, .days, .sched, .advice { padding: 18px 16px; }
+  .toggle { height: 36px; font-size: 14px; }
+  .sched-next { font-size: 13.5px; padding: 12px 14px; }
+  .adv-sum { font-size: 15px; }
+  .tip-row { gap: 10px; padding: 12px 0; }
+  .tip-title { font-size: 15px; }
+  .tip-detail { font-size: 13px; }
+  .tip-usd { font-size: 13.5px; }
   .assume { padding: 4px 4px; }
   .temp { font-size: 52px; }
   .temp-label { font-size: 15px; padding-bottom: 4px; }
@@ -397,6 +471,9 @@ class ClimatePanel extends HTMLElement {
     this._history = null;
     this._busy = false;
     this._toast = "";
+    this._sched = {};
+    this._applied = new Set();
+    this._refreshing = false;
     this.shadowRoot.addEventListener("click", (e) => this._onClick(e));
   }
 
@@ -555,6 +632,19 @@ class ClimatePanel extends HTMLElement {
         this._showTable = !this._showTable;
         this._render();
         return;
+      case "sched-toggle":
+        this._toggleSchedule();
+        return;
+      case "sc-inc":
+      case "sc-dec":
+        this._bumpSchedule(el.dataset.entity, el.dataset.action === "sc-inc" ? 1 : -1);
+        return;
+      case "apply":
+        this._applyTip(el.dataset.id);
+        return;
+      case "advice-refresh":
+        this._refreshAdvice();
+        return;
       default:
         return;
     }
@@ -628,6 +718,207 @@ class ClimatePanel extends HTMLElement {
       }
     }, 700);
     this._render();
+  }
+
+  _toggleSchedule() {
+    const st = this._hass.states[E.sched];
+    if (!st || this._busy) return;
+    const on = st.state === "on";
+    if (on && !window.confirm("Hand the schedule back to the thermostat's own program?")) return;
+    this._call("input_boolean", on ? "turn_off" : "turn_on", { entity_id: E.sched });
+  }
+
+  // Same debounce as the assumptions: one write per burst of taps.
+  _bumpSchedule(entity, dir) {
+    const row = SCHEDULE_ROWS.find((x) => x.entity === entity);
+    const st = this._hass.states[entity];
+    if (!row || !st || BAD.has(st.state)) return;
+    let value;
+    if (row.kind === "time") {
+      const cur = this._sched[entity]?.value ?? st.state;
+      const [hh, mm] = cur.split(":").map(Number);
+      const mins = (((hh * 60 + mm + dir * 15) % 1440) + 1440) % 1440;
+      value = `${String(Math.floor(mins / 60)).padStart(2, "0")}:${String(mins % 60).padStart(2, "0")}:00`;
+    } else {
+      const cur = this._sched[entity]?.value ?? num(st);
+      const min = Number(st.attributes.min ?? 50);
+      const max = Number(st.attributes.max ?? 75);
+      value = Math.min(max, Math.max(min, cur + dir));
+    }
+    this._sched[entity] = { value };
+    clearTimeout(this._sched[`${entity}:t`]);
+    this._sched[`${entity}:t`] = setTimeout(async () => {
+      try {
+        if (row.kind === "time") await this._hass.callService("input_datetime", "set_datetime", { entity_id: entity, time: value });
+        else await this._hass.callService("input_number", "set_value", { entity_id: entity, value });
+      } catch (err) {
+        delete this._sched[entity];
+        this._showToast(`Couldn't save ${row.label}: ${err.message || err}`);
+      }
+    }, 700);
+    this._render();
+  }
+
+  async _applyTip(id) {
+    const tip = (this._hass.states[E.advice]?.attributes?.suggestions || []).find((x) => x.id === id);
+    const ap = tip?.apply;
+    if (!ap || !APPLY_OK.has(ap.service) || this._applied.has(id)) return;
+    const [domain, service] = ap.service.split(".");
+    this._busy = true;
+    this._render();
+    try {
+      await this._hass.callService(domain, service, ap.data || {});
+      this._applied.add(id);
+    } catch (err) {
+      this._showToast(`Couldn't apply: ${err.message || err}`);
+    } finally {
+      this._busy = false;
+      this._render();
+    }
+  }
+
+  async _refreshAdvice() {
+    if (this._refreshing) return;
+    this._refreshing = true;
+    this._render();
+    try {
+      await this._hass.callService("script", "turn_on", { entity_id: E.adviceRefresh });
+    } catch (err) {
+      this._showToast(`Couldn't refresh suggestions: ${err.message || err}`);
+    }
+    // The script runs the advisor and then refreshes the sensor; the new timestamp ends this.
+    this._refreshFrom = this._hass.states[E.advice]?.state;
+    setTimeout(() => {
+      this._refreshing = false;
+      this._render();
+    }, 45000);
+  }
+
+  _clock(hms) {
+    if (!hms || BAD.has(hms)) return "—";
+    const [h, mi] = hms.split(":").map(Number);
+    const d = new Date();
+    d.setHours(h, mi, 0, 0);
+    return this._fmtTime(d.getTime());
+  }
+
+  // What the schedule does next, in words. Null when HA isn't running it.
+  _schedNext(m) {
+    const s = this._hass.states;
+    if (s[E.sched]?.state !== "on") return null;
+    if (m.mode !== "heat") return { text: "Paused while the system isn't in Heat mode.", short: "" };
+    const phase = s[E.phase]?.state;
+    const day = num(s[E.dayT]);
+    const night = num(s[E.nightT]);
+    const by = Date.parse(s[E.warmBy]?.state);
+    const start = Date.parse(s[E.warmStart]?.state);
+    if (phase === "day") {
+      const t = this._clock(s[E.setback]?.state);
+      return { text: `Holding <b>${this._t(day)}</b> until ${esc(t)}, then <b>${this._t(night)}</b> overnight.`, short: `Schedule: ${this._t(night)} at ${t}` };
+    }
+    if (phase === "warming") {
+      return { text: `Warming to <b>${this._t(day)}</b> by ${Number.isFinite(by) ? esc(this._when(by)) : "the warm-by time"}.`, short: `Schedule: warming to ${this._t(day)}` };
+    }
+    const when = Number.isFinite(by) ? this._when(by) : "the warm-by time";
+    const st = Number.isFinite(start) ? ` Warm-up starts about ${esc(this._when(start))}.` : "";
+    return { text: `Holding <b>${this._t(night)}</b> overnight. <b>${this._t(day)}</b> by ${esc(when)}.${st}`, short: `Schedule: ${this._t(day)} by ${when}` };
+  }
+
+  _scheduleCard(m) {
+    const s = this._hass.states;
+    const sw = s[E.sched];
+    if (!sw) {
+      return `<section class="card sched"><div class="card-head"><span class="eyebrow">Schedule</span></div><div class="empty">The schedule helpers aren't loaded — check packages/hvac_schedule.yaml.</div></section>`;
+    }
+    const on = sw.state === "on";
+    const rows = SCHEDULE_ROWS.map((r) => {
+      const st = s[r.entity];
+      const local = this._sched[r.entity]?.value;
+      const live = st && !BAD.has(st.state) ? (r.kind === "time" ? st.state : num(st)) : null;
+      if (local != null && live != null && local === live) delete this._sched[r.entity];
+      const v = this._sched[r.entity]?.value ?? live;
+      const disabled = v == null || this._busy;
+      const shown = v == null ? "—" : r.kind === "time" ? this._clock(v) : this._t(v);
+      const unit = r.kind === "time" ? "±15 min" : "°F";
+      return `
+        <div class="as-row">
+          <div class="as-text"><div class="as-name">${esc(r.label)}</div>${r.help ? `<div class="as-help">${esc(r.help)}</div>` : ""}</div>
+          <div class="stepper sm ${disabled ? "disabled" : ""}">
+            <button data-action="sc-dec" data-entity="${r.entity}" aria-label="${esc(r.label)} earlier or lower" ${disabled ? "disabled" : ""}>${svg("mdiMinus")}</button>
+            <div class="val"><b class="num">${esc(shown)}</b><span>${unit}</span></div>
+            <button data-action="sc-inc" data-entity="${r.entity}" aria-label="${esc(r.label)} later or higher" ${disabled ? "disabled" : ""}>${svg("mdiPlus")}</button>
+          </div>
+        </div>`;
+    }).join("");
+    const next = this._schedNext(m);
+    const rate = num(s[E.rate]);
+    const nextHtml = on
+      ? `<div class="sched-next">${next?.text || ""}${rate != null ? `<div class="muted" style="margin-top:4px">Warm-up timing learns from each morning · now ${rate.toFixed(1)}°/hour.</div>` : ""}</div>`
+      : `<div class="sched-next">The thermostat's own program is running. Turn this on and Home Assistant holds these times instead.</div>`;
+    let trial = "";
+    if (s[E.trial]?.state === "on") {
+      const d0 = s[E.trialStart]?.state;
+      const day = d0 && !BAD.has(d0) ? Math.floor((new Date().setHours(0, 0, 0, 0) - new Date(`${d0}T00:00:00`).getTime()) / 864e5) : null;
+      const why = `It alternates daily so both settings see the same weather; results come as a push.${s[E.smartFan]?.state === "on" ? " The smart fan takes over after." : ""}`;
+      trial = day == null || day < 0
+        ? `<div class="trial">${svg("mdiFan")}<span>Fan trial starts ${esc(d0 || "soon")}. ${why}</span></div>`
+        : `<div class="trial">${svg("mdiFan")}<span>Fan trial · day ${Math.min(day + 1, TRIAL_DAYS)} of ${TRIAL_DAYS} · fan <b>${day % 2 === 0 ? "Auto" : "On"}</b> today. ${why}</span></div>`;
+    } else if (s[E.smartFan]?.state === "on") {
+      const want = s[E.fanWanted];
+      const rh = num(s[E.bedRH]);
+      const tgt = num(s[E.rhTarget]);
+      const why = want?.attributes?.reason === "dry" ? "the air is dry, so the humidifier needs it"
+        : want?.attributes?.reason === "uneven" ? "the floors have drifted apart" : "humidity and floors are fine";
+      trial = `<div class="trial">${svg("mdiFan")}<span>Smart fan · <b>${want?.state === "on" ? "On" : "Auto"}</b> — ${esc(why)}${rh != null && tgt != null ? ` (bedroom ${Math.round(rh)}%, target ${Math.round(tgt)}%)` : ""}.</span></div>`;
+    }
+    return `
+      <section class="card sched">
+        <div class="card-head">
+          <span class="eyebrow">Schedule</span>
+          <button class="toggle ${on ? "on" : ""}" data-action="sched-toggle" aria-pressed="${on}" ${this._busy ? "disabled" : ""}>Home Assistant<i></i></button>
+        </div>
+        <div class="sched-rows">${rows}</div>
+        ${nextHtml}
+        ${trial}
+      </section>`;
+  }
+
+  _adviceCard() {
+    const st = this._hass.states[E.advice];
+    const a = st?.attributes || {};
+    const ok = st && !BAD.has(st.state);
+    if (this._refreshing && ok && this._refreshFrom && st.state !== this._refreshFrom) this._refreshing = false;
+    const refresh = `<button class="link-btn" data-action="advice-refresh" ${this._refreshing ? "disabled" : ""}>${this._refreshing ? "Checking…" : "Check this month"}</button>`;
+    const label = a.period?.label ? ` · ${esc(a.period.label)}` : "";
+    const head = `<div class="card-head"><span class="eyebrow">Suggestions${label}</span>${refresh}</div>`;
+    if (!ok) {
+      return `<section class="card advice">${head}<div class="empty">No suggestions yet. The first monthly check runs on the 1st at 7 AM; “Check this month” runs it now on what's recorded so far.</div></section>`;
+    }
+    const tips = (a.suggestions || []).map((t) => {
+      const ap = t.apply && APPLY_OK.has(t.apply.service) ? t.apply : null;
+      const done = this._applied.has(t.id);
+      const usd = typeof t.usd_month === "number" && t.usd_month >= 1 ? `≈$${Math.round(t.usd_month)}/mo` : "";
+      return `
+        <div class="tip-row">
+          <span class="k ${esc(t.kind)}" aria-hidden="true"></span>
+          <div>
+            <div class="tip-title">${esc(t.title)}</div>
+            <div class="tip-detail">${esc(t.detail)}</div>
+            ${ap ? `<button class="apply ${done ? "done" : ""}" data-action="apply" data-id="${esc(t.id)}" ${done || this._busy ? "disabled" : ""}>${done ? "Done" : esc(ap.label || "Apply")}</button>` : ""}
+          </div>
+          <div class="tip-usd">${usd}</div>
+        </div>`;
+    }).join("");
+    const gen = Date.parse(st.state);
+    const when = Number.isFinite(gen) ? new Date(gen).toLocaleDateString([], { month: "short", day: "numeric" }) : "";
+    const errs = (a.errors || []).length ? `<div class="note warn">${esc(a.errors.join(" "))}</div>` : "";
+    return `
+      <section class="card advice">${head}
+        <div class="adv-sum">${esc(a.summary || "")}</div>
+        ${tips ? `<div class="tips">${tips}</div>` : `<div class="empty">Nothing to change.</div>`}
+        ${errs}
+        <div class="note">Checked ${esc(when)}. Amber is worth doing, grey is for your information, green is fine as is. Rules only — nothing changes unless you tap.</div>
+      </section>`;
   }
 
   _fmtTime(ms) {
@@ -798,6 +1089,7 @@ class ClimatePanel extends HTMLElement {
     }).join("");
     let why = reason;
     if (!why && this._pending) why = this._pending.sent ? "Waiting for the thermostat to confirm… (Honeywell's cloud can take a minute)" : "Sending in a moment…";
+    else if (!why && this._schedNext(m)?.short) why = `${this._schedNext(m).short}. Changes here hold until then.`;
     else if (!why && a.permanent_hold) why = "Permanent hold — the thermostat's schedule is paused.";
 
     const modes = MODE_ORDER.filter((x) => (a.hvac_modes || []).includes(x));
@@ -1042,7 +1334,7 @@ class ClimatePanel extends HTMLElement {
     });
     const fmt = (x) => (x.value == null ? "—" : x.unit === "$/therm" ? `$${x.value.toFixed(3)}` : fmtNum(x.value, x.digits));
     const summary = vals.every((x) => x.value != null)
-      ? `AC ${fmt(vals[0])} kW · blower ${fmt(vals[1])} kW · furnace ${Math.round(vals[2].value / 1000)}k BTU/h · gas ${fmt(vals[3])}/therm`
+      ? `AC ${fmt(vals[0])} kW · fan ${fmt(vals[1])} / blower ${fmt(vals[2])} kW · furnace ${Math.round(vals[3].value / 1000)}k BTU/h · gas ${fmt(vals[4])}/therm`
       : "Equipment numbers aren't loaded — check packages/hvac_cost.yaml";
     const body = this._showAssumptions
       ? `${vals
@@ -1107,8 +1399,8 @@ class ClimatePanel extends HTMLElement {
         </header>
         ${banner}
         <main class="grid">
-          <div class="col">${this._hero(m)}${this._assumeCard(m)}</div>
-          <div class="col">${this._monthCard(m)}${this._histCard(m)}${this._daysCard()}</div>
+          <div class="col">${this._hero(m)}${this._scheduleCard(m)}${this._assumeCard(m)}</div>
+          <div class="col">${this._adviceCard()}${this._monthCard(m)}${this._histCard(m)}${this._daysCard()}</div>
         </main>
         ${this._toast ? `<div class="toast" role="alert">${esc(this._toast)}</div>` : ""}
       </div>`;
