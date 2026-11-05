@@ -83,7 +83,7 @@ def _logs_since(config, start: date, end: date, garmin_client) -> tuple[list[dic
         except Exception as exc:
             _log(f"Garmin activities unavailable: {exc}")
         try:
-            raw = collect_recent_health(garmin_client, days=2)
+            raw = collect_recent_health(garmin_client, days=2, today=end)
             recovery = compress_week(
                 {"athlete_context": {"timezone": athlete_tz_name(config.athlete_timezone)},
                  "activity_details": [], "daily_health": raw},

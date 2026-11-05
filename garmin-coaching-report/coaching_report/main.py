@@ -24,6 +24,7 @@ from .errors import (
     EmptyWindowError,
 )
 from .garmin_auth import connect_with_tokens
+from .timezone_util import athlete_today
 
 
 def _parse_since(raw: str, report_date: date, reports_dir: Path) -> date | None:
@@ -82,14 +83,14 @@ def main() -> int:
     override = os.environ.get("REPORT_DATE", "").strip()
     try:
         report_date = (
-            datetime.strptime(override, "%Y-%m-%d").date() if override else date.today()
+            datetime.strptime(override, "%Y-%m-%d").date() if override else athlete_today(config.athlete_timezone)
         )
     except ValueError:
         print(
             f"[coaching-report] Invalid REPORT_DATE '{override}', using today",
             file=sys.stderr,
         )
-        report_date = date.today()
+        report_date = athlete_today(config.athlete_timezone)
 
     reports_dir = config.report_output_dir
     since = _parse_since(os.environ.get("SINCE", ""), report_date, reports_dir)
