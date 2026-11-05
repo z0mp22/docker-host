@@ -24,7 +24,7 @@ import fcntl
 import json
 import re
 from contextlib import contextmanager
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Iterator, Literal
 
@@ -34,6 +34,8 @@ STATE_FILE = "weekly_coach.json"
 LOCK_FILE = "weekly_coach.lock"
 FEEDBACK_LOG = "lift_feedback_log.jsonl"
 MAX_ANSWER_CHARS = 26
+# Days before the new plan kept from last week's plan (the panel shows yesterday and today).
+CARRY_DAYS = 3
 
 Kind = Literal["climb", "outdoor", "lift", "fingerboard", "cardio", "light", "rest"]
 LiftType = Literal["heavy_1h", "light_30m", "shoulder_pt"]
@@ -116,9 +118,18 @@ class PlanChange(BaseModel):
     if_cooked: str
 
 
+class AnsweredQuestion(BaseModel):
+    id: str = Field(description="The question's id from week.debrief.questions")
+    answer: str = Field(description="His answer in a few words, as he'd put it")
+
+
 class CoachReplySchema(BaseModel):
     reply: str = Field(description="Your reply, under 90 words")
     plan_changes: list[PlanChange] = Field(default_factory=list)
+    answered: list[AnsweredQuestion] = Field(
+        default_factory=list,
+        description="Your open debrief questions that the conversation has now answered, so you stop asking them",
+    )
 
 
 # --- State file ----------------------------------------------------------------
@@ -165,9 +176,13 @@ def new_week_state(
     report_date: str,
     window: dict[str, Any],
     model_meta: dict[str, Any],
+    previous: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """The state for a fresh week. Plan rows are matched to plan_days by
-    date; a day Claude left out becomes an open day rather than vanishing."""
+    date; a day Claude left out becomes an open day rather than vanishing.
+    The last CARRY_DAYS days of the previous week's plan (statuses and all)
+    come along, so the panel's rolling day strip always has yesterday and
+    today even when the week was planned starting tomorrow."""
     by_date = {p.date: p for p in debrief.plan}
     plan = []
     for d in plan_days:
@@ -180,6 +195,14 @@ def new_week_state(
             row["lift_type"] = None
         plan.append({**row, "weekday": d["weekday"], "label": d["label"], "status": "planned",
                      "logged": None, "status_source": None})
+    if previous and plan:
+        first = date.fromisoformat(plan[0]["date"])
+        start = (first - timedelta(days=CARRY_DAYS)).isoformat()
+        plan = [
+            {**r, "carried": True}
+            for r in previous.get("plan", [])
+            if start <= r["date"] < plan[0]["date"]
+        ] + plan
     data = debrief.model_dump()
     data.pop("plan")
     return {
@@ -212,20 +235,35 @@ def replace_state(reports_dir: Path, state: dict[str, Any]) -> None:
         write_state(reports_dir, state)
 
 
+# How far ahead a reply may add a day the plan doesn't have yet (the panel strip shows 5 ahead).
+ADD_DAYS_AHEAD = 8
+
+
 def apply_plan_changes(state: dict[str, Any], changes: list[PlanChange], today: date) -> list[str]:
-    """Replace plan days from today on. Returns the labels changed; past days
-    and dates outside the week are ignored."""
+    """Replace plan days from today on, or add one the plan doesn't have yet
+    (up to ADD_DAYS_AHEAD days out). Returns the labels changed; past days
+    and dates further out are ignored."""
     changed = []
     rows = {r["date"]: r for r in state["plan"]}
     for c in changes:
-        row = rows.get(c.date)
-        if row is None or date.fromisoformat(c.date) < today:
+        try:
+            day = date.fromisoformat(c.date)
+        except ValueError:
             continue
+        if day < today or (c.date not in rows and (day - today).days > ADD_DAYS_AHEAD):
+            continue
+        row = rows.get(c.date)
+        if row is None:
+            row = {"date": c.date, "weekday": day.strftime("%A"), "label": f"{day:%a %b} {day.day}",
+                   "status": "planned", "logged": None, "status_source": None}
+            rows[c.date] = row
+            state["plan"].append(row)
         row.update({k: v for k, v in c.model_dump().items() if k != "date"})
         if row["kind"] != "lift":
             row["lift_type"] = None
         row["changed_at"] = now_iso()
         changed.append(row["label"])
+    state["plan"].sort(key=lambda r: r["date"])
     return changed
 
 

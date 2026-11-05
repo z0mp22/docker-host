@@ -34,6 +34,7 @@ from .collector import _collect_lift_history, collect_history_summaries, collect
 from .compression import compress_week
 from .config import load_app_config
 from .debrief import (
+    ADD_DAYS_AHEAD,
     CoachReplySchema,
     append_feedback_note,
     apply_plan_changes,
@@ -107,7 +108,7 @@ def _garmin(config):
         return None
 
 
-def _record_message(reports_dir, mode: str, text: str, ref: str, cid: str) -> dict[str, Any] | None:
+def _record_message(reports_dir, mode: str, text: str, ref: str, cid: str, today: date) -> dict[str, Any] | None:
     """Save what he said; returns the athlete message (existing one on a retry)."""
     with locked_state(reports_dir) as state:
         if state is None:
@@ -123,14 +124,27 @@ def _record_message(reports_dir, mode: str, text: str, ref: str, cid: str) -> di
                 msg["answers"] = ref
                 state.setdefault("answers", {})[ref] = {"text": text, "at": msg["at"]}
         elif ref:
+            # About one day: a planned day that already passed becomes "changed"; a day the plan
+            # doesn't have yet is still named, so the coach knows which day to plan.
+            msg["about_day"] = ref
             row = next((r for r in state["plan"] if r["date"] == ref), None)
-            if row:
-                msg["about_day"] = ref
+            if row and ref < today.isoformat():
                 row.update({"status": "changed", "status_source": "athlete", "status_note": text})
         thread.append(msg)
         state["updated_at"] = now_iso()
     append_feedback_note(reports_dir, text)
     return msg
+
+
+def _about_day(state: dict[str, Any], day: str | None) -> dict[str, Any] | None:
+    if not day:
+        return None
+    row = next((r for r in state["plan"] if r["date"] == day), None)
+    try:
+        weekday = date.fromisoformat(day).strftime("%A")
+    except ValueError:
+        return None
+    return {"date": day, "weekday": weekday, "planned": {"title": row["title"], "kind": row["kind"]} if row else None}
 
 
 def _reply(config, state: dict[str, Any], msg: dict[str, Any], now: datetime) -> tuple[CoachReplySchema, dict]:
@@ -145,6 +159,11 @@ def _reply(config, state: dict[str, Any], msg: dict[str, Any], now: datetime) ->
         "today": today.isoformat(),
         "today_weekday": today.strftime("%A"),
         "now_mt": now.strftime("%Y-%m-%d %H:%M"),
+        # Dates for the days ahead, so the coach never works out a weekday itself.
+        "days_ahead": [
+            {"date": d.isoformat(), "weekday": d.strftime("%A")}
+            for d in (today + timedelta(days=i) for i in range(ADD_DAYS_AHEAD + 1))
+        ],
         "week": {
             "week_label": state.get("week_label"),
             "debrief": state["debrief"],
@@ -155,7 +174,7 @@ def _reply(config, state: dict[str, Any], msg: dict[str, Any], now: datetime) ->
         "message": {
             "text": msg["text"],
             "answers": {"id": q["id"], "question": q["text"]} if q else None,
-            "about_day": next(({"date": r["date"], "label": r["label"], "title": r["title"]} for r in state["plan"] if r["date"] == msg.get("about_day")), None),
+            "about_day": _about_day(state, msg.get("about_day")),
         },
         "since_report": {
             "activities": [_activity_brief(a) for a in activities],
@@ -230,7 +249,7 @@ def main() -> int:
     if not text:
         _log("COACH_TEXT is empty")
         return 1
-    msg = _record_message(reports_dir, mode, text, ref, cid)
+    msg = _record_message(reports_dir, mode, text, ref, cid, now.date())
     if msg is None:
         return 1
     if any(m.get("re") == msg["id"] for m in load_state(reports_dir)["thread"]):
@@ -250,6 +269,11 @@ def main() -> int:
 
     with locked_state(reports_dir) as state:
         moved = apply_plan_changes(state, reply.plan_changes, now.date())
+        # Questions the conversation answered stop showing and stop being pushed.
+        open_ids = {q["id"] for q in state["debrief"].get("questions", [])} - set(state.get("answers", {}))
+        for a in reply.answered:
+            if a.id in open_ids:
+                state.setdefault("answers", {})[a.id] = {"text": a.answer.strip(), "at": now_iso(), "via": "conversation"}
         for m in state["thread"]:
             if m.get("id") == msg["id"]:
                 m.pop("reply_failed", None)

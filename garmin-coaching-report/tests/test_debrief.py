@@ -95,7 +95,7 @@ def test_plan_changes_only_from_today_on():
     changes = [
         db.PlanChange(date="2026-11-03", kind="rest", title="Rest", focus="f", if_cooked="c"),  # past
         db.PlanChange(date="2026-11-05", kind="outdoor", lift_type="heavy_1h", title="MTB ride", focus="Dry and 60°F", if_cooked="e-bike"),
-        db.PlanChange(date="2026-11-20", kind="rest", title="Rest", focus="f", if_cooked="c"),  # not this week
+        db.PlanChange(date="2026-11-20", kind="rest", title="Rest", focus="f", if_cooked="c"),  # too far out
     ]
     assert db.apply_plan_changes(s, changes, date(2026, 11, 4)) == ["Thu Nov 5"]
     thu = s["plan"][2]
@@ -145,3 +145,26 @@ def test_feedback_note_is_marked_for_the_weekly_report(tmp_path):
     db.append_feedback_note(tmp_path, "Knee a bit sore")
     entry = json.loads((tmp_path / db.FEEDBACK_LOG).read_text().splitlines()[0])
     assert entry["note"] == "Knee a bit sore" and entry["source"] == "coach_chat"
+
+
+def test_new_week_carries_the_last_days_of_the_previous_week():
+    prev = _state()  # plan Tue Nov 3 - Thu Nov 5
+    prev["plan"][2].update({"status": "done", "logged": "Indoor climbing 40 min"})
+    days = [{"date": "2026-11-06", "weekday": "Friday", "label": "Fri Nov 6"}]
+    new = db.new_week_state(_debrief(plan=[]), days, "2026-11-05", {}, {}, previous=prev)
+    assert [r["date"] for r in new["plan"]] == ["2026-11-03", "2026-11-04", "2026-11-05", "2026-11-06"]
+    assert new["plan"][2]["carried"] is True and new["plan"][2]["status"] == "done"
+    assert "carried" not in new["plan"][3]
+    assert new["week_label"] == "Week of Fri Nov 6"
+
+
+def test_a_reply_can_add_a_day_the_plan_doesnt_have_yet():
+    s = _state()
+    added = db.apply_plan_changes(
+        s, [db.PlanChange(date="2026-11-07", kind="outdoor", title="Lumpy Ridge", focus="Multi-pitch", if_cooked="Single pitch")],
+        date(2026, 11, 4),
+    )
+    assert added == ["Sat Nov 7"]
+    assert [r["date"] for r in s["plan"]][-1] == "2026-11-07"
+    sat = s["plan"][-1]
+    assert (sat["weekday"], sat["status"], sat["title"]) == ("Saturday", "planned", "Lumpy Ridge")

@@ -10,7 +10,7 @@ from pathlib import Path
 from .coach import generate_coach_report
 from .collector import build_payload
 from .config import load_app_config
-from .debrief import new_week_state, render_markdown, replace_state
+from .debrief import load_state, new_week_state, render_markdown, replace_state
 from .emailer import (
     last_report_window_end,
     save_outputs,
@@ -153,7 +153,8 @@ def main() -> int:
         )
         model_meta = {"model": result.model, "input_tokens": result.input_tokens, "output_tokens": result.output_tokens}
         state = new_week_state(
-            result.debrief, payload.get("plan_days") or [], payload["report_date"], wr, model_meta
+            result.debrief, payload.get("plan_days") or [], payload["report_date"], wr, model_meta,
+            previous=load_state(reports_dir),
         )
         report_md = render_markdown(state)
         if preview:
