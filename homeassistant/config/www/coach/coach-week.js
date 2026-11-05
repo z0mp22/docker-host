@@ -1,10 +1,15 @@
-// The Coach panel's two cards (since 2026-11-04 the whole panel is these two):
+// The Coach panel's three cards (since 2026-11-05):
 //
-// - Coach: Monday's headline, the open question with tap answers, the conversation and a message
-//   box, with the full debrief (goals, last week, insights) and "New debrief" behind a toggle.
-// - Today: a rolling strip from yesterday through the next five days, the selected day, and for
-//   today everything to do about it in one place: build the session in Hevy, the session itself once
-//   it's there, start/end the basement workout, the shoulder and finger flags, or do something else.
+// - Coach: the open question with tap answers, the conversation and a message box. When the panel is
+//   stacked (phone, tablet) and the thread has gone quiet, the messages fold into a one-line peek so
+//   the day's plan isn't below a scroll of last night's chat.
+// - Today: this morning's recovery, a rolling strip from yesterday through the next five days, the
+//   selected day, and for today everything to do about it in one place: build the session in Hevy,
+//   the session itself once it's there, start/end the basement workout, the shoulder and finger
+//   flags, or do something else.
+// - Debrief (last): Monday's headline, goals, last week, insights, and "New debrief".
+//
+// Kinds and goals each carry an emoji and a color everywhere they appear, so the week scans at a glance.
 //
 // The week comes from sensor.weekly_coach (packages/weekly_coach.yaml). Everything sent to the coach
 // goes through script.coach_send; a message shows at once, then "your coach is replying" until the
@@ -14,11 +19,15 @@ const SENSOR = "sensor.weekly_coach";
 const NOTE = "coach_dispatch";
 const REPLY_WAIT_MS = 8 * 60e3;
 const THREAD_SHOWN = 2; // the last exchange; older ones behind "earlier"
+const ACTIVE_MS = 3 * 3600e3; // after this long with no message the thread folds (stacked layout only)
 const DAYS_BACK = 1;
 const DAYS_AHEAD = 5;
 const KIND = { climb: "Climb", outdoor: "Out", lift: "Lift", fingerboard: "Board", cardio: "Cardio", light: "Easy", rest: "Rest" };
-const TREND = { up: "up", holding: "holding", slipping: "slipping", no_signal: "no signal" };
+const KIND_EMOJI = { climb: "🧗", outdoor: "⛰️", lift: "🏋️", fingerboard: "🖐️", cardio: "🚴", light: "🚶", rest: "😴" };
+const TREND = { up: "↗ up", holding: "→ holding", slipping: "↘ slipping", no_signal: "· no signal" };
 const GOAL = { climbing: "Climbing", mtb: "MTB", snowboard: "Snowboard", physique: "Physique", recovery: "Recovery" };
+const GOAL_EMOJI = { climbing: "🧗", mtb: "🚵", snowboard: "🏂", physique: "💪", recovery: "😴" };
+const VERDICT = { done: "✅", skipped: "❌", changed: "🔁", unknown: "❓" };
 const SESSIONS = [
   { id: "heavy_1h", label: "1h Heavy", script: "script.lift_session_run_heavy" },
   { id: "light_30m", label: "30m Light", script: "script.lift_session_run_light" },
@@ -61,6 +70,10 @@ const dayName = (iso) => new Date(`${iso}T12:00:00`).toLocaleDateString([], { we
 const weekday = (iso) => new Date(`${iso}T12:00:00`).toLocaleDateString([], { weekday: "short" });
 const session = (id) => SESSIONS.find((s) => s.id === id) || SESSIONS[0];
 const m_note = (d) => d.week_shape || "";
+// An outdoor day is a ride or a climb, and gets the matching emoji.
+const kindEmoji = (r) => (r?.kind === "outdoor" && RIDE.test(`${r.title} ${r.focus}`) ? "🚵" : KIND_EMOJI[r?.kind] || "");
+const goalChip = (g) =>
+  `<span class="g-${esc(g)}">${GOAL_EMOJI[g] || ""} ${esc((GOALS.find(([k]) => k === g) || [g, GOAL[g] || g])[1])}</span>`;
 
 export const COACH_SHELL = `
   <div data-region="coachtop"></div>
@@ -71,12 +84,18 @@ export const COACH_SHELL = `
       <textarea class="wk-ta" rows="1" maxlength="600" placeholder="Message your coach"></textarea>
       <button class="send wk-send" data-action="wk-send" aria-label="Send to your coach" disabled></button>
     </div>
-  </div>
-  <div data-region="coachmore"></div>
-  <div class="wk-report" data-region="report" hidden></div>`;
+  </div>`;
+
+export const DEBRIEF_SHELL = `
+  <div data-region="debrief"></div>
+  <div class="wk-report" data-region="report"></div>`;
 
 export const WEEK_CSS = `
-.a-coach { grid-area: coach; } .a-today { grid-area: today; }
+.a-coach { grid-area: coach; } .a-today { grid-area: today; } .a-debrief { grid-area: debrief; }
+/* Kind and goal colors: one per kind (strip, badge) and one per goal (tiles, chips, debrief). */
+.k-climb { --k: #a78bfa; } .k-outdoor { --k: #fb923c; } .k-lift { --k: #f5b041; } .k-fingerboard { --k: #f472b6; }
+.k-cardio { --k: #34d399; } .k-light { --k: #7dd3fc; } .k-rest { --k: #64748b; }
+.g-climbing { --g: #a78bfa; } .g-mtb { --g: #34d399; } .g-snowboard { --g: #7dd3fc; } .g-physique { --g: #f5b041; } .g-recovery { --g: #94a3b8; }
 .wc-top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
 .wc-top .muted { font-size: 13px; white-space: nowrap; }
 .wc-head { margin-top: 10px; font-size: 19px; line-height: 1.5; font-weight: 500; overflow-wrap: anywhere; }
@@ -85,9 +104,12 @@ export const WEEK_CSS = `
 .wc-q .ctx { margin-top: 4px; font-size: 14px; color: var(--muted); }
 .wc-q .chips { margin-top: 12px; }
 .wc-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; margin-top: 12px; }
-.wc-day { border-radius: 14px; padding: 9px 2px; text-align: center; background: #121a28; border: 1.5px solid var(--line); min-width: 0; position: relative; }
+.wc-day { border-radius: 14px; padding: 9px 2px 11px; text-align: center; background: #121a28; border: 1.5px solid var(--line); min-width: 0; position: relative; overflow: hidden; }
+.wc-day::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: var(--k, transparent); opacity: .85; }
 .wc-day span { display: block; font-size: 12.5px; color: var(--muted); }
-.wc-day b { display: block; font-size: 14px; font-weight: 600; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wc-day .em { display: block; font-size: 18px; line-height: 1.3; margin-top: 3px; font-style: normal; }
+.wc-day b { display: block; font-size: 13px; font-weight: 600; margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--k, var(--text)); }
+.wc-day.skipped .em, .wc-day.none .em { opacity: .4; }
 .wc-day.done { background: rgba(34,197,94,.12); border-color: rgba(34,197,94,.3); } .wc-day.done b { color: #8fe3ad; }
 .wc-day.changed { background: rgba(76,195,255,.10); border-color: rgba(76,195,255,.3); } .wc-day.changed b { color: #9fdcff; }
 .wc-day.skipped b, .wc-day.skipped span, .wc-day.none b { color: #5d6b80; }
@@ -105,10 +127,23 @@ export const WEEK_CSS = `
 .wc-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
 .wc-note { margin-top: 10px; font-size: 16px; line-height: 1.5; color: #c3cedd; }
 .wc-bal { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 14px; }
-.wc-bal div { padding: 10px 12px; border-radius: 14px; background: #121a28; border: 1px solid var(--line); min-width: 0; }
-.wc-bal b { display: block; font-size: 13px; font-weight: 600; color: var(--muted); }
-.wc-bal span { display: block; margin-top: 3px; font-size: 15px; font-weight: 600; }
-.wc-bal .zero { border-color: rgba(245,176,65,.4); } .wc-bal .zero span { color: #f7c77a; }
+.wc-bal > div { padding: 10px 12px; border-radius: 14px; background: #121a28; border: 1px solid var(--line); border-left: 3px solid var(--g); min-width: 0; }
+.wc-bal b { display: block; font-size: 13px; font-weight: 600; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wc-bal .dots { display: flex; gap: 4px; margin-top: 6px; }
+.wc-bal .dots i { width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--g); }
+.wc-bal .dots i.d { background: var(--g); }
+.wc-bal span { display: block; margin-top: 4px; font-size: 13.5px; font-weight: 600; color: #c3cedd; }
+.wc-bal .zero { border-color: rgba(245,176,65,.4); border-left-color: #f5b041; } .wc-bal .zero span { color: #f7c77a; }
+.wc-ready { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 0 16px; padding: 10px 14px; border-radius: 14px; font-size: 14px;
+  background: rgba(34,197,94,.08); border: 1px solid rgba(34,197,94,.28); color: #c3cedd; }
+.wc-ready b { color: #8fe3ad; font-weight: 600; }
+.wc-ready.down { background: rgba(245,176,65,.08); border-color: rgba(245,176,65,.35); } .wc-ready.down b { color: #f7c77a; }
+.wc-ready.wait { background: #121a28; border-color: var(--line); } .wc-ready.wait b { color: var(--muted); }
+.wc-ready .nums { display: flex; gap: 8px; flex-wrap: wrap; }
+.wc-ready .nums span { padding: 2px 8px; border-radius: 8px; background: rgba(148,170,200,.08); font-variant-numeric: tabular-nums; }
+.wc-ready .nums .off { color: #f7c77a; }
+.kb { display: inline-flex; align-items: center; gap: 6px; margin-top: 8px; padding: 3px 10px; border-radius: 9px; font-size: 13px; font-weight: 600;
+  color: var(--k); background: color-mix(in srgb, var(--k) 14%, transparent); }
 .wc-replan { margin-top: 10px; }
 .wc-detail .lead { font-size: 17px; color: var(--text); }
 .wc-how { margin: 12px 0 0; padding: 0; list-style: none; counter-reset: h; display: flex; flex-direction: column; gap: 8px; }
@@ -118,7 +153,9 @@ export const WEEK_CSS = `
 .wc-why { margin-top: 14px; padding: 12px 14px; border-radius: 14px; background: #121a28; border: 1px solid var(--line); font-size: 15px; line-height: 1.5; color: #c3cedd; }
 .wc-why b { color: var(--text); font-weight: 600; }
 .wc-serves { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
-.wc-serves span { font-size: 12.5px; font-weight: 600; padding: 4px 10px; border-radius: 8px; background: rgba(167,139,250,.14); color: #d9d0ff; }
+.wc-serves span { font-size: 12.5px; font-weight: 600; padding: 4px 10px; border-radius: 8px; color: var(--g); background: color-mix(in srgb, var(--g) 14%, transparent); }
+.wc-cooked { margin-top: 10px; padding: 10px 14px; border-radius: 14px; border: 1px dashed rgba(148,170,200,.22); font-size: 14.5px; line-height: 1.45; color: var(--muted); }
+.wc-cooked b { color: #c3cedd; font-weight: 600; }
 .wc-sec { margin-top: 18px; padding-top: 18px; border-top: 1px dashed rgba(148,170,200,.16); }
 .wc-flags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .fl { height: 36px; padding: 0 12px; border-radius: 12px; background: #172234; border: 1px solid var(--line); font-size: 14px; color: #c3cedd; display: inline-flex; align-items: center; gap: 8px; }
@@ -131,7 +168,7 @@ export const WEEK_CSS = `
 .wc-other { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
 .wc-other .btn2 { padding: 0 8px; }
 .wc-goals { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-.wc-goal { padding: 10px 12px; border-radius: 14px; background: #121a28; border: 1px solid var(--line); min-width: 0; }
+.wc-goal { padding: 10px 12px; border-radius: 14px; background: #121a28; border: 1px solid var(--line); border-left: 3px solid var(--g, var(--line)); min-width: 0; }
 .wc-goal b { font-size: 14px; font-weight: 600; } .wc-goal span { font-size: 13.5px; margin-left: 6px; }
 .wc-goal .up { color: #8fe3ad; } .wc-goal .slipping { color: #f7c77a; } .wc-goal .holding, .wc-goal .no_signal { color: var(--muted); }
 .wc-goal div { font-size: 12.5px; color: var(--muted); margin-top: 4px; line-height: 1.35; }
@@ -153,12 +190,23 @@ export const WEEK_CSS = `
 .msg-err { align-self: flex-end; font-size: 13px; color: #ffb3ba; display: flex; gap: 10px; align-items: center; }
 .msg-err button { color: var(--accent); font-weight: 600; font-size: 13px; }
 .wk-compose { margin-top: 12px; }
+.wc-peek { display: none; width: 100%; margin-top: 12px; padding: 10px 14px; border-radius: 14px; background: #121a28; border: 1px solid var(--line); text-align: left; color: #c3cedd; font-size: 14px; }
+.wc-peek .t { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wc-peek .meta { display: block; margin-top: 2px; font-size: 12px; color: var(--muted); }
+.wc-dhead { margin-top: 10px; font-size: 18px; line-height: 1.5; font-weight: 500; overflow-wrap: anywhere; }
+.a-debrief .wk-report { margin-top: 18px; padding-top: 14px; border-top: 1px dashed rgba(148,170,200,.16); }
+.a-debrief .wk-report .eyebrow { display: none; }
 .wc-ctx { display: inline-flex; align-items: center; gap: 8px; margin-top: 4px; padding: 6px 10px; border-radius: 10px; background: rgba(167,139,250,.14); color: #d9d0ff; font-size: 13.5px; max-width: 100%; }
 .wc-ctx span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .wc-ctx button { color: #d9d0ff; font-size: 16px; line-height: 1; }
-.a-coach .wk-report { margin-top: 14px; padding-top: 14px; border-top: 1px dashed rgba(148,170,200,.16); }
-.a-coach .wk-report .eyebrow { display: none; }
+/* Stacked (coach above today): a quiet thread folds to the peek so the plan is near the top. */
+@container (max-width: 980px) {
+  .wc-thread.quiet { display: none; }
+  .wc-peek.quiet { display: block; }
+}
 @container (max-width: 640px) {
+  .wc-dhead { font-size: 16.5px; }
+  .wc-day .em { font-size: 16px; }
   .wc-head { font-size: 17px; }
   .wc-days { gap: 4px; }
   .wc-day { border-radius: 11px; padding: 7px 0; }
@@ -173,7 +221,7 @@ export class WeekCard {
   constructor(panel) {
     this.p = panel;
     this.sel = null;
-    this.more = false;
+    this.showThread = false; // the folded (quiet) thread opened by tapping the peek
     this.older = false;
     this.other = false;
     this.pending = []; // { cid, text, mode, ref, at, sent, failed }
@@ -186,7 +234,6 @@ export class WeekCard {
   bind(root) {
     this.ta = root.querySelector(".wk-ta");
     this.sendBtn = root.querySelector(".wk-send");
-    this.reportEl = root.querySelector(".wk-report");
     this.sendBtn.innerHTML = this.p.icon("mdiSend");
     this.ta.addEventListener("input", () => this._onDraft());
   }
@@ -306,8 +353,8 @@ export class WeekCard {
       return;
     } else if (act === "wk-other") {
       this.other = !this.other;
-    } else if (act === "wk-more") {
-      this.more = !this.more;
+    } else if (act === "wk-peek") {
+      this.showThread = !this.showThread;
     } else if (act === "wk-older") {
       this.older = !this.older;
     }
@@ -336,22 +383,12 @@ export class WeekCard {
     this._m = m;
     this._renderCoach(m);
     this._renderToday(m, pm, job, busy);
+    this._renderDebrief(m);
   }
 
   _renderCoach(m) {
     const p = this.p;
-    if (!m.has) {
-      p._set("coachtop", `<div class="eyebrow">Your coach</div><h3>No debrief yet</h3>
-        <div class="sub">Your coach's debrief arrives Mondays at 9 AM. Get one now from Options below.</div>`);
-    } else {
-      const sent = m.sent ? `Debrief · ${new Date(m.sent).toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}` : "";
-      p._set(
-        "coachtop",
-        `<div class="wc-top"><div class="eyebrow">Your coach</div><span class="muted">${esc(sent)}</span></div>
-         <div class="wc-head">${esc(m.d.headline)}</div>
-         ${this._question(m)}`,
-      );
-    }
+    p._set("coachtop", `<div class="eyebrow">💬 Your coach</div>${m.has ? this._question(m) : ""}`);
     p._set("weekthread", this._thread(m));
     p._set(
       "weekctx",
@@ -359,13 +396,21 @@ export class WeekCard {
     );
     const ph = this.replyTo?.type === "q" ? "Your answer" : this.replyTo?.type === "day" ? "What's changing?" : "Message your coach";
     if (this.ta && this.ta.placeholder !== ph) this.ta.placeholder = ph;
-    p._set(
-      "coachmore",
-      `<button class="disclose ${this.more ? "open" : ""}" data-action="wk-more">${p.icon("mdiChevronDown")} ${
-        m.has ? (this.more ? "Hide this week's debrief" : "This week's debrief") : "Options"
-      }</button>${this.more && m.has ? this._full(m) : ""}`,
+  }
+
+  _renderDebrief(m) {
+    if (!m.has) {
+      this.p._set("debrief", `<div class="eyebrow">📋 Debrief</div><h3>No debrief yet</h3>
+        <div class="sub">Your coach's debrief arrives Mondays at 9 AM. Get one now below.</div>`);
+      return;
+    }
+    const sent = m.sent ? new Date(m.sent).toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" }) : "";
+    this.p._set(
+      "debrief",
+      `<div class="wc-top"><div class="eyebrow">📋 This week's debrief</div><span class="muted">${esc(sent)}</span></div>
+       <div class="wc-dhead">${esc(m.d.headline)}</div>
+       ${this._full(m)}`,
     );
-    if (this.reportEl) this.reportEl.hidden = !this.more;
   }
 
   // One question at a time, like the pushes; an answer moves into the conversation and the next one shows.
@@ -383,6 +428,14 @@ export class WeekCard {
     const p = this.p;
     const all = this._messages(m);
     if (!all.length) return "";
+    const t = (x) => (typeof x.at === "number" ? x.at : Date.parse(x.at) || 0);
+    const last = all[all.length - 1];
+    // Quiet: nothing on its way and no message for ACTIVE_MS. A reply in flight, a draft about a day or
+    // question, or a fresh check-in keeps it open.
+    const quiet = !this.showThread && !this.replyTo && !all.some((x) => x.local) && last.role === "coach" && Date.now() - t(last) > ACTIVE_MS;
+    const peek = `<button class="wc-peek ${quiet ? "quiet" : ""}" data-action="wk-peek">
+      <span class="t">${last.role === "coach" ? "Coach" : "You"}: ${esc(last.text)}</span>
+      <span class="meta">▾ ${all.length} message${all.length === 1 ? "" : "s"} · last ${esc(p._fmtTime(t(last)))} ${esc(weekday(isoDay(new Date(t(last)))))}</span></button>`;
     const shown = this.older ? all : all.slice(-THREAD_SHOWN);
     const parts = [];
     if (all.length > shown.length) parts.push(`<button class="disclose" data-action="wk-older">${p.icon("mdiChevronDown")} ${all.length - shown.length} earlier</button>`);
@@ -390,10 +443,10 @@ export class WeekCard {
     for (const x of shown) {
       const at = typeof x.at === "number" ? x.at : Date.parse(x.at);
       const meta =
-        x.mode === "answer" ? `Answer · ${esc(qText(x.ref) || "")}` : x.checkin ? `Saw it in Garmin · ${esc(p._fmtTime(at))}` : at ? esc(p._fmtTime(at)) : "";
+        x.mode === "answer" ? `Answer · ${esc(qText(x.ref) || "")}` : x.checkin ? `⌚ Saw it in Garmin · ${esc(p._fmtTime(at))}` : at ? esc(p._fmtTime(at)) : "";
       parts.push(
         `<div class="msg ${x.role}">${esc(x.text)}${
-          x.role === "coach" && x.plan_changes?.length ? `<span class="moved">Plan updated: ${esc(x.plan_changes.join(", "))}</span>` : ""
+          x.role === "coach" && x.plan_changes?.length ? `<span class="moved">📅 Plan updated: ${esc(x.plan_changes.join(", "))}</span>` : ""
         }<span class="meta">${meta}</span></div>`,
       );
       if (x.role !== "athlete" || x.replied) continue;
@@ -406,7 +459,8 @@ export class WeekCard {
         parts.push(`<div class="msg-err">No reply yet.<button data-action="wk-retry" data-cid="${esc(x.cid)}">Retry</button></div>`);
       }
     }
-    return `<div class="wc-thread">${parts.join("")}</div>`;
+    if (this.showThread) parts.push(`<button class="disclose" data-action="wk-peek">${p.icon("mdiChevronDown")} Fold the conversation</button>`);
+    return `${peek}<div class="wc-thread ${quiet ? "quiet" : ""}">${parts.join("")}</div>`;
   }
 
   _dispatchFailed(at) {
@@ -417,18 +471,22 @@ export class WeekCard {
   _full(m) {
     const d = m.d;
     const goals = (d.goals || [])
-      .map((g) => `<div class="wc-goal"><b>${esc(GOAL[g.goal] || g.goal)}</b><span class="${esc(g.trend)}">${esc(TREND[g.trend] || g.trend)}</span><div>${esc(g.evidence)}</div></div>`)
+      .map(
+        (g) => `<div class="wc-goal g-${esc(g.goal)}"><b>${GOAL_EMOJI[g.goal] || ""} ${esc(GOAL[g.goal] || g.goal)}</b><span class="${esc(g.trend)}">${esc(
+          TREND[g.trend] || g.trend,
+        )}</span><div>${esc(g.evidence)}</div></div>`,
+      )
       .join("");
     const last = (d.last_week || [])
-      .map((x) => `<p><span class="vd ${esc(x.verdict)}">${esc(x.verdict)}</span><b>${esc(x.item)}.</b> ${esc(x.note)}</p>`)
+      .map((x) => `<p><span class="vd ${esc(x.verdict)}">${VERDICT[x.verdict] || ""} ${esc(x.verdict)}</span><b>${esc(x.item)}.</b> ${esc(x.note)}</p>`)
       .join("");
-    const ins = (d.insights || []).map((x) => `<p><b>${esc(x.title)}</b> ${esc(x.body)}</p>`).join("");
+    const ins = (d.insights || []).map((x) => `<p>🔎 <b>${esc(x.title)}</b> ${esc(x.body)}</p>`).join("");
     return `<div class="wc-more">
-      <h5>Goals</h5><div class="wc-goals">${goals}</div>
-      ${last ? `<h5>Last week's plan</h5>${last}` : ""}
-      <h5>What the week showed</h5>${ins}
-      <p class="muted">${esc(d.baselines)}</p>
-      <p class="muted">${esc(d.leaves_out)}</p></div>`;
+      <h5>🎯 Goals</h5><div class="wc-goals">${goals}</div>
+      ${last ? `<h5>🗒️ Last week's plan</h5>${last}` : ""}
+      <h5>📈 What the week showed</h5>${ins}
+      <p class="muted">📊 ${esc(d.baselines)}</p>
+      <p class="muted">🙅 ${esc(d.leaves_out)}</p></div>`;
   }
 
   // --- Today ---------------------------------------------------------------------
@@ -445,17 +503,21 @@ export class WeekCard {
         const r = m.byDate[date];
         const log = m.logged[date];
         const st = r ? shown(r) : log ? "changed" : "none";
-        const cls = [st, date === m.today ? "today" : "", date === this.sel ? "sel" : ""].join(" ");
+        const kind = r?.kind || (log ? (log.kinds || [])[0] : null);
+        const cls = [st, kind ? `k-${kind}` : "", date === m.today ? "today" : "", date === this.sel ? "sel" : ""].join(" ");
+        const em = r ? kindEmoji(r) : log ? KIND_EMOJI[kind] || "✔️" : "";
         return `<button class="wc-day ${cls}" data-action="wk-day" data-date="${date}" aria-label="${esc(`${dayName(date)}: ${r ? r.title : "nothing planned"}`)}">
           ${r?.changed_at && date >= m.today ? '<i class="moved" aria-hidden="true"></i>' : ""}
-          <span>${date === m.today ? "Today" : esc(weekday(date))}</span><b>${r ? esc(KIND[r.kind] || r.kind) : log ? esc(log.short) : "—"}</b></button>`;
+          <span>${date === m.today ? "Today" : esc(weekday(date))}</span><i class="em" aria-hidden="true">${em || "·"}</i><b>${
+            r ? esc(KIND[r.kind] || r.kind) : log ? esc(log.short) : "—"
+          }</b></button>`;
       })
       .join("");
     const isToday = this.sel === m.today;
     this.p._set(
       "today",
       `${this._readiness(m)}
-       <div class="eyebrow">Your week</div>
+       <div class="eyebrow">🗓️ Your week</div>
        ${m.weekNote ? `<div class="wc-note">${esc(m.weekNote)}</div>` : ""}
        ${this._balance(m, days)}
        <div class="wc-days">${pills}</div>
@@ -467,25 +529,34 @@ export class WeekCard {
 
   // This morning's HRV + resting HR against his own normal. When both are off and today is a hard day,
   // he decides: keep the session or take its easy version (same choice as the morning push).
+  // Before Garmin has last night's numbers (the sync looks every 15 min from 4:45 AM) it says it's waiting,
+  // so a plan that hasn't moved reads as "checked, still on" rather than "never looked".
   _readiness(m) {
     const r = m.readiness;
-    if (!r || r.date !== m.today) return "";
+    if (!r || r.date !== m.today) {
+      if (!m.byDate[m.today]) return "";
+      return `<div class="wc-ready wait"><b>⏳ Waiting on last night's HRV</b><span>Syncs from Garmin every 15 min from 4:45 AM; today's plan stands until it's in.</span></div>`;
+    }
     const n = (x) => (x == null ? "?" : Math.round(x));
-    const nums = `HRV ${n(r.hrv)} (your normal ${n(r.base_hrv)}) · resting HR ${n(r.rhr)} (${n(r.base_rhr)})`;
+    // Amber past readiness.py's HRV_DOWN / RHR_UP, the single-day "off" lines.
+    const hrvOff = (r.hrv_down_pct || 0) >= 12;
+    const rhrOff = (r.rhr_up || 0) >= 3;
+    const nums = `<span class="nums"><span class="${hrvOff ? "off" : ""}">HRV ${n(r.hrv)} vs ${n(r.base_hrv)}</span><span class="${rhrOff ? "off" : ""}">RHR ${n(r.rhr)} vs ${n(r.base_rhr)}</span></span>`;
+    const plain = `HRV ${n(r.hrv)} (your normal ${n(r.base_hrv)}) · resting HR ${n(r.rhr)} (${n(r.base_rhr)})`;
     const decision = this.ready[r.date] || r.decision;
     if (r.ask && !decision) {
-      return `<div class="alert warn" style="margin:0 0 18px"><span><b>Recovery's down today.</b> ${esc(nums)}${r.yesterday_off ? ", two days running" : ""}.
+      return `<div class="alert warn" style="margin:0 0 18px"><span><b>🟠 Recovery's down today.</b> ${esc(plain)}${r.yesterday_off ? ", two days running" : ""}.
         ${r.session ? `I'd do the easy version of ${esc(r.session)}: ${esc(r.suggestion || "keep it short and easy")}.` : ""}
         <span class="wc-acts" style="display:flex">
-          <button class="btn2" data-action="wk-ready" data-date="${esc(r.date)}" data-value="kept">Keep it</button>
-          <button class="btn2" data-action="wk-ready" data-date="${esc(r.date)}" data-value="eased">Ease it</button></span></span></div>`;
+          <button class="btn2" data-action="wk-ready" data-date="${esc(r.date)}" data-value="kept">💪 Keep it</button>
+          <button class="btn2" data-action="wk-ready" data-date="${esc(r.date)}" data-value="eased">🪶 Ease it</button></span></span></div>`;
     }
-    const line =
-      decision === "eased" ? `Eased this morning. ${nums}.`
-      : decision === "kept" ? `You kept today's session. ${nums}.`
-      : r.verdict === "ease" ? `Recovery's down. ${nums}.`
-      : `Recovery on track. ${nums}.`;
-    return `<div class="sub" style="margin:0 0 16px;font-size:14px">${esc(line)}</div>`;
+    const [cls, line] =
+      decision === "eased" ? ["down", "🪶 Eased this morning"]
+      : decision === "kept" ? ["", "💪 You kept today's session"]
+      : r.verdict === "ease" ? ["down", "🟠 Recovery's down"]
+      : ["", "🟢 Recovery on track · plan stands"];
+    return `<div class="wc-ready ${cls}" title="${esc(plain)}"><b>${line}</b>${nums}</div>`;
   }
 
   // Sessions per goal across the strip's days: done (logged) and still planned. A goal with nothing
@@ -504,7 +575,8 @@ export class WeekCard {
       const c = count[g];
       const total = c.done + c.planned;
       const txt = !total ? "Nothing this week" : [c.done ? `${c.done} done` : "", c.planned ? `${c.planned} planned` : ""].filter(Boolean).join(" · ");
-      return `<div class="${total ? "" : "zero"}"><b>${esc(label)}</b><span>${esc(txt)}</span></div>`;
+      const dots = "<i class=\"d\"></i>".repeat(c.done) + "<i></i>".repeat(c.planned);
+      return `<div class="g-${g} ${total ? "" : "zero"}"><b>${GOAL_EMOJI[g]} ${esc(label)}</b>${total ? `<div class="dots" aria-hidden="true">${dots}</div>` : ""}<span>${esc(txt)}</span></div>`;
     }).join("");
     return `<div class="wc-bal">${tiles}</div>
       <div class="wc-replan"><button class="disclose" data-action="wk-replan" style="margin-top:0">${this.p.icon("mdiRefresh")} Re-plan my week</button></div>`;
@@ -533,13 +605,13 @@ export class WeekCard {
     if (past) {
       const s = status(r);
       const txt = {
-        done: `Done${r.logged ? ` · ${r.logged}` : ""}`,
-        changed: `Changed · ${r.logged || r.status_note || "you did something else"}`,
-        skipped: "Skipped",
-        unknown: "Nothing in Garmin or Hevy",
-        planned: "Not checked yet",
+        done: `✅ Done${r.logged ? ` · ${r.logged}` : ""}`,
+        changed: `🔁 Changed · ${r.logged || r.status_note || "you did something else"}`,
+        skipped: "⏭️ Skipped",
+        unknown: "❓ Nothing in Garmin or Hevy",
+        planned: "⏳ Not checked yet",
       }[s] || s;
-      st = `<div class="st ${esc(s)}">${s === "done" ? p.icon("mdiCheck") : ""}${esc(txt)}</div>`;
+      st = `<div class="st ${esc(s)}">${esc(txt)}</div>`;
       if (s === "unknown" || s === "planned") {
         acts = `<button class="btn2" data-action="wk-mark" data-date="${date}" data-value="done">${p.icon("mdiCheck")} Done</button>
           <button class="btn2" data-action="wk-mark" data-date="${date}" data-value="skipped">Skipped</button>
@@ -548,21 +620,20 @@ export class WeekCard {
     } else {
       const s = status(r);
       if (date === m.today && ["done", "changed"].includes(s)) {
-        st = `<div class="st ${esc(s)}">${s === "done" ? p.icon("mdiCheck") : ""}${esc(s === "done" ? `Done · ${r.logged}` : `Changed · ${r.logged}`)}</div>`;
-      } else if (r.changed_at) st = `<div class="st moved">Moved here by your coach</div>`;
+        st = `<div class="st ${esc(s)}">${esc(`${s === "done" ? "✅ Done" : "🔁 Changed"}${r.logged ? ` · ${r.logged}` : ""}`)}</div>`;
+      } else if (r.changed_at) st = `<div class="st moved">📅 Moved here by your coach</div>`;
       // Today's change lives under "Do something else today".
       if (date !== m.today) acts = `<button class="btn2" data-action="wk-about" data-date="${date}">Change this day</button>`;
     }
     const how = (r.how || []).length ? `<ol class="wc-how">${r.how.map((x) => `<li><span>${esc(x)}</span></li>`).join("")}</ol>` : "";
     const goals = dayGoals(r, m.logged[date]);
-    const serves = goals.length
-      ? `<div class="wc-serves">${goals.map((g) => `<span>${esc((GOALS.find(([k]) => k === g) || [g, g])[1])}</span>`).join("")}</div>`
-      : "";
-    return `<div class="wc-detail"><h2>${esc(r.title)}</h2><p class="lead">${esc(r.focus)}</p>
-      ${how}
-      ${r.why ? `<div class="wc-why"><b>Why today.</b> ${esc(r.why)}</div>` : ""}
+    const serves = goals.length ? `<div class="wc-serves">${goals.map(goalChip).join("")}</div>` : "";
+    return `<div class="wc-detail k-${esc(r.kind)}"><span class="kb">${kindEmoji(r)} ${esc(KIND[r.kind] || r.kind)}</span>
+      <h2>${esc(r.title)}</h2><p class="lead">${esc(r.focus)}</p>
       ${serves}
-      <p class="cooked">If you're cooked: ${esc(r.if_cooked)}</p>${st}
+      ${how}
+      ${r.why ? `<div class="wc-why"><b>💡 Why today.</b> ${esc(r.why)}</div>` : ""}
+      ${r.if_cooked ? `<div class="wc-cooked"><b>🪫 If you're cooked:</b> ${esc(r.if_cooked)}</div>` : ""}${st}
       ${acts ? `<div class="wc-acts">${acts}</div>` : ""}</div>`;
   }
 

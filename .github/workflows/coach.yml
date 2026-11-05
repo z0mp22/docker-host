@@ -5,7 +5,7 @@ name: Coach
 #   mode=message|answer -> save what you said, reply live, maybe change plan days
 #   mode=day            -> mark a plan day done/skipped (no Claude call)
 #   mode=check          -> mark past plan days from Garmin + Hevy (also nightly from cron)
-#   mode=sync           -> mark days incl. today, log every day, check in if it changes the plan (cron, every 30 min)
+#   mode=sync           -> mark days incl. today, log every day, check in if it changes the plan (cron, every 15 min from 4:45 AM, 30 from 8)
 #   mode=replan         -> the panel's "Re-plan my week": the coach rewrites today through 6 days out
 # No concurrency group: GitHub keeps only one pending run per group, which would
 # drop messages sent in a row. run-coach.sh queues them with flock instead.
