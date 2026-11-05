@@ -420,7 +420,7 @@ panel_custom:
     url_path: house
     sidebar_title: Home
     sidebar_icon: mdi:home
-    module_url: /local/home/home-panel.js?v=13
+    module_url: /local/home/home-panel.js?v=14
     config:
       person: person.cody
       # Header "who's home" chips: a person.* (phone app GPS) or a presence binary_sensor
@@ -474,6 +474,13 @@ panel_custom:
         - {entity: light.basement, name: Basement, icon: mdiLightRecessed}
         - {entity: switch.office_desk_light, name: Office Monitor Light, icon: mdiDeskLamp}
         - {entity: switch.whole_house_fan_switch_1, name: Whole house fan, icon: mdiFan}
+      # Basement workout row under the switches (packages/workout.yaml), moved here from /coach
+      # 2026-11-05 so it's there whatever today's plan is. In progress = Spotify on the basement Roku.
+      workout:
+        start: script.basement_workout
+        end: script.basement_workout_end
+        light: light.basement
+        roku: media_player.basement_roku
       media:
         - {entity: media_player.roku_4800x_a029, name: Living room Roku}
         - {entity: media_player.plex_plex_for_roku_z_roku_ultra, name: Plex · Roku Ultra}
@@ -596,7 +603,7 @@ panel_custom:
     url_path: coach
     sidebar_title: Coaching
     sidebar_icon: mdi:dumbbell
-    module_url: /local/coach/coach-panel.js?v=14
+    module_url: /local/coach/coach-panel.js?v=15
   - name: network-panel
     url_path: network
     sidebar_title: Network

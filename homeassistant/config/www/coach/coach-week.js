@@ -5,8 +5,8 @@
 //   the day's plan isn't below a scroll of last night's chat.
 // - Today: this morning's recovery, a rolling strip from yesterday through the next five days, the
 //   selected day, and for today everything to do about it in one place: build the session in Hevy,
-//   the session itself once it's there, start/end the basement workout, the shoulder and finger
-//   flags, or do something else.
+//   the session itself once it's there, the shoulder and finger flags, or do something else. The
+//   basement Start/End workout lives on the Home panel since 2026-11-05.
 // - Debrief (last): Monday's headline, goals, last week, insights, and "New debrief".
 //
 // Kinds and goals each carry an emoji and a color everywhere they appear, so the week scans at a glance.
@@ -34,7 +34,6 @@ const SESSIONS = [
   { id: "shoulder_pt", label: "PT Day", script: "script.lift_session_run_pt" },
   { id: "fingerboard", label: "Board", script: "script.lift_session_run_fingerboard" },
 ];
-const BASEMENT_KINDS = ["lift", "fingerboard", "cardio"];
 const GOALS = [
   ["climbing", "Climbing"],
   ["mtb", "MTB"],
@@ -637,7 +636,7 @@ export class WeekCard {
       ${acts ? `<div class="wc-acts">${acts}</div>` : ""}</div>`;
   }
 
-  // Everything to do about today: the session (build it, or see it once it's in Hevy), the basement,
+  // Everything to do about today: the session (build it, or see it once it's in Hevy),
   // the flags, and doing something else.
   _todayActions(m, r, pm, job, busy) {
     const p = this.p;
@@ -668,8 +667,6 @@ export class WeekCard {
         <div class="hint">${blocked ? "Finger flag is on: no board work today" : "Your lift coach picks the exercises from today's recovery and your goals"}</div>
         ${this._jobAlert(wantsBoard ? bjob : job)}${flags}</div>`);
     }
-
-    if (BASEMENT_KINDS.includes(kind) || pm.fresh || pm.board.fresh) parts.push(`<div class="wc-sec">${p.workoutHtml(pm)}</div>`);
 
     const others = SESSIONS.map(
       (s) => `<button class="btn2" data-action="wk-gen" data-type="${s.id}" ${(s.id === "fingerboard" && pm.fingerFlagOn) || busy || bbusy ? "disabled" : ""}>${esc(s.label)}</button>`,

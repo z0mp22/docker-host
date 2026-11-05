@@ -6,6 +6,9 @@ const ICONS = {
   mdiPackageVariantClosed: "M21,16.5C21,16.88 20.79,17.21 20.47,17.38L12.57,21.82C12.41,21.94 12.21,22 12,22C11.79,22 11.59,21.94 11.43,21.82L3.53,17.38C3.21,17.21 3,16.88 3,16.5V7.5C3,7.12 3.21,6.79 3.53,6.62L11.43,2.18C11.59,2.06 11.79,2 12,2C12.21,2 12.41,2.06 12.57,2.18L20.47,6.62C20.79,6.79 21,7.12 21,7.5V16.5M12,4.15L10.11,5.22L16,8.61L17.96,7.5L12,4.15M6.04,7.5L12,10.85L13.96,9.75L8.08,6.35L6.04,7.5M5,15.91L11,19.29V12.58L5,9.21V15.91M19,15.91V9.21L13,12.58V19.29L19,15.91Z",
   mdiPackageVariantClosedRemove: "M13 12.6L19 9.2V13C19.7 13 20.4 13.1 21 13.4V7.5C21 7.1 20.8 6.8 20.5 6.6L12.6 2.2C12.4 2.1 12.2 2 12 2S11.6 2.1 11.4 2.2L3.5 6.6C3.2 6.8 3 7.1 3 7.5V16.5C3 16.9 3.2 17.2 3.5 17.4L11.4 21.8C11.6 21.9 11.8 22 12 22S12.4 21.9 12.6 21.8L13.5 21.3C13.2 20.7 13.1 20 13 19.3M12 4.2L18 7.5L16 8.6L10.1 5.2L12 4.2M11 19.3L5 15.9V9.2L11 12.6V19.3M12 10.8L6 7.5L8 6.3L14 9.8L12 10.8M16.9 15.5L19 17.6L21.1 15.5L22.5 16.9L20.4 19L22.5 21.1L21.1 22.5L19 20.4L16.9 22.5L15.5 21.1L17.6 19L15.5 16.9L16.9 15.5Z",
   mdiCheck: "M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z",
+  mdiDumbbell: "M20.57,14.86L22,13.43L20.57,12L17,15.57L8.43,7L12,3.43L10.57,2L9.14,3.43L7.71,2L5.57,4.14L4.14,2.71L2.71,4.14L4.14,5.57L2,7.71L3.43,9.14L2,10.57L3.43,12L7,8.43L15.57,17L12,20.57L13.43,22L14.86,20.57L16.29,22L18.43,19.86L19.86,21.29L21.29,19.86L19.86,18.43L22,16.29L20.57,14.86Z",
+  mdiPlay: "M8,5.14V19.14L19,12.14L8,5.14Z",
+  mdiStop: "M18,18H6V6H18V18Z",
   mdiPaw: "M8.35,3C9.53,2.83 10.78,4.12 11.14,5.9C11.5,7.67 10.85,9.25 9.67,9.43C8.5,9.61 7.24,8.32 6.87,6.54C6.5,4.77 7.17,3.19 8.35,3M15.5,3C16.69,3.19 17.35,4.77 17,6.54C16.62,8.32 15.37,9.61 14.19,9.43C13,9.25 12.35,7.67 12.72,5.9C13.08,4.12 14.33,2.83 15.5,3M3,7.6C4.14,7.11 5.69,8 6.5,9.55C7.26,11.13 7,12.79 5.87,13.28C4.74,13.77 3.2,12.89 2.41,11.32C1.62,9.75 1.9,8.08 3,7.6M21,7.6C22.1,8.08 22.38,9.75 21.59,11.32C20.8,12.89 19.26,13.77 18.13,13.28C17,12.79 16.74,11.13 17.5,9.55C18.31,8 19.86,7.11 21,7.6M19.33,18.38C19.37,19.32 18.65,20.36 17.79,20.75C16,21.57 13.88,19.87 11.89,19.87C9.9,19.87 7.76,21.64 6,20.75C5,20.26 4.31,18.96 4.44,17.88C4.62,16.39 6.41,15.59 7.47,14.5C8.88,13.09 9.88,10.44 11.89,10.44C13.89,10.44 14.95,13.05 16.3,14.5C17.41,15.72 19.26,16.75 19.33,18.38Z",
   mdiClockOutline: "M12,20A8,8 0 0,0 20,12A8,8 0 0,0 12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20M12,2A10,10 0 0,1 22,12A10,10 0 0,1 12,22C6.47,22 2,17.5 2,12A10,10 0 0,1 12,2M12.5,7V12.25L17,14.92L16.25,16.15L11,13V7H12.5Z",
   mdiWateringCan: "M18.5 7.47C17.76 8.2 17.57 9.25 17.92 10.15L15 13.07V11C15 10.45 14.55 10 14 10H12.97C13 9.83 13 9.67 13 9.5C13 6.46 10.54 4 7.5 4S2 6.46 2 9.5C2 11.21 2.78 12.73 4 13.74V20C4 20.55 4.45 21 5 21H14C14.55 21 15 20.55 15 20V15.89L19.33 11.56C20.23 11.91 21.28 11.73 22 11L18.5 7.47M4.05 10C4.03 9.83 4 9.67 4 9.5C4 7.57 5.57 6 7.5 6S11 7.57 11 9.5C11 9.67 10.97 9.83 10.95 10H4.05Z",
@@ -201,6 +204,18 @@ h1 { margin: 2px 0 0; font-size: 34px; font-weight: 700; line-height: 1.1; }
 .sw span { font-size: 13px; color: var(--muted); }
 .sw.on span { color: #f7d49a; }
 .sw:disabled, .sw.na { opacity: .45; }
+/* Basement workout row under the switches (packages/workout.yaml). */
+.wo { display: flex; align-items: center; gap: 14px; margin-top: 12px; padding: 12px 14px; border-radius: 18px; background: #121a28; border: 1.5px solid var(--line); }
+.wo.on { background: rgba(34,197,94,.08); border-color: rgba(34,197,94,.35); }
+.wo .sic { width: 40px; height: 40px; border-radius: 13px; display: grid; place-items: center; background: #243246; color: #aeb9c9; flex: none; }
+.wo.on .sic { background: linear-gradient(160deg, #86efac, #16a34a); color: #052e16; }
+.wo-t { flex: 1; min-width: 0; } .wo-t b { display: block; font-size: 16px; font-weight: 600; } .wo-t span { font-size: 13px; color: var(--muted); }
+.wo.on .wo-t span { color: #8fe3ad; }
+.wo-btns { display: flex; gap: 8px; flex: none; }
+.wo-btn { height: 40px; padding: 0 16px; border-radius: 12px; display: inline-flex; align-items: center; gap: 6px; font-size: 14.5px; font-weight: 600; background: #1b2638; border: 1px solid var(--line); color: #c3cedd; }
+.wo-btn .ic { width: 18px; height: 18px; }
+.wo-btn.wo-go { background: linear-gradient(180deg, #2fa866, #1d7a46); border-color: transparent; color: #fff; }
+.wo-btn:disabled { opacity: .45; }
 .sw.dim { padding: 0; gap: 0; }
 .sw-tap { display: flex; flex-direction: column; gap: 12px; flex: 1; min-width: 0; padding: 14px 14px 10px; border-radius: inherit; }
 .dimmer { -webkit-appearance: none; appearance: none; display: block; margin: 0 14px 14px; height: 30px; border-radius: 10px; cursor: pointer; touch-action: pan-y;
@@ -399,6 +414,8 @@ h1 { margin: 2px 0 0; font-size: 34px; font-weight: 700; line-height: 1.1; }
   .card { border-radius: 22px; padding: 16px 14px; }
   .switches { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
   .sw { padding: 12px; min-height: 92px; border-radius: 16px; }
+  .wo { flex-wrap: wrap; gap: 10px 12px; padding: 12px; border-radius: 16px; }
+  .wo-btns { width: 100%; } .wo-btn { flex: 1 1 0; justify-content: center; height: 44px; }
   .sw-tap { padding: 12px 12px 8px; }
   .dimmer { margin: 0 12px 12px; height: 34px; }
   .sw b { font-size: 15px; }
@@ -702,6 +719,46 @@ class HomePanel extends HTMLElement {
     window.dispatchEvent(new CustomEvent("location-changed", { detail: { replace: false } }));
   }
 
+  // Calls the script itself (not script.turn_on) so a failure comes back as a toast.
+  async _runWorkout(kind) {
+    const w = this._c.workout;
+    if (!w || this._workoutBusy) return;
+    navigator.vibrate?.(8);
+    this._workoutBusy = kind;
+    this._render();
+    try {
+      await this._hass.callService("script", (kind === "end" ? w.end : w.start).slice("script.".length));
+      this._showToast(kind === "end" ? "Workout ended. Your coach will ask how it went." : "Basement's set: lights 35%, playlist on.", true);
+    } catch (err) {
+      this._showToast(`${kind === "end" ? "Workout didn't end" : "Workout didn't start"}: ${err.message || err}`);
+    }
+    this._workoutBusy = null;
+    this._render();
+  }
+
+  // Basement workout: Start (lights 35% + the playlist on the basement Roku) and End (everything off,
+  // then the coach's "how did it go?" push). In progress = Spotify up on the basement Roku.
+  _workoutRow() {
+    const w = this._c.workout;
+    if (!w) return "";
+    const st = this._hass.states;
+    const roku = st[w.roku];
+    const light = st[w.light];
+    const rokuDead = !live(roku);
+    const app = roku?.attributes?.app_name || "";
+    const active = !rokuDead && /spotify/i.test(app) && !["off", "standby"].includes(roku.state);
+    const lightOn = live(light) && light.state === "on";
+    const busy = this._workoutBusy;
+    const sub = rokuDead ? "Basement Roku not responding" : active ? "End turns it all off, then your coach asks how it went" : "Lights 35% + workout playlist";
+    return `<div class="wo ${active ? "on" : ""}">
+      <div class="sic">${svg("mdiDumbbell")}</div>
+      <div class="wo-t"><b>${active ? "Workout in progress" : "Basement workout"}</b><span>${esc(sub)}</span></div>
+      <div class="wo-btns">
+        <button class="wo-btn ${active ? "" : "wo-go"}" data-action="workout" data-kind="start" ${busy || rokuDead ? "disabled" : ""}>${svg(busy === "start" ? "mdiUpdate" : "mdiPlay")} Start</button>
+        <button class="wo-btn ${active ? "wo-go" : ""}" data-action="workout" data-kind="end" ${busy || (rokuDead && !lightOn) ? "disabled" : ""}>${svg(busy === "end" ? "mdiUpdate" : "mdiStop")} End</button>
+      </div></div>`;
+  }
+
   _showToast(msg, ok = false) {
     this._toast = msg;
     this._toastOk = ok;
@@ -741,6 +798,8 @@ class HomePanel extends HTMLElement {
       } catch (err) {
         this._showToast(`Couldn't do that: ${err.message || err}`);
       }
+    } else if (a === "workout") {
+      this._runWorkout(el.dataset.kind);
     } else if (a === "more-info" && el.dataset.entity) {
       this.dispatchEvent(new CustomEvent("hass-more-info", { detail: { entityId: el.dataset.entity }, bubbles: true, composed: true }));
     } else if (a === "more-attn") {
@@ -1396,6 +1455,7 @@ class HomePanel extends HTMLElement {
             <div class="sic">${icon}</div><div><b>${esc(l.name)}</b><span>${ok ? (on ? "On" : "Off") : "Unavailable"}</span></div></button>`;
         })
         .join("")}</div>
+      ${this._workoutRow()}
     </section>`;
 
     const tileHtml = `<div class="tiles a-tiles${garage ? " with-ph" : ""}">${tiles
