@@ -9,8 +9,9 @@ chosen by COACH_MODE:
 - message: you wrote to the coach (COACH_TEXT; COACH_REF is a plan date when
   it's about one day, e.g. "Changed: did a road ride instead").
 - answer: you answered a question from the debrief (COACH_REF is its id).
-- day: you marked a plan day done or skipped (COACH_REF date, COACH_VALUE).
-  No Claude call.
+- day: you marked a plan day done or skipped, or answered the morning
+  readiness push with eased / kept (COACH_REF date, COACH_VALUE). No Claude
+  call; "eased" swaps the day for its easy version and keeps the original.
 - check: the nightly pass that marks past plan days from Garmin and Hevy.
   No Claude call.
 - sync: every 30 minutes in the day (cron). Marks plan days from Garmin and
@@ -58,6 +59,7 @@ from .debrief import (
     now_iso,
 )
 from .garmin_auth import connect_with_tokens
+from .readiness import assess, update_store
 from .prompts import load_chat_prompt
 from .report_context import athlete_notes, forecast
 from .timezone_util import athlete_tz_name
@@ -68,7 +70,9 @@ REPLAN_DAYS = 6
 LOGGED_DAYS_BACK = 7
 MAX_CHECKINS_PER_DAY = 2
 CHECKIN_HOURS = (7, 21)  # local, start inclusive, end exclusive
-DAY_VALUES = ("done", "skipped")
+DAY_VALUES = ("done", "skipped", "eased", "kept")
+# Days worth a morning "ease it?" question (rest and easy days aren't).
+HARD_KINDS = ("climb", "lift", "outdoor", "cardio", "fingerboard")
 MAX_TEXT = 600
 REPLY_MAX_TOKENS = 1500
 
@@ -195,6 +199,8 @@ def _reply(config, state: dict[str, Any], msg: dict[str, Any], now: datetime) ->
             "plan": state["plan"],
             "answers": state.get("answers", {}),
             "week_note": state.get("week_note"),
+            # This morning's HRV + resting HR vs his own baseline, and what he chose.
+            "readiness": state.get("readiness"),
             # Sessions per goal from yesterday through 5 days out, done and still planned.
             "week_balance": week_balance(state, today),
             "logged_days": state.get("logged_days") or {},
@@ -234,6 +240,40 @@ def _reply(config, state: dict[str, Any], msg: dict[str, Any], now: datetime) ->
     return response.parsed_output, {"model": config.anthropic_model, "input_tokens": usage.input_tokens, "output_tokens": usage.output_tokens}
 
 
+def _readiness_choice(state: dict[str, Any], row: dict[str, Any], value: str) -> None:
+    """His answer to the morning push. Easing keeps the original day so it can
+    be shown (and undone by asking the coach)."""
+    r = state.get("readiness") or {}
+    if value == "eased" and not row.get("eased"):
+        row["original"] = {k: row.get(k) for k in ("kind", "lift_type", "title", "focus", "how", "why")}
+        why = (f"Walked back this morning: HRV {r.get('hrv'):g} (your normal {r.get('base_hrv'):g}) and resting HR "
+               f"{r.get('rhr'):g} ({r.get('base_rhr'):g})." if r.get("hrv") is not None else "Walked back this morning.")
+        row.update({"title": f"{row['title']} (eased)", "focus": row.get("if_cooked") or "The easy version.",
+                    "how": [], "why": why, "eased": True, "changed_at": now_iso()})
+    if r.get("date") == row["date"]:
+        r["decision"] = value
+        state["readiness"] = r
+
+
+def _morning_readiness(client, config, reports_dir, state: dict[str, Any], today: date) -> dict[str, Any] | None:
+    """Today's readiness, once: None until Garmin has today's HRV and RHR."""
+    if (state.get("readiness") or {}).get("date") == today.isoformat():
+        return None
+    verdict = assess(update_store(client, reports_dir, today), today)
+    if verdict is None:
+        return None
+    row = next((r for r in state["plan"] if r["date"] == today.isoformat()), None)
+    verdict.update({
+        "session": row["title"] if row else None,
+        "kind": row["kind"] if row else None,
+        "suggestion": row.get("if_cooked") if row else None,
+        # Only a hard day not yet done gets the "ease it?" push.
+        "ask": bool(verdict["verdict"] == "ease" and row and row["kind"] in HARD_KINDS and row.get("status") not in ("done", "changed")),
+        "decision": None,
+    })
+    return verdict
+
+
 def _reviewed(config, state: dict[str, Any], msg: dict[str, Any], now: datetime) -> tuple[CoachReplySchema, dict]:
     """The reply, checked like lift_review checks a lift session: if its plan
     changes leave the rolling week without a lift or a ride, or with easy days
@@ -270,7 +310,14 @@ def _sync(config, reports_dir, now: datetime) -> int:
     if client is None:
         return 1  # keep what's there rather than marking days from Hevy alone
     activities, lifts, _ = _logs_since(config, start, today, client, recovery_too=False)
+    try:
+        ready = _morning_readiness(client, config, reports_dir, state, today)
+    except Exception as exc:
+        _log(f"readiness check failed: {exc}")
+        ready = None
     with locked_state(reports_dir) as state:
+        if ready:
+            state["readiness"] = ready
         changed = check_days(state, activities, lifts, today, include_today=True)
         logged = logged_days(activities, lifts, today - timedelta(days=LOGGED_DAYS_BACK), today)
         if changed or logged != state.get("logged_days"):
@@ -278,7 +325,8 @@ def _sync(config, reports_dir, now: datetime) -> int:
             state["updated_at"] = now_iso()
         events = find_events(state, logged, today)
         checkins_today = sum(1 for m in state.get("thread", []) if m.get("checkin_date") == today.isoformat())
-    _log(f"sync: {', '.join(changed) or 'no day changes'}; {len(logged)} days logged; {len(events)} new events")
+    _log(f"sync: {', '.join(changed) or 'no day changes'}; {len(logged)} days logged; {len(events)} new events"
+         + (f"; readiness {ready['verdict']} (RHR {ready['rhr']:g} vs {ready['base_rhr']:g}, HRV {ready['hrv']:g} vs {ready['base_hrv']:g})" if ready else ""))
     if not events:
         return 0
     if not CHECKIN_HOURS[0] <= now.hour < CHECKIN_HOURS[1]:
@@ -343,7 +391,10 @@ def main() -> int:
             if row is None:
                 _log(f"No plan day {ref!r}")
                 return 1
-            row.update({"status": value, "status_source": "athlete"})
+            if value in ("eased", "kept"):
+                _readiness_choice(state, row, value)
+            else:
+                row.update({"status": value, "status_source": "athlete"})
             state["updated_at"] = now_iso()
         _log(f"{row['label']} marked {value}")
         return 0

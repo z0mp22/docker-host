@@ -244,6 +244,41 @@ def test_balance_problems_name_what_is_missing():
     probs = db.balance_problems(s, date(2026, 11, 4))
     assert any(p.startswith("No ride or spin") for p in probs)
     assert not any(p.startswith("No lift") for p in probs)
-    assert any("easy or rest days in a row" in p for p in probs)  # Thu, Fri, Sat, Sun, Mon have nothing
+    assert any("he wants six training days" in p for p in probs)  # Thu-Mon have nothing planned
     s["plan"][1]["kind"] = "light"
     assert any(p.startswith("No lift") for p in db.balance_problems(s, date(2026, 11, 4)))
+
+
+def test_ease_swaps_in_the_easy_version_and_keeps_the_original(env):
+    with db.locked_state(env.dir) as s:
+        s["readiness"] = {"date": "2026-11-04", "verdict": "ease", "ask": True, "decision": None,
+                          "hrv": 16, "base_hrv": 21, "rhr": 75, "base_rhr": 70}
+    assert env.run(mode="day", ref="2026-11-04", value="eased") == 0
+    s = env.state()
+    wed = s["plan"][1]
+    assert wed["eased"] and wed["title"] == "Pull-up focus (eased)" and wed["focus"] == "c"
+    assert wed["original"]["title"] == "Pull-up focus" and "HRV 16 (your normal 21)" in wed["why"]
+    assert s["readiness"]["decision"] == "eased" and env.calls == []
+    assert env.run(mode="day", ref="2026-11-04", value="eased") == 0  # twice doesn't stack
+    assert env.state()["plan"][1]["title"] == "Pull-up focus (eased)"
+
+
+def test_keep_only_records_the_choice(env):
+    with db.locked_state(env.dir) as s:
+        s["readiness"] = {"date": "2026-11-04", "verdict": "ease", "ask": True, "decision": None}
+    assert env.run(mode="day", ref="2026-11-04", value="kept") == 0
+    s = env.state()
+    assert s["readiness"]["decision"] == "kept" and s["plan"][1]["title"] == "Pull-up focus"
+
+
+def test_sync_records_todays_readiness_once_and_asks_only_for_a_hard_day(env, monkeypatch):
+    _sync_env(env, monkeypatch, [])
+    verdict = {"date": "2026-11-04", "verdict": "ease", "rhr": 75, "hrv": 16, "base_rhr": 70, "base_hrv": 21}
+    seen = []
+    monkeypatch.setattr(cc, "update_store", lambda *a: seen.append(1) or {})
+    monkeypatch.setattr(cc, "assess", lambda store, today: dict(verdict))
+    assert env.run(mode="sync") == 0
+    r = env.state()["readiness"]
+    assert r["ask"] is True and r["session"] == "Pull-up focus" and r["suggestion"] == "c" and r["decision"] is None
+    assert env.run(mode="sync") == 0
+    assert len(seen) == 1  # today's verdict is final

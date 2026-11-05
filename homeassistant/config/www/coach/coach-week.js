@@ -180,6 +180,7 @@ export class WeekCard {
     this.replyTo = null; // { type: "q" | "day", id, label }
     this.answered = {}; // qid -> answer text, until the sensor has it
     this.marks = {}; // date -> done | skipped, until the sensor has it
+    this.ready = {}; // date -> eased | kept, until the sensor has it
   }
 
   bind(root) {
@@ -217,6 +218,7 @@ export class WeekCard {
       // What Garmin and Hevy logged each recent day, planned or not (synced every 30 min).
       logged: a.logged_days || {},
       weekNote: a.week_note || m_note(d),
+      readiness: a.readiness || null,
       today: isoDay(new Date()),
     };
   }
@@ -291,6 +293,9 @@ export class WeekCard {
       return;
     } else if (act === "wk-mark") {
       this.marks[el.dataset.date] = el.dataset.value;
+      this.p._call("script", "coach_send", { mode: "day", ref: el.dataset.date, value: el.dataset.value });
+    } else if (act === "wk-ready") {
+      this.ready[el.dataset.date] = el.dataset.value;
       this.p._call("script", "coach_send", { mode: "day", ref: el.dataset.date, value: el.dataset.value });
     } else if (act === "wk-replan") {
       if (!window.confirm("Your coach rewrites today through next week's same day, keeping what you've agreed. Go?")) return;
@@ -449,7 +454,8 @@ export class WeekCard {
     const isToday = this.sel === m.today;
     this.p._set(
       "today",
-      `<div class="eyebrow">Your week</div>
+      `${this._readiness(m)}
+       <div class="eyebrow">Your week</div>
        ${m.weekNote ? `<div class="wc-note">${esc(m.weekNote)}</div>` : ""}
        ${this._balance(m, days)}
        <div class="wc-days">${pills}</div>
@@ -457,6 +463,29 @@ export class WeekCard {
        ${this._detail(m, m.byDate[this.sel], status)}
        ${isToday ? this._todayActions(m, m.byDate[m.today], pm, job, busy) : ""}`,
     );
+  }
+
+  // This morning's HRV + resting HR against his own normal. When both are off and today is a hard day,
+  // he decides: keep the session or take its easy version (same choice as the morning push).
+  _readiness(m) {
+    const r = m.readiness;
+    if (!r || r.date !== m.today) return "";
+    const n = (x) => (x == null ? "?" : Math.round(x));
+    const nums = `HRV ${n(r.hrv)} (your normal ${n(r.base_hrv)}) · resting HR ${n(r.rhr)} (${n(r.base_rhr)})`;
+    const decision = this.ready[r.date] || r.decision;
+    if (r.ask && !decision) {
+      return `<div class="alert warn" style="margin:0 0 18px"><span><b>Recovery's down today.</b> ${esc(nums)}${r.yesterday_off ? ", two days running" : ""}.
+        ${r.session ? `I'd do the easy version of ${esc(r.session)}: ${esc(r.suggestion || "keep it short and easy")}.` : ""}
+        <span class="wc-acts" style="display:flex">
+          <button class="btn2" data-action="wk-ready" data-date="${esc(r.date)}" data-value="kept">Keep it</button>
+          <button class="btn2" data-action="wk-ready" data-date="${esc(r.date)}" data-value="eased">Ease it</button></span></span></div>`;
+    }
+    const line =
+      decision === "eased" ? `Eased this morning. ${nums}.`
+      : decision === "kept" ? `You kept today's session. ${nums}.`
+      : r.verdict === "ease" ? `Recovery's down. ${nums}.`
+      : `Recovery on track. ${nums}.`;
+    return `<div class="sub" style="margin:0 0 16px;font-size:14px">${esc(line)}</div>`;
   }
 
   // Sessions per goal across the strip's days: done (logged) and still planned. A goal with nothing

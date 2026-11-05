@@ -44,6 +44,14 @@ him the way a person would, and to be able to answer it. Email is one-way.
   and sends a short note only if it's worth saying, and may move coming days. Each event
   is looked at once, at most two check-ins a day, none from 9 PM to 7 AM.
 
+- **Aggressive by default, walked back by readiness** (added 2026-11-04, Cody's call). The
+  week is six training days, five hard and one moderate, balanced across his goals (two
+  climbs, two lifts, a hard ride, a weekend outdoor day, a zone 2 or PT day). Each
+  morning `readiness.py` compares last night's HRV and today's resting HR with his
+  28-day median. Only both together, two days running or far off today, ask to ease a
+  hard day: a push and a panel banner with Keep it / Ease it. Nothing changes unless he
+  eases it. On his last 8 mornings only Nov 1 (HRV 16 vs 22, RHR +5) would have asked.
+
 ## Consequences
 
 - No report email; failures still alert by email.

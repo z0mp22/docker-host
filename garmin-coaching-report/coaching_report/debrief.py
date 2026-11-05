@@ -542,19 +542,20 @@ def week_balance(state: dict[str, Any], today: date, back: int = 1, ahead: int =
 
 
 _REAL_RIDE = re.compile(r"\b(MTB|Spin|Road ride|cycling|biking)\b", re.I)
-MAX_EASY_IN_A_ROW = 2
+MAX_EASY_IN_WEEK = 2  # one rest + one moderate/recovery day in the rolling week (six training days)
 
 
 def balance_problems(state: dict[str, Any], today: date, back: int = 1, ahead: int = 5) -> list[str]:
     """What a plan change mustn't leave in the rolling week (yesterday
     through five days out): no lift, no real ride (an easy e-bike or walk
-    doesn't count), or more than MAX_EASY_IN_A_ROW easy/rest days in a row.
+    doesn't count), or more than MAX_EASY_IN_WEEK easy, rest or unplanned
+    days (he asked for six training days a week).
     Same posture as lift_review: these go back to the coach for one revision."""
     rows = {r["date"]: r for r in state.get("plan", [])}
     logged = state.get("logged_days") or {}
     days = [(today + timedelta(days=i)).isoformat() for i in range(-back, ahead + 1)]
     lift = ride = False
-    run, worst = [], []
+    run = []
     for iso in days:
         row, log = rows.get(iso), logged.get(iso)
         if row and row.get("status") in ("skipped", "unknown"):
@@ -567,9 +568,8 @@ def balance_problems(state: dict[str, Any], today: date, back: int = 1, ahead: i
             or (log and _REAL_RIDE.search(log.get("summary", "")))
         )
         easy = (row is None and not log) or (row is not None and row["kind"] in ("light", "rest") and not (kinds - {"light"}))
-        run = run + [iso] if easy else []
-        if len(run) > len(worst):
-            worst = run
+        if easy:
+            run.append(iso)
     label = lambda iso: f"{date.fromisoformat(iso):%a %b} {date.fromisoformat(iso).day}"
     span = f"{label(days[0])} through {label(days[-1])}"
     problems = []
@@ -577,8 +577,11 @@ def balance_problems(state: dict[str, Any], today: date, back: int = 1, ahead: i
         problems.append(f"No lift session from {span}: physique and pulling strength get nothing. Put a lift (kind lift) on a day that fits.")
     if not ride:
         problems.append(f"No ride or spin from {span} (an easy e-bike or walk isn't one): MTB and snowboard legs get nothing. Add one.")
-    if len(worst) > MAX_EASY_IN_A_ROW:
-        problems.append(f"{len(worst)} easy or rest days in a row ({label(worst[0])} to {label(worst[-1])}); keep it to {MAX_EASY_IN_A_ROW} around a big day.")
+    if len(run) > MAX_EASY_IN_WEEK:
+        problems.append(
+            f"{len(run)} easy, rest or unplanned days from {span} ({', '.join(label(d) for d in run)}): he wants six "
+            f"training days, so keep it to {MAX_EASY_IN_WEEK} (one rest, one moderate) and plan the rest as real sessions."
+        )
     return problems
 
 
