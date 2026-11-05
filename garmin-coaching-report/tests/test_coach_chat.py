@@ -25,6 +25,7 @@ def env(tmp_path, monkeypatch):
             db.CoachReplySchema(
                 reply="Moved the ride to Thursday.",
                 plan_changes=[db.PlanChange(date="2099-01-01", kind="rest", title="x", focus="y", if_cooked="z")],
+                answered=[db.AnsweredQuestion(id="q1", answer="Halloween, one-off"), db.AnsweredQuestion(id="q9", answer="x")],
             ),
             {"model": "m", "input_tokens": 10, "output_tokens": 5},
         )
@@ -113,3 +114,17 @@ def test_bad_input(env, tmp_path, monkeypatch):
     db.state_path(env.dir).unlink()
     assert env.run(mode="check") == 0  # nothing to check before the first debrief
     assert env.run(mode="message", text="hi") == 1
+
+
+def test_a_reply_can_close_a_question_the_conversation_answered(env):
+    assert env.run(mode="message", text="It was Halloween, nothing more", cid="c7") == 0
+    answers = env.state()["answers"]
+    assert answers == {"q1": {**answers["q1"], "text": "Halloween, one-off", "via": "conversation"}}  # unknown q9 ignored
+
+
+def test_a_message_about_a_future_or_unplanned_day_names_it_without_marking_it(env):
+    assert env.run(mode="message", text="Saturday's out", ref="2099-01-02", cid="c8") == 0
+    msg = env.state()["thread"][0]
+    assert msg["about_day"] == "2099-01-02"
+    assert all(r["status"] == "planned" for r in env.state()["plan"])
+    assert cc._about_day(env.state(), "2099-01-02") == {"date": "2099-01-02", "weekday": "Friday", "planned": None}

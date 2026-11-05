@@ -1,9 +1,11 @@
 // Coaching panel: a dependency-free web component registered via panel_custom.
 // It only drives the existing scripts (which dispatch the GitHub workflows that
-// write to Hevy); generation itself is unchanged. The weekly coach card lives in
-// coach-week.js (bump its ?v= below together with this file's in configuration.yaml).
+// write to Hevy); generation itself is unchanged. Since 2026-11-04 the page is two cards,
+// Coach and Today, built in coach-week.js (bump its ?v= below together with this file's in
+// configuration.yaml); this file keeps the shell, the header, the lift/board/basement helpers
+// those cards call, and the report run.
 
-import { WEEK_CSS, WEEK_SHELL, WeekCard } from "./coach-week.js?v=1";
+import { COACH_SHELL, WEEK_CSS, WeekCard } from "./coach-week.js?v=2";
 
 const ICONS = {
   mdiAlertOutline: "M12,2L1,21H23M12,6L19.53,19H4.47M11,10V14H13V10M11,16V18H13V16",
@@ -29,7 +31,6 @@ const FLAG = "input_boolean.lift_shoulder_flag";
 const FINGER_FLAG = "input_boolean.lift_finger_flag";
 // Fingerboard is its own session (own Hevy routine, own sensor) since 2026-10-07.
 const BOARD = { sensor: "sensor.fingerboard_session_latest", script: "script.lift_session_run_fingerboard", note: "fingerboard_session_dispatch" };
-const FEEDBACK = "input_text.lift_feedback";
 const PANEL_STATE = "input_text.coach_panel_state";
 const SLOW_MS = 15 * 60e3;
 const EXPIRE_MS = 60 * 60e3;
@@ -48,13 +49,10 @@ const REPORTS = {
   last: { script: "script.coaching_report_run_since_last", label: "since the last report" },
   "7d": { script: "script.coaching_report_run_full_7d", label: "full 7-day window" },
 };
-const QUICK_FEEDBACK = ["Felt easy", "Too heavy", "Knee bugged me", "Shoulder felt good", "Fingers sore next day", "Loved the supersets", "Short on time"];
-const WARN_FLAG = /poor|very low|\blow\b|elevated|fatigue|knee|pain|sore|injur|bugs?\b|flag_active: true/i;
 
 const svg = (name) => `<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="${ICONS[name] || ""}"/></svg>`;
 const esc = (s) =>
   String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
-const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 const typeInfo = (id) => TYPES.find((t) => t.id === id) || { id, label: id || "Session", desc: "", icon: "mdiDumbbell" };
 const stripMd = (s) => s.replace(/\*\*(.+?)\*\*/g, "$1").replace(/\*(.+?)\*/g, "$1").replace(/`/g, "").trim();
 const localDate = (d = new Date()) =>
@@ -139,11 +137,8 @@ h1 { margin: 0; font-size: 34px; font-weight: 700; line-height: 1.1; }
 @keyframes pulse { 50% { opacity: .35; } }
 .icon-btn { width: 48px; height: 48px; border-radius: 16px; display: grid; place-items: center; background: var(--card-2); border: 1px solid var(--line); flex: none; }
 
-.grid { display: grid; gap: 22px; align-items: start; grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr);
-  grid-template-areas: "week week" "session workout" "session gen" "session board" "session feedback"; grid-template-rows: auto auto auto auto 1fr; }
-.grid.gen-first { grid-template-columns: minmax(0, 1fr) minmax(0, 1.45fr); grid-template-areas: "week week" "workout session" "gen session" "board session" "feedback session"; }
+.grid { display: grid; gap: 22px; align-items: start; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); grid-template-areas: "today coach"; }
 .card { background: linear-gradient(180deg, var(--card-2), var(--card)); border: 1px solid var(--line); border-radius: 30px; padding: 26px 28px; min-width: 0; }
-.a-workout { grid-area: workout; } .a-board { grid-area: board; } .a-session { grid-area: session; } .a-gen { grid-area: gen; } .a-feedback { grid-area: feedback; }
 .eyebrow { font-size: 13px; letter-spacing: .12em; font-weight: 600; color: var(--muted); text-transform: uppercase; }
 h2 { margin: 6px 0 0; font-size: 26px; font-weight: 600; line-height: 1.2; }
 h3 { margin: 6px 0 0; font-size: 21px; font-weight: 600; }
@@ -267,8 +262,7 @@ textarea::placeholder { color: #5d6b80; }
 .toast { position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%); padding: 14px 20px; border-radius: 14px; background: #3a1d24; border: 1px solid rgba(240,97,109,.5); color: #ffd3d7; z-index: 10; max-width: 90vw; }
 
 @container (max-width: 980px) {
-  .grid { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; grid-template-areas: "week" "workout" "session" "gen" "board" "feedback"; }
-  .grid.gen-first { grid-template-columns: minmax(0, 1fr); grid-template-areas: "week" "workout" "gen" "session" "board" "feedback"; }
+  .grid { grid-template-columns: minmax(0, 1fr); grid-template-areas: "coach" "today"; }
 }
 @container (max-width: 640px) {
   .app { padding: 14px 14px 24px; }
@@ -313,10 +307,7 @@ class CoachPanel extends HTMLElement {
     this.attachShadow({ mode: "open" });
     this._regions = {};
     this._notes = {};
-    this._expanded = false;
     this._moreReports = false;
-    this._type = null;
-    this._fb = null;
     this._toast = "";
     this._workout = null; // { phase: "busy" | "done", at }
     this._week = new WeekCard(this);
@@ -343,8 +334,7 @@ class CoachPanel extends HTMLElement {
     this._ensureSetup();
     // The end-of-workout push opens /coach?feedback; coach pushes open /coach?week.
     const params = new URLSearchParams(location.search);
-    if (params.has("feedback")) setTimeout(() => this._focusFeedback(), 600);
-    else if (params.has("week")) setTimeout(() => this._week.focus(), 600);
+    if (params.has("feedback") || params.has("week")) setTimeout(() => this._week.focusCompose(), 600);
     this._tick = setInterval(() => this._render(), 5000);
   }
 
@@ -390,31 +380,13 @@ class CoachPanel extends HTMLElement {
       <div class="app">
         <header class="top" data-region="header"></header>
         <main class="grid">
-          <section class="card a-week">${WEEK_SHELL}</section>
-          <section class="card a-workout" data-region="workout"></section>
-          <section class="card a-gen" data-region="gen"></section>
-          <section class="card a-board" data-region="board"></section>
-          <section class="card a-session" data-region="session"></section>
-          <section class="card a-feedback">
-            <div class="eyebrow">Session feedback</div>
-            <h3>How did it go?</h3>
-            <div class="sub">Likes, dislikes, how it felt — remembered for future sessions.</div>
-            <div class="chips">${QUICK_FEEDBACK.map((c) => `<button class="chip" data-action="chip" data-text="${esc(c)}">${esc(c)}</button>`).join("")}</div>
-            <div class="input">
-              <textarea rows="1" maxlength="255" placeholder="e.g. “Face pulls felt great”"></textarea>
-              <button class="send" data-action="send" aria-label="Send feedback" disabled>${svg("mdiSend")}</button>
-            </div>
-            <div data-region="fbstatus"></div>
-          </section>
+          <section class="card a-coach">${COACH_SHELL}</section>
+          <section class="card a-today" data-region="today"></section>
         </main>
         <div data-region="toast"></div>
       </div>`;
     for (const el of this.shadowRoot.querySelectorAll("[data-region]")) this._regions[el.dataset.region] = { el, html: null };
-    this._grid = this.shadowRoot.querySelector(".grid");
-    this._textarea = this.shadowRoot.querySelector(".a-feedback textarea");
-    this._sendBtn = this.shadowRoot.querySelector(".a-feedback .send");
     this._week.bind(this.shadowRoot);
-    this._textarea.addEventListener("input", () => this._onDraft());
   }
 
   _set(region, html) {
@@ -423,13 +395,6 @@ class CoachPanel extends HTMLElement {
       r.html = html;
       r.el.innerHTML = html;
     }
-  }
-
-  _onDraft() {
-    const ta = this._textarea;
-    ta.style.height = "auto";
-    ta.style.height = `${Math.min(ta.scrollHeight + 2, 180)}px`;
-    this._sendBtn.disabled = !ta.value.trim() || this._fb?.state === "sending";
   }
 
   _scheduleRender() {
@@ -492,33 +457,11 @@ class CoachPanel extends HTMLElement {
       case "menu":
         this.dispatchEvent(new Event("hass-toggle-menu", { bubbles: true, composed: true }));
         return;
-      case "type":
-        this._type = el.dataset.type;
-        this._render();
-        return;
       case "flag":
         this._call("input_boolean", m.flagOn ? "turn_off" : "turn_on", { entity_id: FLAG });
         return;
       case "finger-flag":
         this._call("input_boolean", m.fingerFlagOn ? "turn_off" : "turn_on", { entity_id: FINGER_FLAG });
-        return;
-      case "generate": {
-        const t = typeInfo(this._selectedType(m));
-        if (m.fresh && !window.confirm(`Replace today's session in Hevy with a new ${t.label} session?`)) return;
-        await this._writePanelState({ l: { t: t.id, at: Math.floor(Date.now() / 1000) } });
-        this._call("script", "turn_on", { entity_id: t.script });
-        this._render();
-        return;
-      }
-      case "board": {
-        await this._writePanelState({ b: { at: Math.floor(Date.now() / 1000) } });
-        this._call("script", "turn_on", { entity_id: BOARD.script });
-        this._render();
-        return;
-      }
-      case "expand":
-        this._expanded = !this._expanded;
-        this._render();
         return;
       case "report": {
         const w = el.dataset.window;
@@ -537,33 +480,6 @@ class CoachPanel extends HTMLElement {
         this._moreReports = !this._moreReports;
         this._render();
         return;
-      case "chip": {
-        const ta = this._textarea;
-        const add = el.dataset.text;
-        const cur = ta.value.trim();
-        const next = cur ? `${cur.replace(/[.!]?$/, ".")} ${add}.` : `${add}.`;
-        if (next.length <= 255) ta.value = next;
-        this._onDraft();
-        return;
-      }
-      case "send": {
-        const text = this._textarea.value.trim();
-        if (!text) return;
-        this._fb = { state: "sending", at: Date.now(), text };
-        this._onDraft();
-        this._render();
-        const ok =
-          (await this._call("input_text", "set_value", { entity_id: FEEDBACK, value: text })) &&
-          (await this._call("script", "turn_on", { entity_id: "script.lift_feedback_submit" }));
-        if (!ok) {
-          this._fb = null;
-        } else {
-          this._textarea.value = "";
-        }
-        this._onDraft();
-        this._render();
-        return;
-      }
       default:
         return;
     }
@@ -579,7 +495,7 @@ class CoachPanel extends HTMLElement {
     try {
       await this._hass.callService("script", script.slice("script.".length));
       this._workout = { phase: "done", kind, at: Date.now() };
-      if (kind === "end") this._focusFeedback();
+      if (kind === "end") this._week.focusCompose();
     } catch (err) {
       this._workout = null;
       this._showToast(`${kind === "end" ? "Workout didn't end" : "Workout didn't start"}: ${err.message || err}`);
@@ -588,16 +504,10 @@ class CoachPanel extends HTMLElement {
     setTimeout(() => this._render(), WORKOUT_DONE_MS + 100);
   }
 
-  // After End workout (or opening /coach?feedback from the push), bring the feedback box up.
-  _focusFeedback() {
-    const card = this.shadowRoot.querySelector(".a-feedback");
-    card?.scrollIntoView({ behavior: "smooth", block: "center" });
-    this._textarea?.focus({ preventScroll: true });
-  }
-
   // What the basement is doing right now, from the light and the Roku themselves.
   // Primary when today's session is ready (working out is the next step); otherwise Generate is.
-  _renderWorkout(m) {
+  // Basement controls for the Today card (packages/workout.yaml).
+  workoutHtml(m) {
     const st = this._hass.states;
     const light = st[WORKOUT.light];
     const roku = st[WORKOUT.roku];
@@ -627,28 +537,38 @@ class CoachPanel extends HTMLElement {
       busy && w.kind === "end" ? `${svg("mdiRefresh")} Ending…` : done && w.kind === "end" ? `${svg("mdiCheck")} Ended` : `${svg("mdiStop")} End`;
     const startCls = done && w.kind === "start" ? "done" : !active && m.fresh ? "" : "quiet";
     const endCls = done && w.kind === "end" ? "done" : active ? "" : "quiet";
-    this._set(
-      "workout",
+    return (
       `<div class="wk">
-        <div class="wk-t"><div class="eyebrow">Basement workout</div>
-          <h3>${active ? "Workout in progress" : "Lights 35% · workout playlist"}</h3>
+        <div class="wk-t"><div class="eyebrow">Basement</div>
+          <h3>${active ? "Workout in progress" : "Lights and playlist"}</h3>
           <div class="sub">Now: ${esc(lightText)} · ${esc(tvText)}</div>
-          ${active ? `<div class="sub">End turns off Spotify, the TV and the lights, then asks how it went.</div>` : ""}</div>
+          ${active ? `<div class="sub">End turns everything off, then asks how it went.</div>` : ""}</div>
         <div class="wk-btns">
           <button class="cta wk-btn ${startCls}" data-action="workout" ${busy || rokuDead ? "disabled" : ""}>${startLabel}</button>
           <button class="cta wk-btn ${endCls}" data-action="workout-end" ${busy || (rokuDead && !lightOn) ? "disabled" : ""}>${endLabel}</button>
         </div>
       </div>
-      ${rokuDead ? `<div class="alert warn">${svg("mdiAlertOutline")}<span>Home Assistant can't reach the basement Roku, so the playlist can't start. Check that it's plugged in and on Wi-Fi.</span></div>` : ""}`,
+      ${rokuDead ? `<div class="alert warn">${svg("mdiAlertOutline")}<span>Home Assistant can't reach the basement Roku, so the playlist can't start. Check that it's plugged in and on Wi-Fi.</span></div>` : ""}`
     );
+  }
+
+  // Today's lift session once it's in Hevy, as a list you can read at the rack.
+  sessionHtml(m) {
+    const parsed = parseSummary(m.summary);
+    const exercises = parsed.items.filter((i) => i.kind === "ex");
+    const rows = exercises.length
+      ? `<div class="ses">${exercises
+          .map((e) => `<div class="ses-row"><span>${esc(e.name)}</span><span>${esc(e.reps || "")}${e.load ? ` @ ${esc(e.load)}` : ""}</span></div>`)
+          .join("")}</div>`
+      : `<div class="raw">${esc(stripMd(m.summary))}</div>`;
+    const why = m.rationale.split(/(?<=[.!?])\s+/).slice(0, 2).join(" ");
+    return `<div class="eyebrow">${esc(typeInfo(m.sessionType).label)} · in Hevy</div>
+      <h3>${esc(parsed.title || "Today's session")}</h3>${rows}
+      ${why ? `<div class="sub" style="margin-top:10px">${esc(why)}</div>` : ""}`;
   }
 
   icon(name) {
     return svg(name);
-  }
-
-  _selectedType(m) {
-    return this._type || m.sessionType || "light_30m";
   }
 
   _fmtTime(ms) {
@@ -777,28 +697,24 @@ class CoachPanel extends HTMLElement {
     this._model = m;
     const job = this._liftJob(m);
     const busy = job && ["sending", "queued", "slow"].includes(job.state);
-    this._grid.classList.toggle("gen-first", !m.fresh || !!busy);
-
     this._renderHeader(m, job, busy);
-    this._renderWorkout(m);
-    this._renderGen(m, job, busy);
-    this._renderBoard(m);
-    this._renderSession(m, job, busy);
-    this._renderFeedbackStatus();
-    this._week.render();
+    this._week.render(m, job, busy);
     this._renderReport(m);
     this._set("toast", this._toast ? `<div class="toast" role="alert">${esc(this._toast)}</div>` : "");
   }
 
+  // What today is, in a few words: the plan's day, and whether its session is ready in Hevy.
   _renderHeader(m, job, busy) {
+    const row = this._week.todayRow();
+    const sessionDay = row && ["lift", "fingerboard"].includes(row.kind);
+    const ready = row?.kind === "fingerboard" ? m.board.fresh : m.fresh;
     let s;
-    if (busy) {
-      const t = typeInfo(job.type).label;
-      s = { dot: "blue", label: "Generating", detail: `${t} session · ${job.state === "sending" ? "sending to GitHub" : `started ${this._ago(job.at)}`}` };
-    } else if (job?.state === "failed") s = { dot: "red", label: "Didn't start", detail: "GitHub rejected the request" };
-    else if (m.fresh) s = { dot: "green", label: "Session ready", detail: `${typeInfo(m.sessionType).label}${m.routineId ? " · saved to Hevy" : ""}` };
-    else if (m.has) s = { dot: "amber", label: "No session today", detail: m.ageDays === 1 ? "Last one was yesterday" : `Last one was ${m.ageDays} days ago` };
-    else s = { dot: "", label: "No session yet", detail: "Generate your first one" };
+    if (busy) s = { dot: "blue", label: "Building", detail: `${typeInfo(job.type).label} session · ${job.state === "sending" ? "sending to GitHub" : `started ${this._ago(job.at)}`}` };
+    else if (job?.state === "failed") s = { dot: "red", label: "Didn't start", detail: "GitHub rejected the request" };
+    else if (!row) s = { dot: "", label: "Nothing planned today", detail: "message your coach" };
+    else if (sessionDay && ready) s = { dot: "green", label: row.title, detail: "ready in Hevy" };
+    else if (sessionDay) s = { dot: "amber", label: row.title, detail: "not built yet" };
+    else s = { dot: "", label: row.title, detail: "today" };
     this._set(
       "header",
       `${this._narrow ? `<button class="icon-btn" data-action="menu" aria-label="Menu">${svg("mdiMenu")}</button>` : ""}
@@ -807,210 +723,6 @@ class CoachPanel extends HTMLElement {
         <div class="status"><span class="dot ${s.dot}"></span><b>${esc(s.label)}</b><span class="muted">·</span><span class="muted detail">${esc(s.detail)}</span></div>
       </div>`,
     );
-  }
-
-  _renderGen(m, job, busy) {
-    const sel = typeInfo(busy ? job.type : this._selectedType(m));
-    const opts = TYPES.map(
-      (t) => `<button class="opt ${t.id === sel.id ? "sel" : ""}" data-action="type" data-type="${t.id}" aria-pressed="${t.id === sel.id}" ${busy ? "disabled" : ""}>
-        <div class="oic">${svg(t.icon)}</div><b>${t.label}</b><span>${t.desc}</span></button>`,
-    ).join("");
-    let hint = m.fresh ? "Replaces today's session in Hevy (“Next Lift Session”)" : "Writes to “Next Lift Session” in Hevy";
-    let alert = "";
-    if (job?.state === "sending") hint = "Sending to GitHub…";
-    else if (job?.state === "queued") hint = `Queued ${this._ago(job.at)} · you'll get a push when it's ready`;
-    else if (job?.state === "slow")
-      alert = `<div class="alert warn">${svg("mdiAlertOutline")}<span>Still no session ${this._ago(job.at).replace(" ago", "")} after the request. The “Run Lift Session” workflow on GitHub may have failed.</span></div>`;
-    else if (job?.state === "failed")
-      alert = `<div class="alert err">${svg("mdiAlertOutline")}<span><b>${esc(job.result.title)}.</b> ${esc(job.result.message)}</span></div>`;
-    else if (job?.state === "expired")
-      alert = `<div class="alert warn">${svg("mdiAlertOutline")}<span>The ${esc(typeInfo(job.type).label)} request at ${this._fmtTime(job.at)} never produced a session. Check the “Run Lift Session” workflow on GitHub.</span></div>`;
-    this._set(
-      "gen",
-      `<div class="eyebrow">${m.fresh ? "Need a different one?" : "Plan today"}</div>
-      <h3>Generate a session</h3>
-      <div class="seg">${opts}</div>
-      <div class="modifier ${m.flagOn ? "on" : ""}">
-        ${svg("mdiShieldAlertOutline")}
-        <div class="t"><b>Shoulder flag</b><div>${m.flagOn ? "On · coach keeps load off the shoulder" : "Off · turn on if the shoulder is acting up"}</div></div>
-        <button class="toggle ${m.flagOn ? "on" : ""}" data-action="flag" aria-pressed="${m.flagOn}" aria-label="Shoulder flag"></button>
-      </div>
-      <button class="cta" data-action="generate" ${busy ? "disabled" : ""}>${busy ? `${svg("mdiRefresh")} Generating…` : `${svg(sel.icon)} ${job?.state === "failed" ? "Try again" : `Generate ${sel.label}`}`}</button>
-      ${alert}
-      <div class="hint">${esc(hint)}</div>`,
-    );
-  }
-
-  _renderBoard(m) {
-    const b = m.board;
-    const job = this._boardJob(m);
-    const busy = job && ["sending", "queued", "slow"].includes(job.state);
-    const fb = b.fb;
-    const title = fb ? `Phase ${fb.phase} · ${fb.phase_name}` : "Beastmaker 1000";
-    const facts = [];
-    if (fb?.ramp_week) facts.push(`ramp week ${fb.ramp_week}${fb.deload_week ? " (deload)" : ""}`);
-    if (fb && fb.board_days_last_7d != null) facts.push(`${plural(fb.board_days_last_7d, "board day")} in the last 7 before it`);
-    let list = "";
-    if (b.has) {
-      const items = parseSummary(b.summary).items.filter((i) => i.kind === "ex");
-      const when = b.fresh ? "Today" : `${new Date(`${b.date}T12:00:00`).toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })} · ${b.ageDays === 1 ? "yesterday" : `${b.ageDays} days ago`}`;
-      list = `<div class="pills"><span class="pill ${b.fresh ? "fresh" : "stale"}">${esc(when)}</span></div>
-        ${
-          b.blocks.length
-            ? this._boardBlocks(b.blocks)
-            : items.length
-              ? `<div class="bd-list">${items.map((e) => `<div class="bd-ex"><span>${esc(e.name)}</span><span>${esc(e.reps || "")}</span></div>`).join("")}</div>`
-              : `<div class="raw">${esc(stripMd(b.summary))}</div>`
-        }
-        ${b.routineId ? `<div class="hevy">${svg("mdiCheck")} Saved to Hevy as “Next Fingerboard Session”</div>` : ""}`;
-    } else {
-      list = `<div class="empty">No board session yet. Generate one for a separate 20–30 minute board day.</div>`;
-    }
-    const gate = b.flags.find((f) => /gate looks met/i.test(f));
-    let alert = gate ? `<div class="alert ok">${svg("mdiCheck")}<span>${esc(gate)}. Tell Claude to advance the phase.</span></div>` : "";
-    let hint = m.fingerFlagOn ? "Finger flag is on · turn it off when the fingers feel normal" : "Writes to “Next Fingerboard Session” in Hevy";
-    if (job?.state === "sending") hint = "Sending to GitHub…";
-    else if (job?.state === "queued") hint = `Queued ${this._ago(job.at)} · you'll get a push when it's ready`;
-    else if (job?.state === "slow")
-      alert = `<div class="alert warn">${svg("mdiAlertOutline")}<span>Still no board session ${this._ago(job.at).replace(" ago", "")} after the request. The “Run Lift Session” workflow may have failed, or the board is off today (an email says why).</span></div>`;
-    else if (job?.state === "failed")
-      alert = `<div class="alert err">${svg("mdiAlertOutline")}<span><b>${esc(job.result.title)}.</b> ${esc(job.result.message)}</span></div>`;
-    else if (job?.state === "expired")
-      alert = `<div class="alert warn">${svg("mdiAlertOutline")}<span>The board request at ${this._fmtTime(job.at)} never produced a session. Check the email or the “Run Lift Session” workflow on GitHub.</span></div>`;
-    this._set(
-      "board",
-      `<div class="eyebrow">Fingerboard</div>
-      <h3>${esc(title)}</h3>
-      ${facts.length ? `<div class="sub">${esc(facts.join(" · "))}</div>` : ""}
-      ${list}
-      <div class="modifier ${m.fingerFlagOn ? "on" : ""}">
-        ${svg("mdiAlertOutline")}
-        <div class="t"><b>Finger flag</b><div>${m.fingerFlagOn ? "On · no board sessions or dead hangs" : "Off · turn on if a finger or elbow is tweaky"}</div></div>
-        <button class="toggle ${m.fingerFlagOn ? "on" : ""}" data-action="finger-flag" aria-pressed="${m.fingerFlagOn}" aria-label="Finger flag"></button>
-      </div>
-      <button class="cta bd-btn" data-action="board" ${busy || m.fingerFlagOn ? "disabled" : ""}>${busy ? `${svg("mdiRefresh")} Generating…` : `${svg("mdiHandBackRightOutline")} ${job?.state === "failed" ? "Try again" : b.fresh ? "Regenerate board session" : "Generate board session"}`}</button>
-      ${alert}
-      <div class="hint">${esc(hint)}</div>`,
-    );
-  }
-
-  _renderSession(m, job, busy) {
-    if (busy) {
-      this._set(
-        "session",
-        `<div class="eyebrow">Coach is working</div>
-        <h2>Building your ${esc(typeInfo(job.type).label)} session…</h2>
-        <div class="sub">Pulling sleep, recovery and recent training from Garmin and Hevy.</div>
-        <div class="progress"><div></div></div>
-        <div class="blocks">${'<div class="skel"></div>'.repeat(3)}</div>`,
-      );
-      return;
-    }
-    if (!m.has) {
-      this._set("session", `<div class="eyebrow">Session</div><h2>No session yet</h2><div class="empty">Pick a session type and tap Generate.</div>`);
-      return;
-    }
-    const parsed = parseSummary(m.summary);
-    const exercises = parsed.items.filter((i) => i.kind === "ex");
-    let body;
-    if (!exercises.length) {
-      body = `<div class="raw">${esc(stripMd(m.summary))}</div>`;
-    } else {
-      const parts = [];
-      let block = null;
-      let n = 0;
-      for (const it of parsed.items) {
-        if (it.kind === "note") {
-          block = null;
-          parts.push({ note: it });
-          continue;
-        }
-        if (block && it.label && block.label === it.label) block.items.push(it);
-        else {
-          block = { label: it.label, badge: it.label || String(++n), items: [it] };
-          parts.push({ block });
-        }
-      }
-      body = `<div class="blocks">${parts
-        .map((p) =>
-          p.note
-            ? `<div class="note ${p.note.heading ? "heading" : ""}">${esc(p.note.text)}</div>`
-            : `<div class="block" data-badge="${esc(p.block.badge)}">${p.block.items
-                .map(
-                  (e) => `<div class="ex"><div class="ex-name">${esc(e.name)}</div>
-                  <div class="ex-sets">${esc(e.reps || "")}${e.load ? ` <small>@ ${esc(e.load)}</small>` : ""}</div>
-                  <div class="ex-meta">${esc(e.extra || "")}</div><div class="ex-rest">${e.rest ? `rest ${esc(e.rest)}` : ""}</div></div>`,
-                )
-                .join("")}</div>`,
-        )
-        .join("")}</div>`;
-    }
-    const supersets = new Set(exercises.filter((e) => e.label).map((e) => e.label)).size;
-    const count = m.exerciseCount ?? exercises.length;
-    const dateLabel = m.fresh
-      ? "Today"
-      : `${new Date(`${m.sessionDate}T12:00:00`).toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })} · ${m.ageDays === 1 ? "yesterday" : `${m.ageDays} days ago`}`;
-    const sentences = m.rationale.split(/(?<=[.!?])\s+/);
-    const longWhy = sentences.length > 2;
-    const why = this._expanded || !longWhy ? m.rationale : sentences.slice(0, 2).join(" ");
-    const flags = this._expanded ? m.flags : m.flags.slice(0, 6);
-    const hiddenFlags = m.flags.length - flags.length;
-    const flagText = (f) => (this._expanded ? f : f.replace(/\s+—.*$/, ""));
-    this._set(
-      "session",
-      `<div class="eyebrow">${m.fresh ? "Today's session" : "Last session"}</div>
-      <h2>${esc(parsed.title || `${typeInfo(m.sessionType).label} session`)}</h2>
-      <div class="pills">
-        <span class="pill ${m.fresh ? "fresh" : "stale"}">${esc(dateLabel)}</span>
-        <span class="pill">${esc(typeInfo(m.sessionType).label)}</span>
-        ${count ? `<span class="pill">${plural(count, "exercise")}${supersets ? ` · ${plural(supersets, "superset")}` : ""}</span>` : ""}
-      </div>
-      ${body}
-      ${
-        m.rationale || m.flags.length || m.priorities.length
-          ? `<div class="why">
-        <div class="eyebrow">Why this session</div>
-        ${
-          m.priorities.length
-            ? `<ol class="prio">${m.priorities
-                .map((p) => {
-                  const [goal, ...rest] = String(p).split(":");
-                  return rest.length ? `<li><span><b>${esc(goal.replace(/_/g, " ").trim())}</b> · ${esc(rest.join(":").trim())}</span></li>` : `<li><span>${esc(p)}</span></li>`;
-                })
-                .join("")}</ol>`
-            : ""
-        }
-        ${m.rationale ? `<p>${esc(why)}</p>` : ""}
-        ${m.flags.length ? `<div class="flags">${flags.map((f) => `<span class="flag ${WARN_FLAG.test(f) ? "warn" : ""}">${esc(flagText(f))}</span>`).join("")}</div>` : ""}
-        ${longWhy || hiddenFlags ? `<button class="link" data-action="expand">${this._expanded ? "Show less" : `Read full reasoning${hiddenFlags ? ` · ${plural(hiddenFlags, "more factor")}` : ""}`}</button>` : ""}
-      </div>`
-          : ""
-      }
-      ${m.routineId ? `<div class="hevy">${svg("mdiCheck")} Saved to Hevy as “Next Lift Session”</div>` : ""}`,
-    );
-  }
-
-  _renderFeedbackStatus() {
-    const fb = this._fb;
-    let html = "";
-    if (fb) {
-      const result = this._dispatchResult("lift_feedback_dispatch", fb.at);
-      if (!result) html = `<div class="hint" style="text-align:left">Sending…</div>`;
-      else if (result.ok) html = `<div class="alert ok">${svg("mdiCheck")}<span>Logged — the coach will factor this into future sessions.</span></div>`;
-      else {
-        html = `<div class="alert err">${svg("mdiAlertOutline")}<span><b>${esc(result.title)}.</b> ${esc(result.message)}</span></div>`;
-        if (!this._textarea.value) {
-          this._textarea.value = fb.text;
-          this._onDraft();
-        }
-      }
-      if (result) {
-        fb.state = "done";
-        if (Date.now() - fb.at > 20000) this._fb = null;
-      }
-    }
-    this._set("fbstatus", html);
-    this._sendBtn.disabled = !this._textarea.value.trim() || this._fb?.state === "sending";
   }
 
   _renderReport(m) {
