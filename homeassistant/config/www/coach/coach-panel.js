@@ -5,7 +5,7 @@
 // configuration.yaml); this file keeps the shell, the header, the lift/board/basement helpers
 // those cards call, and the report run.
 
-import { COACH_SHELL, WEEK_CSS, WeekCard } from "./coach-week.js?v=3";
+import { COACH_SHELL, WEEK_CSS, WeekCard } from "./coach-week.js?v=4";
 
 const ICONS = {
   mdiAlertOutline: "M12,2L1,21H23M12,6L19.53,19H4.47M11,10V14H13V10M11,16V18H13V16",

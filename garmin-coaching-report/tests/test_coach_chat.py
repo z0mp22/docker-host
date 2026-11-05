@@ -2,7 +2,7 @@
 its plan changes, and that retries and failures leave a clean thread."""
 
 import json
-from datetime import datetime
+from datetime import date, datetime
 from types import SimpleNamespace
 
 import pytest
@@ -31,6 +31,8 @@ def env(tmp_path, monkeypatch):
         )
 
     monkeypatch.setattr(cc, "_reply", fake_reply)
+    # The week-balance review has its own tests below; here every reply passes it.
+    monkeypatch.setattr(cc, "balance_problems", lambda *a, **k: [])
 
     def run(**e):
         for k in ("COACH_MODE", "COACH_TEXT", "COACH_REF", "COACH_VALUE", "COACH_CID"):
@@ -188,3 +190,60 @@ def test_sync_sends_nothing_when_the_coach_says_it_isnt_worth_saying(env, monkey
     _sync_env(env, monkeypatch, [_act("2026-11-04", "e_bike_fitness", 60)])
     assert env.run(mode="sync") == 0
     assert env.state()["thread"] == [] and env.state()["noticed"]
+
+
+def test_replan_sends_the_button_text_and_flags_it(env, monkeypatch):
+    seen = []
+
+    def fake(config, state, msg, now):
+        seen.append(msg)
+        return db.CoachReplySchema(
+            reply="Lift moves to Monday.",
+            plan_changes=[db.PlanChange(date=now.date().isoformat(), kind="lift", lift_type="heavy_1h", title="Pull-up test",
+                                        focus="f", how=["Warm up", "Pull-ups"], why="w", goals=["physique"], if_cooked="c")],
+            week_note="Two climbs, one lift, one ride.",
+        ), {"model": "m", "input_tokens": 1, "output_tokens": 1}
+
+    monkeypatch.setattr(cc, "_reply", fake)
+    assert env.run(mode="replan", cid="r1") == 0
+    s = env.state()
+    assert seen[0]["replan"] is True and seen[0]["text"] == cc.REPLAN_TEXT
+    assert s["thread"][0]["replan"] is True and s["week_note"] == "Two climbs, one lift, one ride."
+    added = [r for r in s["plan"] if r.get("how") == ["Warm up", "Pull-ups"]]
+    assert len(added) == 1 and added[0]["goals"] == ["physique"]
+
+
+def test_week_note_only_changes_with_the_plan(env, monkeypatch):
+    monkeypatch.setattr(cc, "_reply", lambda *a: (db.CoachReplySchema(reply="ok", week_note="New shape"), {"model": "m", "input_tokens": 1, "output_tokens": 1}))
+    assert env.run(mode="message", text="thanks", cid="c9") == 0
+    assert env.state().get("week_note") is None
+
+
+def test_a_plan_change_that_drops_lifting_goes_back_once(env, monkeypatch):
+    replies = []
+
+    def fake(config, state, msg, now):
+        replies.append(msg.get("revise"))
+        kind = "lift" if msg.get("revise") else "light"
+        return db.CoachReplySchema(
+            reply="ok", plan_changes=[db.PlanChange(date=now.date().isoformat(), kind=kind, title="t", focus="f", if_cooked="c")],
+        ), {"model": "m", "input_tokens": 10, "output_tokens": 5}
+
+    monkeypatch.setattr(cc, "_reply", fake)
+    monkeypatch.setattr(cc, "balance_problems", lambda state, today: [] if any(r["kind"] == "lift" and r["date"] == today.isoformat() for r in state["plan"]) else ["No lift"])
+    assert env.run(mode="message", text="Saturday's out", cid="c10") == 0
+    assert replies[0] is None and replies[1]["problems"] == ["No lift"]
+    coach = env.state()["thread"][-1]
+    assert coach["revised_for"] == ["No lift"] and coach["input_tokens"] == 20
+    assert any(r["kind"] == "lift" for r in env.state()["plan"])
+
+
+def test_balance_problems_name_what_is_missing():
+    from tests.test_debrief import _state
+    s = _state()  # Tue climb, Wed lift, Thu open light day; nothing else planned
+    probs = db.balance_problems(s, date(2026, 11, 4))
+    assert any(p.startswith("No ride or spin") for p in probs)
+    assert not any(p.startswith("No lift") for p in probs)
+    assert any("easy or rest days in a row" in p for p in probs)  # Thu, Fri, Sat, Sun, Mon have nothing
+    s["plan"][1]["kind"] = "light"
+    assert any(p.startswith("No lift") for p in db.balance_problems(s, date(2026, 11, 4)))

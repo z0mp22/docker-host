@@ -75,12 +75,24 @@ FOCUS_HELP = (
 )
 
 
+HOW_HELP = (
+    "How to do it, as 2-4 short steps he can follow (warm-up, the main work with how hard, when to stop), "
+    "each under 15 words. For lift and fingerboard days the structure and intent, not exercise names. "
+    "Empty for rest."
+)
+WHY_HELP = "Why this day sits where it does in the week and what it builds toward, one or two sentences"
+GOALS_HELP = "Which of his goals this day serves (climbing, mtb, snowboard, physique); empty for rest"
+
+
 class PlanDay(BaseModel):
     date: str = Field(description="Copied from plan_days")
     kind: Kind = Field(description=KIND_HELP)
     lift_type: LiftType | None = Field(None, description="Only when kind is lift")
     title: str = Field(description="The session in 2-4 words, e.g. 'Gym climb, quality'")
     focus: str = Field(description=FOCUS_HELP)
+    how: list[str] = Field(default_factory=list, description=HOW_HELP)
+    why: str = Field("", description=WHY_HELP)
+    goals: list[GoalName] = Field(default_factory=list, description=GOALS_HELP)
     if_cooked: str = Field(description="The easier version, under 15 words")
 
 
@@ -106,6 +118,10 @@ class DebriefSchema(BaseModel):
     goals: list[GoalCheck]
     plan: list[PlanDay]
     leaves_out: str = Field(description="What this week deliberately leaves out, one sentence")
+    week_shape: str = Field(
+        "",
+        description="The week's shape across his goals in two sentences: the key sessions, what each goal gets, and why",
+    )
     questions: list[Question]
 
 
@@ -115,6 +131,9 @@ class PlanChange(BaseModel):
     lift_type: LiftType | None = None
     title: str
     focus: str = Field(description=FOCUS_HELP)
+    how: list[str] = Field(default_factory=list, description=HOW_HELP)
+    why: str = Field("", description=WHY_HELP)
+    goals: list[GoalName] = Field(default_factory=list, description=GOALS_HELP)
     if_cooked: str
 
 
@@ -129,6 +148,13 @@ class CoachReplySchema(BaseModel):
     answered: list[AnsweredQuestion] = Field(
         default_factory=list,
         description="Your open debrief questions that the conversation has now answered, so you stop asking them",
+    )
+    week_note: str = Field(
+        "",
+        description=(
+            "When you change the plan: the week's shape now across his goals, two sentences (what each goal "
+            "gets this week and why). Empty when the plan didn't change."
+        ),
     )
     worth_saying: bool = Field(
         True,
@@ -224,6 +250,7 @@ def new_week_state(
         "thread": [],
         "updated_at": now_iso(),
         "last_coach_at": None,
+        "week_note": debrief.week_shape or None,
         **{k: model_meta.get(k) for k in ("model", "input_tokens", "output_tokens")},
     }
 
@@ -460,6 +487,99 @@ def find_events(state: dict[str, Any], logged: dict[str, dict[str, Any]], today:
             "why": why,
         })
     return [e for e in events if e["key"] not in set(state.get("noticed") or [])]
+
+
+# Goals a day serves when the plan row doesn't say (rows written before 2026-11-05, or logged-only days).
+_KIND_GOALS = {
+    "climb": ["climbing"], "fingerboard": ["climbing"], "lift": ["physique", "climbing"],
+    "cardio": ["mtb", "snowboard"], "light": [], "rest": [],
+}
+_RIDE = re.compile(r"mtb|ride|bik|trail", re.I)
+
+
+def day_goals(row: dict[str, Any] | None, log: dict[str, Any] | None = None) -> list[str]:
+    if row and row.get("goals"):
+        return list(row["goals"])
+    kind = row["kind"] if row else None
+    if kind == "outdoor":
+        return ["mtb", "snowboard"] if _RIDE.search(f"{row.get('title', '')} {row.get('focus', '')}") else ["climbing"]
+    if kind in _KIND_GOALS and (row.get("status") != "changed" or not log):
+        return _KIND_GOALS[kind]
+    if log:  # a changed or unplanned day counts for what was actually done
+        kinds = set(log.get("kinds") or [])
+        out = []
+        if kinds & {"climb", "fingerboard"} or ("outdoor" in kinds and "climb" in log.get("summary", "").lower()):
+            out.append("climbing")
+        if "lift" in kinds:
+            out += ["physique", "climbing"] if "climbing" not in out else ["physique"]
+        if "cardio" in kinds or ("outdoor" in kinds and "climb" not in log.get("summary", "").lower()):
+            out += ["mtb", "snowboard"]
+        return out
+    return []
+
+
+def week_balance(state: dict[str, Any], today: date, back: int = 1, ahead: int = 5) -> dict[str, Any]:
+    """Sessions per goal over the rolling week the panel shows (yesterday
+    through five days ahead): done (logged) and still planned, plus how many
+    days are easy or rest. Skipped and nothing-logged days count for nothing."""
+    rows = {r["date"]: r for r in state.get("plan", [])}
+    logged = state.get("logged_days") or {}
+    goals = {g: {"done": 0, "planned": 0} for g in ("climbing", "mtb", "snowboard", "physique")}
+    easy = 0
+    for i in range(-back, ahead + 1):
+        iso = (today + timedelta(days=i)).isoformat()
+        row, log = rows.get(iso), logged.get(iso)
+        past = iso < today.isoformat()
+        status = row.get("status") if row else ("done" if log else None)
+        if row and row["kind"] in ("rest", "light") and status not in ("changed",):
+            easy += 1
+        if status in ("skipped", "unknown") or (past and not log and status not in ("done",)):
+            continue
+        bucket = "done" if (status in ("done", "changed") or (log and not row)) else "planned"
+        for g in day_goals(row, log):
+            goals[g][bucket] += 1
+    return {"days": back + ahead + 1, "goals": goals, "easy_or_rest_days": easy}
+
+
+_REAL_RIDE = re.compile(r"\b(MTB|Spin|Road ride|cycling|biking)\b", re.I)
+MAX_EASY_IN_A_ROW = 2
+
+
+def balance_problems(state: dict[str, Any], today: date, back: int = 1, ahead: int = 5) -> list[str]:
+    """What a plan change mustn't leave in the rolling week (yesterday
+    through five days out): no lift, no real ride (an easy e-bike or walk
+    doesn't count), or more than MAX_EASY_IN_A_ROW easy/rest days in a row.
+    Same posture as lift_review: these go back to the coach for one revision."""
+    rows = {r["date"]: r for r in state.get("plan", [])}
+    logged = state.get("logged_days") or {}
+    days = [(today + timedelta(days=i)).isoformat() for i in range(-back, ahead + 1)]
+    lift = ride = False
+    run, worst = [], []
+    for iso in days:
+        row, log = rows.get(iso), logged.get(iso)
+        if row and row.get("status") in ("skipped", "unknown"):
+            row = None
+        kinds = set((log or {}).get("kinds") or [])
+        lift |= bool((row and row["kind"] in ("lift",)) or "lift" in kinds)
+        ride |= bool(
+            (row and row["kind"] == "cardio")
+            or (row and row["kind"] == "outdoor" and _RIDE.search(f"{row.get('title', '')} {row.get('focus', '')}"))
+            or (log and _REAL_RIDE.search(log.get("summary", "")))
+        )
+        easy = (row is None and not log) or (row is not None and row["kind"] in ("light", "rest") and not (kinds - {"light"}))
+        run = run + [iso] if easy else []
+        if len(run) > len(worst):
+            worst = run
+    label = lambda iso: f"{date.fromisoformat(iso):%a %b} {date.fromisoformat(iso).day}"
+    span = f"{label(days[0])} through {label(days[-1])}"
+    problems = []
+    if not lift:
+        problems.append(f"No lift session from {span}: physique and pulling strength get nothing. Put a lift (kind lift) on a day that fits.")
+    if not ride:
+        problems.append(f"No ride or spin from {span} (an easy e-bike or walk isn't one): MTB and snowboard legs get nothing. Add one.")
+    if len(worst) > MAX_EASY_IN_A_ROW:
+        problems.append(f"{len(worst)} easy or rest days in a row ({label(worst[0])} to {label(worst[-1])}); keep it to {MAX_EASY_IN_A_ROW} around a big day.")
+    return problems
 
 
 # --- Markdown archive ----------------------------------------------------------
