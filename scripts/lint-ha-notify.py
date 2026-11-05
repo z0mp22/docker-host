@@ -100,6 +100,9 @@ def code_files() -> list[Path]:
 def main() -> int:
     errors: list[str] = []
     tags: dict[str, set[str]] = defaultdict(set)
+    # Literal prefixes of templated tags ("coach-q-{{ id }}" -> "coach-q-"), so a
+    # templated clear of the same family can be checked against them.
+    tag_prefixes: set[str] = set()
     clears: dict[str, str] = {}
     calls = 0
 
@@ -146,12 +149,19 @@ def main() -> int:
                     clears[str(tag).strip()] = where
                 elif not is_template(tag):
                     tags[str(tag).strip()].add(owner(rel, node_path, doc))
+                else:
+                    prefix = str(tag).strip().split("{", 1)[0]
+                    if prefix:
+                        tag_prefixes.add(prefix)
 
     for tag, owners in sorted(tags.items()):
         if len(owners) > 1:
             errors.append(f"tag {tag!r} shared by {', '.join(sorted(owners))}; each alert needs its own tag")
 
     for tag, where in sorted(clears.items()):
+        prefix = tag.split("{", 1)[0] if is_template(tag) else None
+        if prefix is not None and prefix in tag_prefixes:
+            continue
         if tag not in tags:
             errors.append(f"{where}: clears tag {tag!r}, which no alert sends")
 

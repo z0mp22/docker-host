@@ -96,8 +96,8 @@ coaching_report_run_since_last:
           {% if dispatch is not defined %}
             Could not reach the GitHub API (network error). Nothing was dispatched.
           {% elif dispatch.status == 204 %}
-            GitHub Actions accepted the run (since last report). The report email
-            should arrive in a few minutes.
+            GitHub Actions accepted the run (since last report). The debrief shows up on
+            the Coach panel (and as a push) in a few minutes.
           {% else %}
             GitHub rejected the request — HTTP {{ dispatch.status }}.
             {{ dispatch.content if dispatch.content else 'No response body.' }}
@@ -304,8 +304,8 @@ coaching_report_run_full_7d:
           {% if dispatch is not defined %}
             Could not reach the GitHub API (network error). Nothing was dispatched.
           {% elif dispatch.status == 204 %}
-            GitHub Actions accepted the run (full 7-day window). The report email
-            should arrive in a few minutes.
+            GitHub Actions accepted the run (full 7-day window). The debrief shows up on
+            the Coach panel (and as a push) in a few minutes.
           {% else %}
             GitHub rejected the request — HTTP {{ dispatch.status }}.
             {{ dispatch.content if dispatch.content else 'No response body.' }}

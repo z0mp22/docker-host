@@ -6,6 +6,7 @@ from typing import Any, Literal
 
 import anthropic
 
+from .debrief import DebriefSchema, question_ids_ok
 from .compression import (
     compress_week,
     monthly_sport_aggregates,
@@ -21,7 +22,7 @@ WeekLevel = Literal["full", "downsampled", "structured", "compact"]
 
 @dataclass
 class CoachResult:
-    report_markdown: str
+    debrief: DebriefSchema
     model: str
     input_tokens: int
     output_tokens: int
@@ -141,12 +142,15 @@ def _call_model(
     system: str,
     messages: list[dict[str, Any]],
     max_output_tokens: int,
-) -> anthropic.types.Message:
-    return client.messages.create(
+) -> Any:
+    # Structured output: the debrief comes back as DebriefSchema on
+    # response.parsed_output (same SDK path as lift_coach.py).
+    return client.messages.parse(
         model=model,
         max_tokens=max_output_tokens,
         system=system,
         messages=messages,
+        output_format=DebriefSchema,
     )
 
 
@@ -217,11 +221,10 @@ def generate_coach_report(
         raise CoachError(
             f"Report truncated: hit max_tokens ({max_output_tokens:,}) before the "
             f"model finished. model={chosen_model} output_tokens={out}. "
-            "Raise MAX_OUTPUT_TOKENS or trim the payload; do not email a partial report."
+            "Raise MAX_OUTPUT_TOKENS or trim the payload; do not publish a partial debrief."
         )
-
-    text_blocks = [b.text for b in response.content if b.type == "text"]
-    report_body = "\n".join(text_blocks).strip()
+    if response.parsed_output is None:
+        raise CoachError("Claude's response did not match the debrief schema")
 
     usage = response.usage
     input_tokens = usage.input_tokens if usage else estimated
@@ -230,7 +233,7 @@ def generate_coach_report(
     cache_creation = getattr(usage, "cache_creation_input_tokens", 0) or 0
 
     result = CoachResult(
-        report_markdown=report_body,
+        debrief=question_ids_ok(response.parsed_output),
         model=chosen_model,
         input_tokens=input_tokens,
         output_tokens=output_tokens,

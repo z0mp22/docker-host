@@ -1,5 +1,6 @@
 """Entrypoint for weekly mountain sports coaching report."""
 
+import json
 import os
 import sys
 import traceback
@@ -9,11 +10,11 @@ from pathlib import Path
 from .coach import generate_coach_report
 from .collector import build_payload
 from .config import load_app_config
+from .debrief import new_week_state, render_markdown, replace_state
 from .emailer import (
     last_report_window_end,
     save_outputs,
     send_alert_email,
-    send_report_email,
 )
 from .errors import (
     AuthExpiredError,
@@ -94,7 +95,7 @@ def main() -> int:
     since = _parse_since(os.environ.get("SINCE", ""), report_date, reports_dir)
     through = _parse_through(os.environ.get("THROUGH", ""), report_date)
     dry_run = os.environ.get("DRY_RUN", "").strip().lower() in ("1", "true", "yes")
-    # PREVIEW: call Claude and print the report, but save and email nothing
+    # PREVIEW: call Claude and print the debrief, but save and publish nothing
     # (a saved report would move SINCE=last and become next week's previous_report).
     preview = os.environ.get("PREVIEW", "").strip().lower() in ("1", "true", "yes")
 
@@ -149,18 +150,23 @@ def main() -> int:
             max_output_tokens=config.max_output_tokens,
             enable_prompt_cache=config.enable_prompt_cache,
         )
+        model_meta = {"model": result.model, "input_tokens": result.input_tokens, "output_tokens": result.output_tokens}
+        state = new_week_state(
+            result.debrief, payload.get("plan_days") or [], payload["report_date"], wr, model_meta
+        )
+        report_md = render_markdown(state)
         if preview:
-            print(result.report_markdown)
+            print(report_md)
+            print(json.dumps(state, indent=2, ensure_ascii=False))
             print(
-                f"[coaching-report] PREVIEW: {len(result.report_markdown.split())} words, "
-                f"{result.input_tokens} in / {result.output_tokens} out; nothing saved or emailed",
+                f"[coaching-report] PREVIEW: {len(report_md.split())} words, "
+                f"{result.input_tokens} in / {result.output_tokens} out; nothing saved or published",
                 file=sys.stderr,
             )
             return 0
-        md_path = save_outputs(config, report_date, result, user_content, payload)
-        full_md = md_path.read_text(encoding="utf-8")
-        send_report_email(config, report_date, full_md)
-        print(f"[coaching-report] Report saved to {md_path}", file=sys.stderr)
+        replace_state(reports_dir, state)
+        md_path = save_outputs(config, report_date, result, user_content, payload, report_md)
+        print(f"[coaching-report] Debrief saved to {md_path} and weekly_coach.json", file=sys.stderr)
         return 0
 
     except EmptyWindowError as exc:

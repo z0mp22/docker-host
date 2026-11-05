@@ -12,5 +12,6 @@
 | [0009](0009-cloudflare-edge.md) | Cloudflare edge: filter at Cloudflare, show what it stopped, one-tap travel and lockdown | Accepted |
 | [0010](0010-basement-samsung-tv.md) | Basement Samsung TV: local control only, input guessed from the active device | Accepted |
 | [0011](0011-lift-coach-deadlift-back-limits.md) | Back-safety limits on deadlifts and other barbell hinges | Accepted |
+| [0013](0013-weekly-coach-in-home-assistant.md) | The weekly coach lives in Home Assistant, and talks back | Accepted |
 
 Related DVR library decisions live in [czampino/plex_recordings](https://github.com/czampino/plex_recordings/tree/main/docs/decisions).

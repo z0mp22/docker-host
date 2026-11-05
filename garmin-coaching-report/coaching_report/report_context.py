@@ -25,6 +25,8 @@ from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from .debrief import load_state, previous_week
+
 FEEDBACK_LOG = "lift_feedback_log.jsonl"
 REPORT_GLOB = "mountain-sports-coaching-*.md"
 # Sections of a past report worth carrying forward, by heading.
@@ -74,8 +76,13 @@ def _sections(markdown: str) -> list[tuple[str, str]]:
 
 
 def previous_report(reports_dir: Path, report_date: date) -> dict[str, Any] | None:
-    """The most recent report before report_date, cut to what it asked of
-    the athlete. None when there is no earlier report."""
+    """Last week as the coach left it: the plan with what actually happened
+    each day, the questions with your answers, and the conversation
+    (weekly_coach.json). Before that file existed, the last markdown report
+    cut to what it asked of the athlete. None when there is no earlier week."""
+    state = load_state(reports_dir)
+    if state and str(state.get("report_date") or "") < report_date.isoformat():
+        return previous_week(state)
     try:
         reports = [(d, p) for p in reports_dir.glob(REPORT_GLOB) if (d := _report_date(p)) and d < report_date]
         if not reports:
@@ -114,7 +121,8 @@ def athlete_notes(reports_dir: Path, since: date, through: date, tz_name: str) -
         if (since - local.date()).days > NOTES_LEAD_DAYS or local.date() > through:
             continue
         note = str(entry.get("note") or "").strip()
-        if note:
+        # Messages to the weekly coach are in previous_report's conversation already.
+        if note and entry.get("source") != "coach_chat":
             out.append({"date": local.date().isoformat(), "weekday": local.strftime("%A"),
                         "time_mt": local.strftime("%H:%M"), "note": note})
     return out
