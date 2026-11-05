@@ -529,13 +529,13 @@ export class WeekCard {
 
   // This morning's HRV + resting HR against his own normal. When both are off and today is a hard day,
   // he decides: keep the session or take its easy version (same choice as the morning push).
-  // Before Garmin has last night's numbers (the sync looks every 15 min from 5 AM) it says it's waiting,
+  // Before Garmin has last night's numbers (the sync looks every 15 min from 4:45 AM) it says it's waiting,
   // so a plan that hasn't moved reads as "checked, still on" rather than "never looked".
   _readiness(m) {
     const r = m.readiness;
     if (!r || r.date !== m.today) {
       if (!m.byDate[m.today]) return "";
-      return `<div class="wc-ready wait"><b>⏳ Waiting on last night's HRV</b><span>Syncs from Garmin every 15 min from 5 AM; today's plan stands until it's in.</span></div>`;
+      return `<div class="wc-ready wait"><b>⏳ Waiting on last night's HRV</b><span>Syncs from Garmin every 15 min from 4:45 AM; today's plan stands until it's in.</span></div>`;
     }
     const n = (x) => (x == null ? "?" : Math.round(x));
     // Amber past readiness.py's HRV_DOWN / RHR_UP, the single-day "off" lines.

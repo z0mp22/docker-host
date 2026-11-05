@@ -54,7 +54,7 @@ him the way a person would, and to be able to answer it. Email is one-way.
   28-day median. Only both together, two days running or far off today, ask to ease a
   hard day: a push and a panel banner with Keep it / Ease it. Nothing changes unless he
   eases it. On his last 8 mornings only Nov 1 (HRV 16 vs 22, RHR +5) would have asked.
-  From 2026-11-05 the sync runs every 15 minutes from 5 AM (he's up around 5; the 6 AM
+  From 2026-11-05 the sync runs every 15 minutes from 4:45 AM (he's up around 5; the 6 AM
   start missed that), and the panel always says where the check is: waiting on last
   night's HRV, on track (plan stands), or down. A "go" morning leaves the plan as it is.
 
