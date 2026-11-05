@@ -127,7 +127,7 @@ def test_forecast_maps_plan_days_with_worst_aqi(monkeypatch):
     out = rc.forecast(40.6, -105.1, PLAN_DAYS, "America/Denver")
     assert [d["date"] for d in out] == ["2026-11-03", "2026-11-04"]
     assert out[0] == {**out[0], "label": "Tue Nov 3", "conditions": "light snow", "high_f": 38.5, "snow_in": 1.4,
-                      "sunset_mt": "16:54", "max_us_aqi": 61}
+                      "sunset_mt": "4:54 PM", "max_us_aqi": 61}
     assert out[1]["max_us_aqi"] is None
 
 

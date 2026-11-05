@@ -136,6 +136,14 @@ def _get_json(url: str, params: dict[str, Any]) -> dict[str, Any]:
         return json.load(resp)
 
 
+def _clock(stamp: str | None) -> str | None:
+    """"2026-11-03T16:54" -> "4:54 PM" (he reads 12-hour times)."""
+    try:
+        return datetime.fromisoformat(stamp).strftime("%-I:%M %p") if stamp else None
+    except ValueError:
+        return None
+
+
 def forecast(lat: float, lon: float, plan_days: list[dict[str, str]], tz_name: str) -> list[dict[str, Any]] | None:
     """One entry per plan day that the forecast covers, in °F / mph / inches,
     with the day's worst US AQI when the air-quality forecast reaches it."""
@@ -180,7 +188,7 @@ def forecast(lat: float, lon: float, plan_days: list[dict[str, str]], tz_name: s
             "snow_in": val("snowfall_sum"),
             "wind_mph": val("wind_speed_10m_max"),
             "gusts_mph": val("wind_gusts_10m_max"),
-            "sunset_mt": (val("sunset") or "")[11:16] or None,
+            "sunset_mt": _clock(val("sunset")),
             "max_us_aqi": aqi.get(day),
         })
     return out or None
