@@ -1,0 +1,14 @@
+# Online activity: scripts/sitewatch.py (docker-host cron, every 15 min) turns Pi-hole's DNS log
+# into which sites each person uses and publishes one retained summary on home/sitewatch/summary.
+# The Online panel reads the attributes; the state is when it was made, so the panel can tell
+# "no recent data" apart from "nobody online". Monitoring only: nothing here blocks anything.
+
+mqtt:
+  sensor:
+    - name: Online activity
+      unique_id: sitewatch_summary
+      state_topic: home/sitewatch/summary
+      value_template: "{{ value_json.updated }}"
+      device_class: timestamp
+      json_attributes_topic: home/sitewatch/summary
+      icon: mdi:web

@@ -1,0 +1,2 @@
+# Offset from netwatch (*/15), which reads the same Pi-hole database.
+7-59/15 * * * * root /usr/bin/python3 /usr/local/bin/sitewatch.py >>/var/log/sitewatch.log 2>&1

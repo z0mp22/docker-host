@@ -57,6 +57,10 @@ def is_template(value: object) -> bool:
     return isinstance(value, str) and ("{{" in value or "{%" in value)
 
 
+def template_prefix(value: str) -> str:
+    return re.split(r"\{[{%]", value.strip(), maxsplit=1)[0]
+
+
 def walk(node, path):
     """Yield (path, mapping) for every mapping in the tree."""
     if isinstance(node, dict):
@@ -100,10 +104,9 @@ def code_files() -> list[Path]:
 def main() -> int:
     errors: list[str] = []
     tags: dict[str, set[str]] = defaultdict(set)
-    # Literal prefixes of templated tags ("coach-q-{{ id }}" -> "coach-q-"), so a
-    # templated clear of the same family can be checked against them.
-    tag_prefixes: set[str] = set()
     clears: dict[str, str] = {}
+    # Literal start of templated tags ("wildlife-" for "wildlife-{{ animal | slugify }}").
+    tag_prefixes: set[str] = set()
     calls = 0
 
     for path in yaml_files() + code_files():
@@ -150,19 +153,15 @@ def main() -> int:
                 elif not is_template(tag):
                     tags[str(tag).strip()].add(owner(rel, node_path, doc))
                 else:
-                    prefix = str(tag).strip().split("{", 1)[0]
-                    if prefix:
-                        tag_prefixes.add(prefix)
+                    tag_prefixes.add(template_prefix(tag))
 
     for tag, owners in sorted(tags.items()):
         if len(owners) > 1:
             errors.append(f"tag {tag!r} shared by {', '.join(sorted(owners))}; each alert needs its own tag")
 
     for tag, where in sorted(clears.items()):
-        prefix = tag.split("{", 1)[0] if is_template(tag) else None
-        if prefix is not None and prefix in tag_prefixes:
-            continue
-        if tag not in tags:
+        # A templated clear only has to match the literal start of a templated alert's tag.
+        if tag not in tags and not (is_template(tag) and template_prefix(tag) in tag_prefixes - {""}):
             errors.append(f"{where}: clears tag {tag!r}, which no alert sends")
 
     script = (scripts_doc or {}).get(NOTIFY_SCRIPT)
