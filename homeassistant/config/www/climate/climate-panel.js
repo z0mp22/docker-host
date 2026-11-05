@@ -1003,6 +1003,8 @@ class ClimatePanel extends HTMLElement {
     }
   }
 
+  // Fort Collins Utilities' electric time-of-day rate. Gas (Xcel) costs the same at every hour, so
+  // peak pricing only matters much when the AC can run; in heat mode the chip stays neutral.
   _chip(m) {
     if (!m.tariff) return null;
     const on = m.tariff === "on_peak";
@@ -1010,7 +1012,12 @@ class ClimatePanel extends HTMLElement {
     const cents = Number.isFinite(rate) ? ` · ${(rate * 100).toFixed(1)}¢/kWh` : "";
     const next = m.ta.next_change ? Date.parse(m.ta.next_change) : NaN;
     const when = Number.isFinite(next) ? (on ? ` · until ${this._when(next)}` : ` · peak ${this._when(next)}`) : "";
-    return { cls: on ? "peak" : "", text: `${on ? "On-peak" : "Off-peak"}${cents}${when}` };
+    const matters = m.mode === "cool" || m.mode === "heat_cool" || m.activity === "cooling";
+    return {
+      cls: on && matters ? "peak" : "",
+      text: `Electric ${on ? "peak" : "off-peak"}${cents}${when}`,
+      title: "Fort Collins Utilities' time-of-day electric rate. It prices the AC and the furnace blower; gas heat from Xcel costs the same at every hour.",
+    };
   }
 
   _costNow(m) {
@@ -1023,7 +1030,9 @@ class ClimatePanel extends HTMLElement {
     if (m.activity === "idle" || m.activity === "off") {
       let sub = "";
       const coolingMode = m.mode === "cool" || m.mode === "heat_cool";
-      if (coolingMode && m.tariff === "off_peak" && ta.season === "summer" && Number.isFinite(next) && next - Date.now() < 4 * 36e5) {
+      if (m.mode === "heat" && m.tariff === "on_peak") {
+        sub = "Electric peak pricing only touches the blower; gas heat costs the same all day.";
+      } else if (coolingMode && m.tariff === "off_peak" && ta.season === "summer" && Number.isFinite(next) && next - Date.now() < 4 * 36e5) {
         sub = `Peak pricing starts at ${this._fmtTime(next)} — pre-cooling before then is cheaper.`;
       } else if (coolingMode && m.tariff === "on_peak" && ta.season === "summer" && ratio) {
         sub = `Cooling now would cost ${ratio.toFixed(1)}× the off-peak rate.`;
@@ -1140,10 +1149,16 @@ class ClimatePanel extends HTMLElement {
       : proj != null
         ? `On pace for about <b>${dollars(proj)}</b> in ${esc(monthName)}`
         : "Projection after 2 days of data";
+    const hr = (h) => (h === 12 ? "noon" : `${h % 12 || 12} ${h < 12 ? "am" : "pm"}`);
+    const ps = Number(m.ta.peak_start_hour);
+    const pe = Number(m.ta.peak_end_hour);
+    const same = Number.isFinite(ps) && Number.isFinite(pe) && (ps < 12) === (pe < 12) && ps !== 12 && pe !== 12;
+    const peakHours = Number.isFinite(ps) && Number.isFinite(pe)
+      ? `${same ? hr(ps).split(" ")[0] : hr(ps)}–${hr(pe)} weekdays` : "";
     const rows = [
-      ["gas", "Gas heat", mo.gas, `${fmtNum(mo.therms, 1)} therms · ${fmtHours(mo.heatH)} heating`],
-      ["on", "Electric, on-peak", mo.elecOn, `${fmtNum(mo.kwhOn, 1)} kWh`],
-      ["off", "Electric, off-peak", mo.elecOff, `${fmtNum(mo.kwhOff, 1)} kWh`],
+      ["gas", "Gas heat", mo.gas, `Xcel, same price all day · ${fmtNum(mo.therms, 1)} therms · ${fmtHours(mo.heatH)} heating`],
+      ["on", "Electric, on-peak", mo.elecOn, `Fort Collins Utilities${peakHours ? `, ${peakHours}` : ""} · ${fmtNum(mo.kwhOn, 1)} kWh`],
+      ["off", "Electric, off-peak", mo.elecOff, `Fort Collins Utilities, all other hours · ${fmtNum(mo.kwhOff, 1)} kWh`],
     ];
     const ry = Number(m.ta.rates_year);
     const stale = Number.isFinite(ry) && ry > 0 && ry < now.getFullYear()
@@ -1395,7 +1410,7 @@ class ClimatePanel extends HTMLElement {
             <div class="status"><span class="dot ${status.dot}"></span><b>${esc(status.label)}</b><span class="muted">·</span><span class="muted detail">${esc(status.detail)}</span></div>
           </div>
           <div class="spacer"></div>
-          ${chip ? `<div class="chip ${chip.cls}">${svg("mdiClockOutline")}<span>${esc(chip.text)}</span></div>` : ""}
+          ${chip ? `<div class="chip ${chip.cls}" title="${esc(chip.title)}">${svg("mdiClockOutline")}<span>${esc(chip.text)}</span></div>` : ""}
         </header>
         ${banner}
         <main class="grid">
