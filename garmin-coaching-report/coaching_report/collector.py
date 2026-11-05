@@ -10,7 +10,8 @@ from garmin_connect_mcp.client import GarminClientWrapper
 from . import nutrition as nutrition_api
 from .config import AppConfig
 from .errors import DataCollectionError, EmptyWindowError
-from .timezone_util import athlete_tz_name
+from .report_context import athlete_notes, forecast, previous_report
+from .timezone_util import athlete_today, athlete_tz_name
 from .hevy_client import HevyClient, workout_date, kg_to_lb, rpe_to_rir
 
 
@@ -53,14 +54,16 @@ def _collect_day_health(client: GarminClientWrapper, day: date, compact: bool = 
     return entry
 
 
-def collect_recent_health(client: GarminClientWrapper, days: int = 2) -> list[dict[str, Any]]:
+def collect_recent_health(
+    client: GarminClientWrapper, days: int = 2, today: date | None = None
+) -> list[dict[str, Any]]:
     """Last `days` calendar days of Garmin recovery data, most recent last.
 
     Public wrapper around the same per-day extraction build_payload() uses,
     for the lift-session pipeline's shorter, more recent-focused lookback --
     it doesn't need a full week/history payload, just yesterday and today.
     """
-    end = date.today()
+    end = today or athlete_today()
     return [
         _collect_day_health(client, end - timedelta(days=i), compact=True)
         for i in range(days - 1, -1, -1)
@@ -173,7 +176,7 @@ def build_payload(
     report_date -- identical to the historical behavior. ``since`` / ``through``
     override the lookback window start / end for on-demand runs.
     """
-    today = report_date or date.today()
+    today = report_date or athlete_today(config.athlete_timezone)
     week_end = through or (today - timedelta(days=1))
     week_start = since or (week_end - timedelta(days=6))
 
@@ -209,10 +212,11 @@ def build_payload(
     strength_training_log = _collect_lift_history(config, week_start, week_end)
 
     tz = athlete_tz_name(config.athlete_timezone)
+    days_ahead = plan_days(today)
     return {
         "report_date": _date_str(today),
         "report_weekday": today.strftime("%A"),
-        "plan_days": plan_days(today),
+        "plan_days": days_ahead,
         "athlete_context": {
             "timezone": tz,
             "timezone_label": "Mountain Time (MT)",
@@ -235,6 +239,9 @@ def build_payload(
         },
         "nutrition_history": nutrition_history or [],
         "strength_training_log": strength_training_log or [],
+        "previous_report": previous_report(config.report_output_dir, today),
+        "athlete_notes": athlete_notes(config.report_output_dir, week_start, today, tz),
+        "forecast": forecast(config.forecast_lat, config.forecast_lon, days_ahead, tz),
     }
 
 

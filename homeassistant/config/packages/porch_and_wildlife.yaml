@@ -4,7 +4,9 @@
 #   only fresh view of the porch (camera.doorbell also serves it).
 # - Wildlife: Frigate's COCO model has no deer/raccoon/fox class. Deer come through as
 #   horse/cow/sheep and raccoons/foxes as cat/dog/bear, so Claude names the animal and only
-#   wild ones are pushed (the household golden retriever is a Driveway "dog" too).
+#   wild ones are pushed (the household golden retriever is a "dog" on every camera too).
+#   Each sighting also raises a /house "Needs attention" row (binary_sensor.wildlife_spotted)
+#   until "Got it" on the push or the row, or a day without another sighting.
 # Both use ai_task.claude_ai_task from the Anthropic integration (added in the UI 2026-10-11,
 # set to claude-sonnet-5 with thinking off). Haiku 4.5 called a leashed dog with two walkers
 # a raccoon or coyote; Sonnet got it right. Without the integration these stop at their
@@ -60,6 +62,52 @@ script:
         data:
           message: clear_notification
           tag: porch-package-taken
+
+  wildlife_dismiss:
+    alias: "Wildlife: got it"
+    icon: mdi:paw-off
+    sequence:
+      - repeat:
+          for_each: "{{ state_attr('binary_sensor.wildlife_spotted', 'animals') or [] }}"
+          sequence:
+            - action: script.notify_phones
+              data:
+                message: clear_notification
+                tag: "wildlife-{{ repeat.item | slugify }}"
+      - event: wildlife_dismissed
+
+# One row on /house for every wild animal since the last "Got it": the newest sighting's photo, the
+# others named. Fed by events so the list survives restarts (trigger-based entities restore).
+template:
+  - triggers:
+      - trigger: event
+        event_type: wildlife_sighting
+        id: seen
+      - trigger: event
+        event_type: wildlife_dismissed
+        id: dismissed
+    binary_sensor:
+      - name: Wildlife spotted
+        unique_id: wildlife_spotted
+        icon: mdi:paw
+        state: "{{ trigger.id == 'seen' }}"
+        # A sighting from yesterday isn't something to act on any more.
+        auto_off:
+          hours: 24
+        attributes:
+          # Newest last. A sighting after auto-off starts a fresh list.
+          animals: >-
+            {% set before = this.attributes.animals | default([], true) if this.state == 'on' else [] %}
+            {{ (before | reject('eq', trigger.event.data.animal) | list) + [trigger.event.data.animal]
+               if trigger.id == 'seen' else [] }}
+          dangerous: >-
+            {% if trigger.id == 'seen' %}
+              {{ trigger.event.data.dangerous
+                 or (this.state == 'on' and this.attributes.dangerous | default(false, true)) }}
+            {% else %}false{% endif %}
+          where: "{{ trigger.event.data.where if trigger.id == 'seen' else this.attributes.where | default(none) }}"
+          event_id: "{{ trigger.event.data.event_id if trigger.id == 'seen' else this.attributes.event_id | default(none) }}"
+          at: "{{ now().isoformat() if trigger.id == 'seen' else this.attributes.at | default(none) }}"
 
 automation:
   - id: porch_package_check
@@ -199,20 +247,22 @@ automation:
                         url: /house
 
   - id: wildlife_driveway_alert
-    alias: "Wildlife: push when Claude confirms a wild animal on the Driveway"
+    alias: "Wildlife: push when Claude confirms a wild animal on a camera"
     description: >-
-      Frigate's first sighting of a horse/cow/sheep/bear/cat/dog on the Driveway gets a live frame
-      checked by Claude; only wild animals are pushed, one alert per species.
+      Frigate's first sighting of a horse/cow/sheep/bear/cat/dog on the Driveway, Garage or Basement
+      gets a live frame checked by Claude; only wild animals are pushed (one alert per species) and
+      put on /house's "Needs attention" list.
     mode: queued
     max: 3
     triggers:
       - trigger: mqtt
         topic: frigate/events
     conditions:
+      # Bambu is the 3D printer camera. Garage and Basement only track cat/dog/bear.
       - condition: template
         value_template: >-
           {{ trigger.payload_json.type == 'new'
-             and trigger.payload_json.after.camera == 'Driveway'
+             and trigger.payload_json.after.camera in ['Driveway', 'Garage', 'Basement']
              and trigger.payload_json.after.label in ['horse', 'cow', 'sheep', 'bear', 'cat', 'dog'] }}
       - condition: template
         value_template: "{{ expand('ai_task.claude_ai_task') | count > 0 }}"
@@ -220,18 +270,22 @@ automation:
       - variables:
           event_id: "{{ trigger.payload_json.after.id }}"
           frigate_label: "{{ trigger.payload_json.after.label }}"
+          camera: "{{ trigger.payload_json.after.camera }}"
+          where: >-
+            {{ {'Driveway': 'on the driveway', 'Garage': 'in the garage',
+                'Basement': 'in the basement'}[camera] }}
       - action: ai_task.generate_data
         response_variable: seen
         data:
           entity_id: ai_task.claude_ai_task
-          task_name: driveway wildlife check
+          task_name: wildlife check
           instructions: >-
-            This is a driveway security camera frame (possibly infrared at night) in Fort
-            Collins, Colorado. The object detector thinks it saw a {{ frigate_label }}. Is there a
-            wild animal in the frame, such as a deer, raccoon, fox, coyote, skunk, bear, rabbit or
-            mountain lion? Pets (dogs, house cats), people, vehicles and birds are not wild animals.
-            A dog on a leash or walking with people is a pet. If the animal is too small or unclear
-            to identify, answer false.
+            This is a {{ camera | lower }} security camera frame (possibly infrared at night) at a
+            house in Fort Collins, Colorado. The object detector thinks it saw a {{ frigate_label }}.
+            Is there a wild animal in the frame, such as a deer, raccoon, fox, coyote, skunk, bear,
+            rabbit, bobcat or mountain lion? Pets (dogs, house cats), people, vehicles and birds are
+            not wild animals. A dog on a leash or walking with people is a pet. If the animal is too
+            small or unclear to identify, answer false.
           structure:
             wild:
               description: True only if a wild mammal is visible
@@ -243,14 +297,27 @@ automation:
               required: true
               selector:
                 text:
+            dangerous:
+              description: >-
+                True if this animal could hurt a person or a dog, e.g. bear, mountain lion,
+                bobcat, coyote
+              required: true
+              selector:
+                boolean:
           attachments:
-            - media_content_id: media-source://camera/camera.driveway
+            - media_content_id: "media-source://camera/camera.{{ camera | lower }}"
               media_content_type: image/jpeg
       - condition: template
         value_template: "{{ seen.data.wild and seen.data.animal | length > 0 }}"
+      - event: wildlife_sighting
+        event_data:
+          animal: "{{ seen.data.animal }}"
+          dangerous: "{{ seen.data.dangerous }}"
+          where: "{{ where }}"
+          event_id: "{{ event_id }}"
       - action: script.notify_phones
         data:
-          title: "{{ seen.data.animal | capitalize }} on the driveway"
+          title: "{{ seen.data.animal | capitalize }} {{ where }}"
           message: "Frigate saw a {{ frigate_label }} · {{ now().strftime('%-I:%M %p') }}"
           # Per species, so a second deer replaces the first alert instead of stacking.
           tag: "wildlife-{{ seen.data.animal | slugify }}"
@@ -259,3 +326,17 @@ automation:
             image: "/api/frigate/notifications/{{ event_id }}/snapshot.jpg"
             clickAction: /wildlife
             url: /wildlife
+            actions:
+              - action: WILDLIFE_GOT_IT
+                title: Got it
+
+  - id: wildlife_got_it_from_notification
+    alias: "Wildlife: \"Got it\" on the push clears the /house row"
+    triggers:
+      - trigger: event
+        event_type: mobile_app_notification_action
+        event_data:
+          action: WILDLIFE_GOT_IT
+    actions:
+      - action: script.wildlife_dismiss
+    mode: single

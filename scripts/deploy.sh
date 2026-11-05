@@ -248,6 +248,8 @@ deploy_garmin_coaching_report() {
     "${DEPLOY_ROOT}/garmin-coaching-report/scripts/run-report.sh" 755
   install_file "${REPO_ROOT}/garmin-coaching-report/scripts/run-lift-session.sh" \
     "${DEPLOY_ROOT}/garmin-coaching-report/scripts/run-lift-session.sh" 755
+  install_file "${REPO_ROOT}/garmin-coaching-report/scripts/run-coach.sh" \
+    "${DEPLOY_ROOT}/garmin-coaching-report/scripts/run-coach.sh" 755
   install_file "${REPO_ROOT}/garmin-coaching-report/cron/garmin-coaching-report" \
     "/etc/cron.d/garmin-coaching-report" 644
   (
@@ -403,6 +405,17 @@ install_netwatch() {
     || log "WARN: netwatch initial run failed (see /tmp/netwatch-deploy.log)"
 }
 
+install_sitewatch() {
+  log "installing sitewatch (Pi-hole lookups -> sites per person, for the Online panel)"
+  install_file "${REPO_ROOT}/scripts/sitewatch.py" "/usr/local/bin/sitewatch.py" 755
+  sudo mkdir -p /etc/sitewatch
+  install_file "${REPO_ROOT}/sitewatch/people.json" "/etc/sitewatch/people.json" 644
+  install_file "${REPO_ROOT}/sitewatch/sites.json" "/etc/sitewatch/sites.json" 644
+  install_file "${REPO_ROOT}/cron/sitewatch" "/etc/cron.d/sitewatch" 644
+  sudo /usr/bin/python3 /usr/local/bin/sitewatch.py >>/tmp/sitewatch-deploy.log 2>&1 \
+    || log "WARN: sitewatch initial run failed (see /tmp/sitewatch-deploy.log)"
+}
+
 install_udm_traffic() {
   log "installing udm-traffic (UDM traffic + firewall blocks for the Network panel)"
   install_file "${REPO_ROOT}/scripts/udm-traffic.py" "/usr/local/bin/udm-traffic.py" 755
@@ -452,6 +465,7 @@ main() {
   install_hdhomerun_signal_bridge
   install_bluetooth_watchdog
   install_netwatch
+  install_sitewatch
   install_udm_traffic
   install_cloudflare_edge
   deploy_mountain_project_feed

@@ -14,7 +14,7 @@ import json
 import os
 import sys
 import traceback
-from datetime import date, datetime
+from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from .config import load_app_config
@@ -38,6 +38,7 @@ from .lift_fingerboard_plan import RULES_VERSION, load_board_prescriptions, plan
 from .lift_review import enforce_hinge_limits, fingerboard_problems, name_problems, review_plan
 from .lift_safety import assert_session_plan_safe, resolve_banned_exercise_ids
 from .hevy_client import HevyClient
+from .timezone_util import athlete_today
 
 SESSION_TYPES = ("heavy_1h", "light_30m", "shoulder_pt", "fingerboard")
 DEFAULT_SESSION_TYPE = "heavy_1h"
@@ -82,7 +83,7 @@ def main() -> int:
     shoulder_flag = os.environ.get("LIFT_SHOULDER_FLAG", "").strip().lower() in ("1", "true", "yes")
     finger_flag = os.environ.get("LIFT_FINGER_FLAG", "").strip().lower() in ("1", "true", "yes")
     dry_run = os.environ.get("DRY_RUN", "").strip().lower() in ("1", "true", "yes")
-    session_date = date.today()
+    session_date = athlete_today(config.athlete_timezone)
 
     try:
         garmin_client = connect_with_tokens(config.garmin)

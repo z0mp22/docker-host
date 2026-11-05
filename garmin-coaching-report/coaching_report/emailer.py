@@ -5,12 +5,10 @@ import json
 import smtplib
 import sys
 from datetime import date, datetime
-from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-import markdown
 
 from .coach import CoachResult
 from .config import AppConfig
@@ -65,39 +63,21 @@ def _metadata_footer(result: CoachResult) -> str:
 """
 
 
-def _html_wrapper(body_html: str) -> str:
-    return f"""<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<style>
-  body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; line-height: 1.5; color: #222; max-width: 720px; margin: 2em auto; padding: 0 1em; }}
-  h1, h2, h3 {{ color: #1a1a1a; }}
-  table {{ border-collapse: collapse; margin: 1em 0; }}
-  th, td {{ border: 1px solid #ccc; padding: 0.4em 0.8em; text-align: left; }}
-  th {{ background: #f5f5f5; }}
-  code {{ background: #f4f4f4; padding: 0.1em 0.3em; border-radius: 3px; }}
-</style>
-</head>
-<body>
-{body_html}
-</body>
-</html>"""
-
-
 def save_outputs(
     config: AppConfig,
     report_date: date,
     result: CoachResult,
     user_content: dict[str, Any],
     payload: dict[str, Any] | None = None,
+    report_markdown: str = "",
 ) -> Path:
-    """Write markdown report, metadata JSON, and optional debug input JSON."""
+    """Write the markdown archive of the week, metadata JSON, and optional
+    debug input JSON. The debrief itself lives in weekly_coach.json."""
     config.report_output_dir.mkdir(parents=True, exist_ok=True)
     stamp = report_date.isoformat()
     base = config.report_output_dir / f"mountain-sports-coaching-{stamp}"
 
-    full_markdown = result.report_markdown + _metadata_footer(result)
+    full_markdown = report_markdown + _metadata_footer(result)
     md_path = base.with_suffix(".md")
     md_path.write_text(full_markdown, encoding="utf-8")
 
@@ -142,27 +122,6 @@ def save_outputs(
     print(log_line, file=sys.stderr)
 
     return md_path
-
-
-def send_report_email(config: AppConfig, report_date: date, markdown_content: str) -> None:
-    subject = f"Mountain Sports Coaching Report — {report_date.isoformat()}"
-    html_body = _html_wrapper(markdown.markdown(markdown_content, extensions=["tables"]))
-
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = subject
-    msg["From"] = config.gmail_user
-    msg["To"] = config.gmail_user
-    msg.attach(MIMEText(markdown_content, "plain", "utf-8"))
-    msg.attach(MIMEText(html_body, "html", "utf-8"))
-
-    try:
-        with smtplib.SMTP("smtp.gmail.com", 587, timeout=60) as smtp:
-            smtp.ehlo()
-            smtp.starttls()
-            smtp.login(config.gmail_user, config.gmail_app_password)
-            smtp.sendmail(config.gmail_user, [config.gmail_user], msg.as_string())
-    except Exception as exc:
-        raise EmailError(f"Failed to send report email: {exc}") from exc
 
 
 PRESCRIPTIONS_LOG = "lift_prescriptions.jsonl"

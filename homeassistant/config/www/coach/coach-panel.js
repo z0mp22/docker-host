@@ -1,6 +1,9 @@
 // Coaching panel: a dependency-free web component registered via panel_custom.
 // It only drives the existing scripts (which dispatch the GitHub workflows that
-// write to Hevy); generation itself is unchanged.
+// write to Hevy); generation itself is unchanged. The weekly coach card lives in
+// coach-week.js (bump its ?v= below together with this file's in configuration.yaml).
+
+import { WEEK_CSS, WEEK_SHELL, WeekCard } from "./coach-week.js?v=1";
 
 const ICONS = {
   mdiAlertOutline: "M12,2L1,21H23M12,6L19.53,19H4.47M11,10V14H13V10M11,16V18H13V16",
@@ -137,10 +140,10 @@ h1 { margin: 0; font-size: 34px; font-weight: 700; line-height: 1.1; }
 .icon-btn { width: 48px; height: 48px; border-radius: 16px; display: grid; place-items: center; background: var(--card-2); border: 1px solid var(--line); flex: none; }
 
 .grid { display: grid; gap: 22px; align-items: start; grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr);
-  grid-template-areas: "session workout" "session gen" "session board" "session feedback" "session report"; grid-template-rows: auto auto auto auto 1fr; }
-.grid.gen-first { grid-template-columns: minmax(0, 1fr) minmax(0, 1.45fr); grid-template-areas: "workout session" "gen session" "board session" "feedback session" "report session"; }
+  grid-template-areas: "week week" "session workout" "session gen" "session board" "session feedback"; grid-template-rows: auto auto auto auto 1fr; }
+.grid.gen-first { grid-template-columns: minmax(0, 1fr) minmax(0, 1.45fr); grid-template-areas: "week week" "workout session" "gen session" "board session" "feedback session"; }
 .card { background: linear-gradient(180deg, var(--card-2), var(--card)); border: 1px solid var(--line); border-radius: 30px; padding: 26px 28px; min-width: 0; }
-.a-workout { grid-area: workout; } .a-board { grid-area: board; } .a-session { grid-area: session; } .a-gen { grid-area: gen; } .a-feedback { grid-area: feedback; } .a-report { grid-area: report; }
+.a-workout { grid-area: workout; } .a-board { grid-area: board; } .a-session { grid-area: session; } .a-gen { grid-area: gen; } .a-feedback { grid-area: feedback; }
 .eyebrow { font-size: 13px; letter-spacing: .12em; font-weight: 600; color: var(--muted); text-transform: uppercase; }
 h2 { margin: 6px 0 0; font-size: 26px; font-weight: 600; line-height: 1.2; }
 h3 { margin: 6px 0 0; font-size: 21px; font-weight: 600; }
@@ -264,8 +267,8 @@ textarea::placeholder { color: #5d6b80; }
 .toast { position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%); padding: 14px 20px; border-radius: 14px; background: #3a1d24; border: 1px solid rgba(240,97,109,.5); color: #ffd3d7; z-index: 10; max-width: 90vw; }
 
 @container (max-width: 980px) {
-  .grid { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; grid-template-areas: "workout" "session" "gen" "board" "feedback" "report"; }
-  .grid.gen-first { grid-template-columns: minmax(0, 1fr); grid-template-areas: "workout" "gen" "session" "board" "feedback" "report"; }
+  .grid { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; grid-template-areas: "week" "workout" "session" "gen" "board" "feedback"; }
+  .grid.gen-first { grid-template-columns: minmax(0, 1fr); grid-template-areas: "week" "workout" "gen" "session" "board" "feedback"; }
 }
 @container (max-width: 640px) {
   .app { padding: 14px 14px 24px; }
@@ -316,6 +319,7 @@ class CoachPanel extends HTMLElement {
     this._fb = null;
     this._toast = "";
     this._workout = null; // { phase: "busy" | "done", at }
+    this._week = new WeekCard(this);
     this.shadowRoot.addEventListener("click", (e) => this._onClick(e));
   }
 
@@ -337,8 +341,10 @@ class CoachPanel extends HTMLElement {
   connectedCallback() {
     loadFont();
     this._ensureSetup();
-    // The end-of-workout push opens /coach?feedback.
-    if (new URLSearchParams(location.search).has("feedback")) setTimeout(() => this._focusFeedback(), 600);
+    // The end-of-workout push opens /coach?feedback; coach pushes open /coach?week.
+    const params = new URLSearchParams(location.search);
+    if (params.has("feedback")) setTimeout(() => this._focusFeedback(), 600);
+    else if (params.has("week")) setTimeout(() => this._week.focus(), 600);
     this._tick = setInterval(() => this._render(), 5000);
   }
 
@@ -380,16 +386,17 @@ class CoachPanel extends HTMLElement {
   _buildShell() {
     this._shell = true;
     this.shadowRoot.innerHTML = `
-      <style>${CSS}</style>
+      <style>${CSS}${WEEK_CSS}</style>
       <div class="app">
         <header class="top" data-region="header"></header>
         <main class="grid">
+          <section class="card a-week">${WEEK_SHELL}</section>
           <section class="card a-workout" data-region="workout"></section>
           <section class="card a-gen" data-region="gen"></section>
           <section class="card a-board" data-region="board"></section>
           <section class="card a-session" data-region="session"></section>
           <section class="card a-feedback">
-            <div class="eyebrow">Coach feedback</div>
+            <div class="eyebrow">Session feedback</div>
             <h3>How did it go?</h3>
             <div class="sub">Likes, dislikes, how it felt — remembered for future sessions.</div>
             <div class="chips">${QUICK_FEEDBACK.map((c) => `<button class="chip" data-action="chip" data-text="${esc(c)}">${esc(c)}</button>`).join("")}</div>
@@ -399,14 +406,14 @@ class CoachPanel extends HTMLElement {
             </div>
             <div data-region="fbstatus"></div>
           </section>
-          <section class="card a-report" data-region="report"></section>
         </main>
         <div data-region="toast"></div>
       </div>`;
     for (const el of this.shadowRoot.querySelectorAll("[data-region]")) this._regions[el.dataset.region] = { el, html: null };
     this._grid = this.shadowRoot.querySelector(".grid");
-    this._textarea = this.shadowRoot.querySelector("textarea");
-    this._sendBtn = this.shadowRoot.querySelector(".send");
+    this._textarea = this.shadowRoot.querySelector(".a-feedback textarea");
+    this._sendBtn = this.shadowRoot.querySelector(".a-feedback .send");
+    this._week.bind(this.shadowRoot);
     this._textarea.addEventListener("input", () => this._onDraft());
   }
 
@@ -479,6 +486,7 @@ class CoachPanel extends HTMLElement {
   async _onClick(e) {
     const el = e.target.closest?.("[data-action]");
     if (!el || !this._hass || el.disabled) return;
+    if (el.dataset.action.startsWith("wk-")) return this._week.onClick(el);
     const m = this._model;
     switch (el.dataset.action) {
       case "menu":
@@ -635,6 +643,10 @@ class CoachPanel extends HTMLElement {
     );
   }
 
+  icon(name) {
+    return svg(name);
+  }
+
   _selectedType(m) {
     return this._type || m.sessionType || "light_30m";
   }
@@ -773,6 +785,7 @@ class CoachPanel extends HTMLElement {
     this._renderBoard(m);
     this._renderSession(m, job, busy);
     this._renderFeedbackStatus();
+    this._week.render();
     this._renderReport(m);
     this._set("toast", this._toast ? `<div class="toast" role="alert">${esc(this._toast)}</div>` : "");
   }
@@ -1011,7 +1024,7 @@ class CoachPanel extends HTMLElement {
       if (result && !result.ok) status = `<div class="alert err">${svg("mdiAlertOutline")}<span><b>${esc(result.title)}.</b> ${esc(result.message)}</span></div>`;
       else if (age < REPORT_BUSY_MS) {
         busy = true;
-        status = `<div class="alert ok">${svg("mdiCheck")}<span>${result ? `Queued ${this._ago(at)} (${esc(REPORTS[req.w]?.label || "")}) — the email should arrive in a few minutes.` : "Sending to GitHub…"}</span></div>`;
+        status = `<div class="alert ok">${svg("mdiCheck")}<span>${result ? `Queued ${this._ago(at)} (${esc(REPORTS[req.w]?.label || "")}) — the new debrief shows up here in a few minutes.` : "Sending to GitHub…"}</span></div>`;
       } else {
         status = `<div class="hint" style="text-align:left">Last requested here ${new Date(at).toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })} at ${this._fmtTime(at)}</div>`;
       }
@@ -1020,8 +1033,8 @@ class CoachPanel extends HTMLElement {
       "report",
       `<div class="eyebrow">Weekly coaching report</div>
       <div class="report-row">
-        <div class="t">Emails a report covering everything since the last one. Also runs automatically Mondays at 9 AM.</div>
-        <button class="btn2" data-action="report" data-window="last" ${busy ? "disabled" : ""}>${svg("mdiChartLine")} Run report</button>
+        <div class="t">Writes a new debrief covering everything since the last one. Runs on its own Mondays at 9 AM.</div>
+        <button class="btn2" data-action="report" data-window="last" ${busy ? "disabled" : ""}>${svg("mdiChartLine")} New debrief</button>
       </div>
       ${status}
       <button class="disclose ${this._moreReports ? "open" : ""}" data-action="more-reports">${svg("mdiChevronDown")} More options</button>

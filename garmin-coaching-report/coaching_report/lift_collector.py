@@ -36,7 +36,7 @@ from .lift_equipment import HOME_GYM
 from .lift_fingerboard import build_context as build_fingerboard_context
 from .lift_feedback import load_recent_feedback
 from .lift_review import hinge_limits
-from .timezone_util import athlete_tz_name
+from .timezone_util import athlete_today, athlete_tz_name
 from .hevy_client import HevyClient, parse_ts, kg_to_lb, rpe_to_rir
 
 # Logged workouts the lift coach reads: everything in this window, or the
@@ -84,7 +84,7 @@ def _recovery_and_activity(
     # for just 2 days). Route through compress_week() rather than sending
     # collect_recent_health()'s raw output directly, which was a real bug
     # caught while verifying this feature end-to-end, not a hypothetical.
-    raw_recovery = collect_recent_health(garmin_client, days=2)
+    raw_recovery = collect_recent_health(garmin_client, days=2, today=session_date)
     compressed = compress_week(
         {"athlete_context": athlete_context, "activity_details": [], "daily_health": raw_recovery},
         "compact",
@@ -122,7 +122,7 @@ def build_lift_payload(
     """`catalog` is what the coach may prescribe (home gym, no board work);
     `full_catalog` (defaults to it) resolves names and muscles in history and
     the fingerboard exercises."""
-    session_date = session_date or date.today()
+    session_date = session_date or athlete_today(config.athlete_timezone)
     full_catalog = full_catalog if full_catalog is not None else catalog
     athlete_context = _athlete_context(config)
     recent_recovery, recent_mountain_activity = _recovery_and_activity(
@@ -190,7 +190,7 @@ def build_fingerboard_payload(
     catalog; the coach gets the plan exercises plus forearm work only."""
     from .lift_fingerboard import fingerboard_session_catalog
 
-    session_date = session_date or date.today()
+    session_date = session_date or athlete_today(config.athlete_timezone)
     athlete_context = _athlete_context(config)
     recent_recovery, recent_mountain_activity = _recovery_and_activity(
         garmin_client, athlete_context, session_date

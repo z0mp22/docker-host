@@ -38,6 +38,8 @@ recorder:
       - sensor.mountain_project_feed
       # ~7 KB of attributes every 15 min; the panel only needs the latest (MQTT retains it).
       - sensor.network_traffic
+      # ~5 KB of attributes every 15 min; the Online panel only needs the latest (MQTT retains it).
+      - sensor.online_activity
       # ~14 KB of attributes, rewritten every 5 min; panels and automations only read the live state.
       - sensor.plex_recordings_sync_meta
       # Sonarr upcoming/queue/recent lists, rewritten every 5 min (packages/tv_shows.yaml).
@@ -45,6 +47,8 @@ recorder:
       # Cloudflare summaries: rewritten every 5 min (MQTT retains the latest); rule expressions.
       - sensor.cloudflare_edge
       - sensor.cloudflare_edge_rules
+      # The weekly coach's debrief + plan + thread (packages/weekly_coach.yaml); the panel reads it live.
+      - sensor.weekly_coach
 
 # Load frontend themes from the themes folder
 frontend:
@@ -416,7 +420,7 @@ panel_custom:
     url_path: house
     sidebar_title: Home
     sidebar_icon: mdi:home
-    module_url: /local/home/home-panel.js?v=12
+    module_url: /local/home/home-panel.js?v=13
     config:
       person: person.cody
       # Header "who's home" chips: a person.* (phone app GPS) or a presence binary_sensor
@@ -445,6 +449,10 @@ panel_custom:
         photo: camera.porch_package
         brought_in: script.porch_package_brought_in
         dismiss: script.porch_package_dismiss_taken
+      # Claude-confirmed wild animals on any Frigate camera (same package), until "Got it" or a day.
+      wildlife:
+        sensor: binary_sensor.wildlife_spotted
+        dismiss: script.wildlife_dismiss
       # Garage door tile: Frigate's garage_door classifier (packages/garage_door.yaml), since there's
       # no door sensor. It carries a Garage camera still so a misread is easy to spot.
       garage:
@@ -516,6 +524,7 @@ panel_custom:
         recordings: /recordings
         network: /network
         media: /tv
+        wildlife: /wildlife
   - name: tv-panel
     url_path: tv
     sidebar_title: TV
@@ -587,7 +596,7 @@ panel_custom:
     url_path: coach
     sidebar_title: Coaching
     sidebar_icon: mdi:dumbbell
-    module_url: /local/coach/coach-panel.js?v=7
+    module_url: /local/coach/coach-panel.js?v=8
   - name: network-panel
     url_path: network
     sidebar_title: Network
@@ -693,6 +702,16 @@ panel_custom:
       # to come through as horse/cow/sheep (shown as "Large animal"), foxes and coyotes as dog.
       # Frigate must track these on the camera (frigate repo, cameras.Driveway.objects.track).
       labels: [cat, bird, bear, horse, cow, sheep]
+  # Which sites each person uses, from Pi-hole's DNS log (packages/sitewatch.yaml). Read-only.
+  - name: online-panel
+    url_path: online
+    sidebar_title: Online
+    sidebar_icon: mdi:web
+    module_url: /local/online/online-panel.js?v=1
+    config:
+      summary: sensor.online_activity
+      # sitewatch runs every 15 min; past this the panel says it stopped updating.
+      stale_minutes: 45
   - name: climbing-panel
     url_path: climbing
     sidebar_title: Climbing
@@ -707,7 +726,7 @@ panel_custom:
     url_path: hvac
     sidebar_title: Climate
     sidebar_icon: mdi:thermostat
-    module_url: /local/climate/climate-panel.js?v=2
+    module_url: /local/climate/climate-panel.js?v=4
     config:
       # Honeywell TCC integration. If HA names it differently, rename the entity to this id
       # (packages/hvac_cost.yaml reads it too).

@@ -29,3 +29,10 @@ args+=(
 )
 
 docker "${args[@]}"
+
+# The debrief lives in weekly_coach.json; Home Assistant reads its copy
+# (sensor.weekly_coach) for the Coach panel and the Monday push. Skipped on a
+# dry run, which writes nothing.
+if [ -z "${DRY_RUN:-}" ] && [ -f /docker/garmin-coaching-report/reports/weekly_coach.json ]; then
+  cp /docker/garmin-coaching-report/reports/weekly_coach.json /docker/homeassistant/weekly_coach_state.json
+fi

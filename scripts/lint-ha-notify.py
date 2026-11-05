@@ -57,6 +57,10 @@ def is_template(value: object) -> bool:
     return isinstance(value, str) and ("{{" in value or "{%" in value)
 
 
+def template_prefix(value: str) -> str:
+    return re.split(r"\{[{%]", value.strip(), maxsplit=1)[0]
+
+
 def walk(node, path):
     """Yield (path, mapping) for every mapping in the tree."""
     if isinstance(node, dict):
@@ -101,6 +105,8 @@ def main() -> int:
     errors: list[str] = []
     tags: dict[str, set[str]] = defaultdict(set)
     clears: dict[str, str] = {}
+    # Literal start of templated tags ("wildlife-" for "wildlife-{{ animal | slugify }}").
+    tag_prefixes: set[str] = set()
     calls = 0
 
     for path in yaml_files() + code_files():
@@ -146,13 +152,16 @@ def main() -> int:
                     clears[str(tag).strip()] = where
                 elif not is_template(tag):
                     tags[str(tag).strip()].add(owner(rel, node_path, doc))
+                else:
+                    tag_prefixes.add(template_prefix(tag))
 
     for tag, owners in sorted(tags.items()):
         if len(owners) > 1:
             errors.append(f"tag {tag!r} shared by {', '.join(sorted(owners))}; each alert needs its own tag")
 
     for tag, where in sorted(clears.items()):
-        if tag not in tags:
+        # A templated clear only has to match the literal start of a templated alert's tag.
+        if tag not in tags and not (is_template(tag) and template_prefix(tag) in tag_prefixes - {""}):
             errors.append(f"{where}: clears tag {tag!r}, which no alert sends")
 
     script = (scripts_doc or {}).get(NOTIFY_SCRIPT)

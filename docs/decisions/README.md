@@ -13,5 +13,6 @@
 | [0010](0010-basement-samsung-tv.md) | Basement Samsung TV: local control only, input guessed from the active device | Accepted |
 | [0011](0011-lift-coach-deadlift-back-limits.md) | Back-safety limits on deadlifts and other barbell hinges | Accepted |
 | [0012](0012-fingerboard-sessions-from-rules.md) | Fingerboard sessions from rules, not Claude | Accepted |
+| [0013](0013-weekly-coach-in-home-assistant.md) | The weekly coach lives in Home Assistant, and talks back | Accepted |
 
 Related DVR library decisions live in [czampino/plex_recordings](https://github.com/czampino/plex_recordings/tree/main/docs/decisions).
