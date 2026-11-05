@@ -10,7 +10,7 @@
 # - Each question, one at a time: 7:30 PM, or 2 minutes after a coach reply while one is still open.
 #   Two tap answers plus Reply.
 # - The coach's replies, with Reply, so the conversation can stay in the notification. That includes
-#   check-ins: every 30 min run-coach.sh syncs Garmin + Hevy (cron), and when what you did changes the
+#   check-ins: every 15-30 min run-coach.sh syncs Garmin + Hevy (cron), and when what you did changes the
 #   plan the coach says so on its own ("Coach saw your training").
 # - 7:30 AM, only when yesterday's planned session left nothing in Garmin or Hevy: Done / Skipped /
 #   Changed (Reply).

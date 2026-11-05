@@ -1,11 +1,11 @@
 // Coaching panel: a dependency-free web component registered via panel_custom.
 // It only drives the existing scripts (which dispatch the GitHub workflows that
-// write to Hevy); generation itself is unchanged. Since 2026-11-04 the page is two cards,
-// Coach and Today, built in coach-week.js (bump its ?v= below together with this file's in
+// write to Hevy); generation itself is unchanged. Since 2026-11-05 the page is three cards,
+// Coach, Today and Debrief, built in coach-week.js (bump its ?v= below together with this file's in
 // configuration.yaml); this file keeps the shell, the header, the lift/board/basement helpers
 // those cards call, and the report run.
 
-import { COACH_SHELL, WEEK_CSS, WeekCard } from "./coach-week.js?v=5";
+import { COACH_SHELL, DEBRIEF_SHELL, WEEK_CSS, WeekCard } from "./coach-week.js?v=6";
 
 const ICONS = {
   mdiAlertOutline: "M12,2L1,21H23M12,6L19.53,19H4.47M11,10V14H13V10M11,16V18H13V16",
@@ -137,7 +137,7 @@ h1 { margin: 0; font-size: 34px; font-weight: 700; line-height: 1.1; }
 @keyframes pulse { 50% { opacity: .35; } }
 .icon-btn { width: 48px; height: 48px; border-radius: 16px; display: grid; place-items: center; background: var(--card-2); border: 1px solid var(--line); flex: none; }
 
-.grid { display: grid; gap: 22px; align-items: start; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); grid-template-areas: "today coach"; }
+.grid { display: grid; gap: 22px; align-items: start; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); grid-template-areas: "today coach" "today debrief"; }
 .card { background: linear-gradient(180deg, var(--card-2), var(--card)); border: 1px solid var(--line); border-radius: 30px; padding: 26px 28px; min-width: 0; }
 .eyebrow { font-size: 13px; letter-spacing: .12em; font-weight: 600; color: var(--muted); text-transform: uppercase; }
 h2 { margin: 6px 0 0; font-size: 26px; font-weight: 600; line-height: 1.2; }
@@ -262,7 +262,7 @@ textarea::placeholder { color: #5d6b80; }
 .toast { position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%); padding: 14px 20px; border-radius: 14px; background: #3a1d24; border: 1px solid rgba(240,97,109,.5); color: #ffd3d7; z-index: 10; max-width: 90vw; }
 
 @container (max-width: 980px) {
-  .grid { grid-template-columns: minmax(0, 1fr); grid-template-areas: "coach" "today"; }
+  .grid { grid-template-columns: minmax(0, 1fr); grid-template-areas: "coach" "today" "debrief"; }
 }
 @container (max-width: 640px) {
   .app { padding: 14px 14px 24px; }
@@ -382,6 +382,7 @@ class CoachPanel extends HTMLElement {
         <main class="grid">
           <section class="card a-coach">${COACH_SHELL}</section>
           <section class="card a-today" data-region="today"></section>
+          <section class="card a-debrief">${DEBRIEF_SHELL}</section>
         </main>
         <div data-region="toast"></div>
       </div>`;

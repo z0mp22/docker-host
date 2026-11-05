@@ -23,6 +23,9 @@ him the way a person would, and to be able to answer it. Email is one-way.
   one open question with tap answers, the week as a strip of days (green done, blue
   changed, amber nothing logged), goals, the full debrief behind a toggle, and the
   conversation with a message box. A lift or board day has "Build in Hevy".
+  Since 2026-11-05 it is three cards: Coach (question, conversation; on a phone a thread
+  quiet for 3 hours folds to one line so the day's plan is near the top), Today, and the
+  debrief last. Kinds and goals carry an emoji and a color everywhere for scanning.
 - **Phone first.** The Monday push carries the headline. Questions are pushed one at a
   time (7:30 PM, or after a reply) with two tap answers and Reply. Coach replies are
   pushed with Reply, so a whole exchange can happen in notifications.
@@ -51,6 +54,9 @@ him the way a person would, and to be able to answer it. Email is one-way.
   28-day median. Only both together, two days running or far off today, ask to ease a
   hard day: a push and a panel banner with Keep it / Ease it. Nothing changes unless he
   eases it. On his last 8 mornings only Nov 1 (HRV 16 vs 22, RHR +5) would have asked.
+  From 2026-11-05 the sync runs every 15 minutes from 5 AM (he's up around 5; the 6 AM
+  start missed that), and the panel always says where the check is: waiting on last
+  night's HRV, on track (plan stands), or down. A "go" morning leaves the plan as it is.
 
 ## Consequences
 

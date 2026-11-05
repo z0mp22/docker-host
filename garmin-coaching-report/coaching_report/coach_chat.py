@@ -14,7 +14,7 @@ chosen by COACH_MODE:
   call; "eased" swaps the day for its easy version and keeps the original.
 - check: the nightly pass that marks past plan days from Garmin and Hevy.
   No Claude call.
-- sync: every 30 minutes in the day (cron). Marks plan days from Garmin and
+- sync: every 15 minutes from 5 AM, every 30 from 8 AM (cron). Marks plan days from Garmin and
   Hevy, today included once something is logged, and keeps what was logged
   on every recent day (logged_days) for the panel. When what you did changes
   the plan (a different session, or a hard effort on an easy, rest or
