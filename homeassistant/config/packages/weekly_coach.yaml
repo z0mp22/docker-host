@@ -14,6 +14,10 @@
 #   plan the coach says so on its own ("Coach saw your training").
 # - 7:30 AM, only when yesterday's planned session left nothing in Garmin or Hevy: Done / Skipped /
 #   Changed (Reply).
+# - The morning readiness check (since 2026-11-04 the plan is aggressive and walked back as needed):
+#   when last night's HRV and today's resting HR are both off his own baseline (two days running, or
+#   far off today) and today is a hard day, "Recovery's down today" with the coach's easy version and
+#   Keep it / Ease it. Nothing changes unless he taps Ease it.
 # Everything you send goes through script.coach_send -> the Coach GitHub workflow -> run-coach.sh,
 # which replies live (Claude) for messages and answers, and just records day check-offs.
 
@@ -37,8 +41,13 @@ command_line:
         - thread
         - logged_days
         - week_note
+        - readiness
 
 input_text:
+  # The date the morning readiness push last asked about.
+  coach_ready_asked:
+    name: Coach readiness asked
+    max: 16
   # "<report_date>:q1,q2" -- which of this week's questions were already pushed.
   coach_pushed:
     name: Coach questions pushed
@@ -273,6 +282,45 @@ automation:
           value: "{{ yesterday }}"
     mode: single
 
+  - id: weekly_coach_readiness_push
+    alias: "Coach: ask before easing a hard day when HRV and resting HR are both down"
+    triggers:
+      - trigger: state
+        entity_id: sensor.weekly_coach
+        attribute: readiness
+    variables:
+      r: "{{ state_attr('sensor.weekly_coach', 'readiness') or {} }}"
+      today: "{{ now().date().isoformat() }}"
+    conditions:
+      - condition: template
+        value_template: >-
+          {{ r.get('date') == today and r.get('ask') and not r.get('decision')
+             and states('input_text.coach_ready_asked') != today }}
+    actions:
+      - action: script.notify_phones
+        data:
+          title: "Recovery's down today"
+          message: >-
+            HRV {{ r.hrv | round(0) | int }} (your normal {{ r.base_hrv | round(0) | int }}), resting HR
+            {{ r.rhr | round(0) | int }} ({{ r.base_rhr | round(0) | int }}).
+            {{ r.session }}: I'd do the easy version: {{ r.suggestion }}
+          tag: "coach-ready-{{ today }}"
+          channel: Coach
+          data:
+            url: /coach?week
+            clickAction: /coach?week
+            # Built as a template: the lint reads a literal templated "action:" key as a hidden service call.
+            actions: >-
+              {{ [{'action': 'COACH_KEEP_' ~ today, 'title': 'Keep it'},
+                  {'action': 'COACH_EASE_' ~ today, 'title': 'Ease it'},
+                  {'action': 'REPLY', 'title': 'Reply'}] }}
+      - action: input_text.set_value
+        target:
+          entity_id: input_text.coach_ready_asked
+        data:
+          value: "{{ today }}"
+    mode: single
+
   - id: weekly_coach_push_action
     alias: "Coach: handle a tap or reply on a coach push"
     triggers:
@@ -309,6 +357,21 @@ automation:
                   text: "{{ answer }}"
                   ref: "{{ qid }}"
                   source: push
+          # Keep it / Ease it on the readiness push: COACH_KEEP_<date> / COACH_EASE_<date>
+          - conditions: "{{ act.startswith('COACH_KEEP_') or act.startswith('COACH_EASE_') }}"
+            sequence:
+              - variables:
+                  day: "{{ act.rsplit('_', 1)[1] }}"
+              - action: script.notify_phones
+                data:
+                  message: clear_notification
+                  tag: "coach-ready-{{ day }}"
+              - action: script.coach_send
+                data:
+                  mode: day
+                  ref: "{{ day }}"
+                  value: "{{ 'eased' if act.startswith('COACH_EASE_') else 'kept' }}"
+                  source: push
           # Done / Skipped on the day check: COACH_DAY_DONE_<date> / COACH_DAY_SKIP_<date>
           - conditions: "{{ act.startswith('COACH_DAY_') }}"
             sequence:
@@ -335,6 +398,18 @@ automation:
                   mode: answer
                   text: "{{ reply }}"
                   ref: "{{ tag[8:] }}"
+                  source: push
+          - conditions: "{{ tag.startswith('coach-ready-') }}"
+            sequence:
+              - action: script.notify_phones
+                data:
+                  message: clear_notification
+                  tag: "coach-ready-{{ tag[12:] }}"
+              - action: script.coach_send
+                data:
+                  mode: message
+                  text: "{{ reply }}"
+                  ref: "{{ tag[12:] }}"
                   source: push
           - conditions: "{{ tag.startswith('coach-day-') }}"
             sequence:
